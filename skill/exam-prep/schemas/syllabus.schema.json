@@ -1,10 +1,26 @@
 {
   "type": "object",
   "additionalProperties": true,
-  "required": ["schema_version", "concepts"],
+  "required": ["schema_version"],
+  "anyOf": [
+    {
+      "required": ["concepts"],
+      "properties": {"schema_version": {"enum": [1]}}
+    },
+    {
+      "required": ["learning_targets"],
+      "properties": {"schema_version": {"enum": [2]}}
+    }
+  ],
   "properties": {
-    "schema_version": {"type": "integer", "enum": [1]},
-    "concepts": {"type": "object"}
+    "schema_version": {"type": "integer", "enum": [1, 2]},
+    "course_id": {"type": "string"},
+    "concepts": {"type": "object"},
+    "learning_targets": {"type": "array"},
+    "source_refs": {"type": "array"},
+    "assessment_capabilities": {"type": "object"},
+    "exam_questions": {"type": "array"},
+    "source_coverage": {"type": "object"}
   }
 }
 

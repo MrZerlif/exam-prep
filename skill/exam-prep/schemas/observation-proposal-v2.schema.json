@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "observation_id", "target_id", "task_id", "capability_id", "task_type", "outcome", "assistance", "error_tags", "diagnostic_confidence", "source_refs"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [2]},
+    "observation_id": {"type": "string", "minLength": 1},
+    "target_id": {"type": "string", "minLength": 1},
+    "task_id": {"type": "string", "minLength": 1},
+    "capability_id": {"type": "string", "minLength": 1},
+    "task_type": {"type": "string", "minLength": 1},
+    "outcome": {"type": "string", "enum": ["correct", "partial", "incorrect", "skipped", "solution_seen"]},
+    "assistance": {"type": "object"},
+    "error_tags": {"type": "array"},
+    "diagnostic_confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "learner_self_confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "learner_explanation": {"type": "string"},
+    "source_refs": {"type": "array"}
+  }
+}

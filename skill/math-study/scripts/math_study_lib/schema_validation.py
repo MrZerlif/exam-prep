@@ -50,6 +50,17 @@ def _matches_type(value: Any, expected: str) -> bool:
 
 
 def validate_document(document: Any, schema: dict[str, Any], path: str = "$") -> None:
+    if "anyOf" in schema:
+        failures: list[str] = []
+        for option in schema["anyOf"]:
+            try:
+                validate_document(document, option, path)
+                break
+            except SchemaError as exc:
+                failures.append(str(exc))
+        else:
+            raise SchemaError(path, "document does not match any allowed schema variant")
+
     expected = schema.get("type")
     expected_types = expected if isinstance(expected, list) else [expected]
     if expected and not any(_matches_type(document, item) for item in expected_types):
@@ -101,7 +112,12 @@ def validate_observation_proposal(document: dict[str, Any]) -> None:
     for field in ENGINE_OWNED_PROPOSAL_FIELDS:
         if field in document:
             raise SchemaError(_path("$", field), "engine-owned field is not accepted from LLM")
-    validate_document(document, load_schema("observation-proposal.schema.json"))
+    schema_name = (
+        "observation-proposal-v2.schema.json"
+        if document.get("schema_version") == 2
+        else "observation-proposal.schema.json"
+    )
+    validate_document(document, load_schema(schema_name))
 
 
 def validate_state_bundle(bundle: dict[str, Any]) -> None:

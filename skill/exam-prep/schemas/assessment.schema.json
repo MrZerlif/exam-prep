@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "FrozenAssessment",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["assessment_id", "target_id", "capability_id", "prompt", "rubric", "expected_evidence", "source_refs", "difficulty", "question_version", "rubric_version", "spec_hash"],
+  "properties": {
+    "assessment_id": {"type": "string", "minLength": 1},
+    "target_id": {"type": "string", "minLength": 1},
+    "capability_id": {"type": "string", "minLength": 1},
+    "prompt": {"type": "string", "minLength": 1},
+    "rubric": {"type": "object"},
+    "expected_evidence": {"type": "array"},
+    "source_refs": {"type": "array"},
+    "difficulty": {"type": "number", "minimum": 0, "maximum": 1},
+    "question_version": {"type": "integer", "minimum": 1},
+    "rubric_version": {"type": "integer", "minimum": 1},
+    "spec_hash": {"type": "string", "minLength": 1}
+  }
+}

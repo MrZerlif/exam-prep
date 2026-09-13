@@ -19,6 +19,19 @@ class ExamPrepPackageTests(unittest.TestCase):
         self.assertIn("NotebookLM MCP", skill_text)
         self.assertIn("attempt-first", skill_text)
 
+    def test_exam_prep_activation_is_subject_agnostic(self):
+        skill_text = (EXAM_PREP / "SKILL.md").read_text(encoding="utf-8").casefold()
+        self.assertIn("any academic or technical subject", skill_text)
+        self.assertIn("learning targets", skill_text)
+        self.assertNotIn("mathematical analysis study", skill_text)
+
+    def test_migration_flag_names_the_legacy_math_study_source(self):
+        sys.path.insert(0, str(EXAM_PREP / "scripts"))
+        from exam_prep import _parser
+
+        args = _parser().parse_args(["migrate", "--from-math-study", "legacy-workspace"])
+        self.assertEqual("legacy-workspace", args.from_math_study)
+
     def test_exam_prep_entrypoint_runs_without_repository_imports(self):
         with tempfile.TemporaryDirectory() as tmp:
             install = Path(tmp) / "install"

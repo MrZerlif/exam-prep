@@ -1,0 +1,29 @@
+{
+  "schema_version": 2,
+  "proposal_id": "generated-from-materials-v1",
+  "source_refs": [
+    {
+      "source_id": "teacher:week-1",
+      "authority": "teacher_material",
+      "locator": "page 2"
+    }
+  ],
+  "learning_targets": [
+    {
+      "target_id": "subject:target-1",
+      "title": "State and apply the central method",
+      "prerequisites": [],
+      "capability_ids": ["independent_problem"],
+      "exam_question_ids": ["exam:q1"],
+      "source_refs": ["teacher:week-1"]
+    }
+  ],
+  "assessment_capabilities": [],
+  "exam_questions": [
+    {
+      "question_id": "exam:q1",
+      "target_ids": ["subject:target-1"],
+      "capability_ids": ["independent_problem"]
+    }
+  ]
+}

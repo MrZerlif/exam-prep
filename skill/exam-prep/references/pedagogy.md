@@ -61,6 +61,14 @@ conditions.
 
 ## Pressure safeguards
 
+Attempt-first is a tutor-policy obligation as well as an evidence invariant.
+Before an attempt, the tutor must not disclose a full solution merely because
+the learner asks, signals recognition, or is under exam pressure. Ask for a
+start, use the next permitted hint level, and record any unavoidable exposure.
+The Python engine cannot stop a conversational model from leaking an answer;
+behavioral pressure tests therefore check the skill policy, while deterministic
+tests ensure leaked or exposed work cannot promote independent mastery.
+
 | Rationalization | Required response |
 |---|---|
 | “When you explain it, I understand it.” | Request retrieval or a mini-problem before changing mastery. |

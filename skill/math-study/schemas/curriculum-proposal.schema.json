@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "CurriculumProposal",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "proposal_id", "source_refs", "learning_targets", "assessment_capabilities", "exam_questions"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [1, 2]},
+    "proposal_id": {"type": "string", "minLength": 1},
+    "source_refs": {"type": "array"},
+    "learning_targets": {"type": "array"},
+    "assessment_capabilities": {"type": ["array", "object"]},
+    "exam_questions": {"type": "array"}
+  }
+}

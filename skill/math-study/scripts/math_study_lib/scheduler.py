@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from typing import Any, Iterable
 
 from .reducer import average_known_mastery
+from .target_normalization import normalize_event, normalize_syllabus
 
 # Minimum interval floor so a review is never scheduled instantly/negatively
 # even when the exam is minutes away.
@@ -57,7 +58,7 @@ def _average_mastery(state: dict[str, Any]) -> float:
 def _event_band(event: dict[str, Any]) -> str:
     levels = set(event.get("assistance", {}).get("levels_revealed", []))
     assistance = event.get("assistance", {})
-    if assistance.get("full_solution_viewed") or "H5" in levels:
+    if event.get("solution_exposed") or assistance.get("full_solution_viewed") or "H5" in levels:
         return "solution_seen"
     if assistance.get("partial_transformation_shown") or "H4" in levels:
         return "heavily_scaffolded"
@@ -94,13 +95,15 @@ def build_review_queue(
     now: datetime,
     syllabus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
+    normalized_syllabus = normalize_syllabus(syllabus or {})
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for event in events:
-        grouped.setdefault(event.get("concept_id", ""), []).append(event)
+    for raw_event in events:
+        event = normalize_event(raw_event, normalized_syllabus)
+        grouped.setdefault(event.get("target_id", event.get("concept_id", "")), []).append(event)
     cap = int(course.get("scheduler", {}).get("max_review_interval_hours", 72))
     exam_time = _exam_time(course, now)
     has_valid_exam_horizon = exam_time is not None and exam_time > now
-    concept_metadata = (syllabus or {}).get("concepts", {})
+    concept_metadata = normalized_syllabus.targets
     items: dict[str, dict[str, Any]] = {}
     for concept_id, concept_events in grouped.items():
         if not concept_id:
@@ -184,7 +187,7 @@ def compute_priority(
     now: datetime,
     budget_minutes: int,
 ) -> dict[str, Any]:
-    metadata = syllabus.get("concepts", {}).get(concept_id, {})
+    metadata = normalize_syllabus(syllabus).targets.get(concept_id, {})
     state = concepts.get(concept_id, {})
     average = _average_mastery(state)
     gap = max(0.0, 1.0 - average)
@@ -255,11 +258,12 @@ def select_next_activity(
     recent_concept_ids: Iterable[str] | None = None,
 ) -> dict[str, Any]:
     recent = set(recent_concept_ids or [])
+    target_ids = normalize_syllabus(syllabus).targets
     candidates = [
         compute_priority(
             concept_id, syllabus, concepts, reviews, course, now, budget_minutes
         )
-        for concept_id in syllabus.get("concepts", {})
+        for concept_id in target_ids
     ]
     if not candidates:
         raise ValueError("syllabus has no concepts")

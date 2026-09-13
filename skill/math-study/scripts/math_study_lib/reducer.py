@@ -7,6 +7,7 @@ from typing import Any
 
 from .capabilities import CapabilityRegistry
 from .evidence_maturity import add_event_to_maturity, empty_evidence_maturity
+from .target_normalization import normalize_event, normalize_syllabus
 
 DIMENSIONS = ("conceptual", "procedural", "recall", "transfer", "speed")
 # Every dimension except speed always starts at a known 0.0 (every scored task
@@ -151,15 +152,17 @@ def reduce_learning_state(
 ) -> dict[str, Any]:
     del course
     mistake_policy = {**DEFAULT_RECURRING_MISTAKE_POLICY, **(policy.get("recurring_mistake") or {})}
+    normalized_syllabus = normalize_syllabus(syllabus)
     capability_registry = CapabilityRegistry.from_syllabus(syllabus)
     unmapped_capability_events: list[str] = []
     concepts: dict[str, dict[str, Any]] = {
         concept_id: _empty_concept()
-        for concept_id in syllabus.get("concepts", {})
+        for concept_id in normalized_syllabus.targets
     }
     mistake_sessions: dict[tuple[str, str], set[str]] = defaultdict(set)
-    for event in events:
-        concept_id = event.get("concept_id")
+    for raw_event in events:
+        event = normalize_event(raw_event, normalized_syllabus)
+        concept_id = event.get("target_id")
         if concept_id not in concepts:
             continue
         state = concepts[concept_id]
@@ -173,11 +176,14 @@ def reduce_learning_state(
         capability = capability_resolution.capability
         if capability_resolution.warning and capability.capability_id not in unmapped_capability_events:
             unmapped_capability_events.append(capability.capability_id)
-        assistance_band = derive_assistance_band(event.get("assistance", {}))
+        assistance = event.get("assistance") or {}
+        if event.get("solution_exposed"):
+            assistance = {**assistance, "full_solution_viewed": True}
+        assistance_band = derive_assistance_band(assistance)
         outcome = event.get("outcome", "skipped")
         signal = _outcome_signal(outcome)
         tags = event.get("error_tags", [])
-        if outcome == "solution_seen" or event.get("assistance", {}).get("full_solution_viewed"):
+        if outcome == "solution_seen" or event.get("solution_exposed") or assistance.get("full_solution_viewed"):
             state["evidence"]["solution_views"] += 1
         if outcome in {"incorrect", "partial"}:
             state["evidence"]["failures"] += 1
@@ -273,7 +279,7 @@ def reduce_learning_state(
         state["recurring_mistakes"].sort(key=lambda item: (-item["count"], item["tag"]))
 
     for concept_id, state in concepts.items():
-        prerequisites = syllabus.get("concepts", {}).get(concept_id, {}).get("prerequisites", [])
+        prerequisites = normalized_syllabus.targets.get(concept_id, {}).get("prerequisites", [])
         blocked = any(
             concepts[prereq]["mastery_status"] == "unseen"
             for prereq in prerequisites

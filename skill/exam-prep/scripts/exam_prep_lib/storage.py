@@ -12,7 +12,7 @@ from typing import Any
 
 from .assessment import FrozenAssessment
 from .assessment_integrity import assess_attempt_evidence
-from .schema_validation import validate_observation_proposal
+from .schema_validation import load_schema, validate_document, validate_observation_proposal
 
 
 class ObservationConflict(ValueError):
@@ -160,6 +160,7 @@ class StudyStore:
             else FrozenAssessment.from_mapping(assessment)
         )
         canonical = frozen.to_mapping()
+        validate_document(canonical, load_schema("assessment.schema.json"))
         existing = {
             item["assessment_id"]: item
             for item in self.read_assessments()
