@@ -4,20 +4,21 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
+SKILL_ROOT = ROOT / "skill" / "math-study"
 
 
 class FixtureTests(unittest.TestCase):
     def test_all_package_json_fixtures_parse(self):
         paths = [
-            ROOT / "config" / "config.template.json",
-            ROOT / "syllabus" / "example-syllabus.json",
-            ROOT / "state" / "templates" / "course.json",
-            ROOT / "state" / "templates" / "learner.json",
-            ROOT / "state" / "templates" / "session.json",
-            ROOT / "state" / "templates" / "current.json",
-            ROOT / "examples" / "observation-proposal.json",
-            ROOT / "examples" / "session-summary.json",
-            ROOT / "examples" / "mock-exam.json",
+            SKILL_ROOT / "config" / "config.template.json",
+            SKILL_ROOT / "syllabus" / "example-syllabus.json",
+            SKILL_ROOT / "state" / "templates" / "course.json",
+            SKILL_ROOT / "state" / "templates" / "learner.json",
+            SKILL_ROOT / "state" / "templates" / "session.json",
+            SKILL_ROOT / "state" / "templates" / "current.json",
+            SKILL_ROOT / "examples" / "observation-proposal.json",
+            SKILL_ROOT / "examples" / "session-summary.json",
+            SKILL_ROOT / "examples" / "mock-exam.json",
         ]
         for path in paths:
             with self.subTest(path=path):
@@ -25,13 +26,13 @@ class FixtureTests(unittest.TestCase):
 
     def test_example_syllabus_has_dependency_graph_and_provenance(self):
         syllabus = json.loads(
-            (ROOT / "syllabus" / "example-syllabus.json").read_text(encoding="utf-8")
+            (SKILL_ROOT / "syllabus" / "example-syllabus.json").read_text(encoding="utf-8")
         )
         self.assertTrue(any(item.get("prerequisites") for item in syllabus["concepts"].values()))
         self.assertTrue(all(item.get("source_refs") for item in syllabus["concepts"].values()))
 
     def test_templates_contain_no_runtime_observations(self):
-        for path in (ROOT / "state" / "templates").glob("*.json"):
+        for path in (SKILL_ROOT / "state" / "templates").glob("*.json"):
             data = json.loads(path.read_text(encoding="utf-8"))
             self.assertNotIn("observations", data)
             self.assertNotIn("priority_score", json.dumps(data))

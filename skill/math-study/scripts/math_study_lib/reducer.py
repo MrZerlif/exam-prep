@@ -7,6 +7,14 @@ from typing import Any
 
 
 DIMENSIONS = ("conceptual", "procedural", "recall", "transfer", "speed")
+# Every dimension except speed always starts at a known 0.0 (every scored task
+# updates at least one of conceptual/procedural/recall/transfer). speed is the
+# odd one out: only a minority of task types touch it, and only when the CLI
+# has actually measured elapsed/expected time - which today it never does.
+# Absence of timing evidence is not evidence of zero speed, so speed starts
+# (and stays) unknown/None until real timing evidence exists, and unknown
+# dimensions are excluded from averaging rather than dragged to the floor.
+SCORED_AT_START = tuple(dimension for dimension in DIMENSIONS if dimension != "speed")
 CONFIDENCE_VALUES = {"low": 0.25, "medium": 0.55, "high": 0.9}
 ASSISTANCE_WEIGHTS = {
     "independent": 1.0,
@@ -41,6 +49,16 @@ MISTAKE_SUMMARIES = {
     "domain_condition_error": "missed a domain or validity condition",
     "proof_structure_error": "proof structure is incomplete",
 }
+# Configurable policy defaults for recurring-mistake classification and
+# resolution. A single occurrence is just an occurrence, not yet a pattern;
+# "recurring" requires it to show up again, either repeatedly in one session
+# or across separate sessions. Resolution requires a real clean streak so a
+# single lucky guess cannot erase the history immediately.
+DEFAULT_RECURRING_MISTAKE_POLICY = {
+    "min_count": 3,
+    "min_sessions": 2,
+    "resolve_after_clean_successes": 3,
+}
 
 
 def derive_assistance_band(assistance: dict[str, Any]) -> str:
@@ -56,9 +74,21 @@ def derive_assistance_band(assistance: dict[str, Any]) -> str:
     return "independent"
 
 
+def average_known_mastery(mastery: dict[str, Any]) -> float:
+    """Average mastery over dimensions with actual evidence, excluding any
+    dimension (currently only speed) that is still None/unknown."""
+    known = [float(value) for value in mastery.values() if value is not None]
+    if not known:
+        return 0.0
+    return sum(known) / len(known)
+
+
 def _empty_concept() -> dict[str, Any]:
     return {
-        "mastery": {dimension: 0.0 for dimension in DIMENSIONS},
+        "mastery": {
+            **{dimension: 0.0 for dimension in SCORED_AT_START},
+            "speed": None,
+        },
         "confidence": {"diagnostic": 0.0, "learner_self_report": 0.0},
         "evidence": {
             "independent_successes": 0,
@@ -69,7 +99,8 @@ def _empty_concept() -> dict[str, Any]:
             "transfer_successes": 0,
             "exam_successes": 0,
         },
-        "status": "unseen",
+        "mastery_status": "unseen",
+        "availability": "available",
         "last_tested": None,
         "recurring_mistakes": [],
     }
@@ -83,9 +114,11 @@ def _outcome_signal(outcome: str) -> float | None:
     return {"correct": 1.0, "partial": 0.5, "incorrect": 0.0}.get(outcome)
 
 
-def _status(state: dict[str, Any]) -> str:
+def _mastery_status(state: dict[str, Any]) -> str:
     evidence = state["evidence"]
-    average = sum(state["mastery"].values()) / len(DIMENSIONS)
+    if not any(evidence.values()):
+        return "unseen"
+    average = average_known_mastery(state["mastery"])
     if evidence["solution_views"] and not evidence["independent_successes"]:
         return "learning"
     if (
@@ -114,6 +147,7 @@ def reduce_learning_state(
     policy: dict[str, Any],
 ) -> dict[str, Any]:
     del course
+    mistake_policy = {**DEFAULT_RECURRING_MISTAKE_POLICY, **(policy.get("recurring_mistake") or {})}
     concepts: dict[str, dict[str, Any]] = {
         concept_id: _empty_concept()
         for concept_id in syllabus.get("concepts", {})
@@ -127,6 +161,7 @@ def reduce_learning_state(
         assistance_band = derive_assistance_band(event.get("assistance", {}))
         outcome = event.get("outcome", "skipped")
         signal = _outcome_signal(outcome)
+        tags = event.get("error_tags", [])
         if outcome == "solution_seen" or event.get("assistance", {}).get("full_solution_viewed"):
             state["evidence"]["solution_views"] += 1
         if outcome in {"incorrect", "partial"}:
@@ -154,9 +189,10 @@ def reduce_learning_state(
             if outcome == "correct" and isinstance(elapsed, (int, float)) and isinstance(
                 expected, (int, float)
             ) and expected > 0:
+                prior_speed = state["mastery"]["speed"]
                 speed_signal = max(0.0, min(1.0, expected / max(elapsed, 1)))
                 state["mastery"]["speed"] = _update(
-                    state["mastery"]["speed"], speed_signal, alpha
+                    prior_speed if prior_speed is not None else 0.0, speed_signal, alpha
                 )
 
         for confidence_key, output_key in (
@@ -173,7 +209,20 @@ def reduce_learning_state(
             if state["last_tested"] is None or event["recorded_at"] > state["last_tested"]:
                 state["last_tested"] = event["recorded_at"]
 
-        for tag in event.get("error_tags", []):
+        # A clean independent success is evidence against every mistake this
+        # concept has accumulated so far (not just ones matching this task's
+        # tags): it must run before this event's own tags are folded in below,
+        # so a mistake that reoccurs in the same event it would have been
+        # resolved by is correctly kept open, not resolved and reopened.
+        if outcome == "correct" and assistance_band == "independent":
+            for mistake in state["recurring_mistakes"]:
+                if mistake["resolved"] or mistake["tag"] in tags:
+                    continue
+                mistake["clean_streak"] += 1
+                if mistake["clean_streak"] >= mistake_policy["resolve_after_clean_successes"]:
+                    mistake["resolved"] = True
+
+        for tag in tags:
             key = (concept_id, tag)
             mistake_sessions[key].add(event.get("session_id", "unknown"))
             existing = next(
@@ -186,15 +235,32 @@ def reduce_learning_state(
                     "summary": MISTAKE_SUMMARIES.get(tag, tag),
                     "count": 0,
                     "sessions_seen": 0,
+                    "recurring": False,
                     "resolved": False,
+                    "clean_streak": 0,
                 }
                 state["recurring_mistakes"].append(existing)
             existing["count"] += 1
             existing["sessions_seen"] = len(mistake_sessions[key])
+            existing["clean_streak"] = 0
+            existing["resolved"] = False
+            existing["recurring"] = (
+                existing["count"] >= mistake_policy["min_count"]
+                or existing["sessions_seen"] >= mistake_policy["min_sessions"]
+            )
 
-    for state in concepts.values():
-        state["status"] = _status(state)
+    for concept_id, state in concepts.items():
+        state["mastery_status"] = _mastery_status(state)
         state["recurring_mistakes"].sort(key=lambda item: (-item["count"], item["tag"]))
+
+    for concept_id, state in concepts.items():
+        prerequisites = syllabus.get("concepts", {}).get(concept_id, {}).get("prerequisites", [])
+        blocked = any(
+            concepts[prereq]["mastery_status"] == "unseen"
+            for prereq in prerequisites
+            if prereq in concepts
+        )
+        state["availability"] = "prerequisite_blocked" if blocked else "available"
 
     return {
         "schema_version": 1,

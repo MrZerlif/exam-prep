@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schema_version", "observation_id", "concept_id", "task_id", "task_type", "outcome", "assistance", "error_tags", "diagnostic_confidence", "learner_self_confidence", "source_refs"],
+  "required": ["schema_version", "observation_id", "concept_id", "task_id", "task_type", "outcome", "assistance", "error_tags", "diagnostic_confidence", "source_refs"],
   "properties": {
     "schema_version": {"type": "integer", "enum": [1]},
     "observation_id": {"type": "string", "minLength": 1},

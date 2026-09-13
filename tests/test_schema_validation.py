@@ -2,7 +2,7 @@ import sys
 import unittest
 
 
-sys.path.insert(0, "scripts")
+sys.path.insert(0, "skill/math-study/scripts")
 
 from math_study_lib.schema_validation import (  # noqa: E402
     SchemaError,
@@ -66,6 +66,17 @@ class SchemaValidationTests(unittest.TestCase):
         proposal = valid_proposal()
         proposal["assistance"]["levels_revealed"] = ["H9"]
         with self.assertRaisesRegex(SchemaError, "levels_revealed"):
+            validate_observation_proposal(proposal)
+
+    def test_learner_self_confidence_is_optional(self):
+        proposal = valid_proposal()
+        del proposal["learner_self_confidence"]
+        validate_observation_proposal(proposal)
+
+    def test_diagnostic_confidence_stays_required(self):
+        proposal = valid_proposal()
+        del proposal["diagnostic_confidence"]
+        with self.assertRaisesRegex(SchemaError, "diagnostic_confidence"):
             validate_observation_proposal(proposal)
 
     def test_non_numeric_mastery_is_rejected(self):

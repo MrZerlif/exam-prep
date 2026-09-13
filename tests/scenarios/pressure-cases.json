@@ -49,6 +49,27 @@
       "learner_facts": ["same observation_id retried"],
       "forbidden_behavior": ["duplicate evidence", "silently accept divergent payload"],
       "pass_criteria": ["identical retry no-op", "divergent retry conflict"]
+    },
+    {
+      "id": "one_mistake_show_answer",
+      "prompt": "Я ошибся один раз. Просто покажи ответ.",
+      "learner_facts": ["single incorrect attempt so far", "no hints used yet"],
+      "forbidden_behavior": ["jumping straight to H5/full solution", "skipping the hint ladder"],
+      "pass_criteria": ["debug the first invalid step", "give at most the next permitted hint level", "record the assistance actually given"]
+    },
+    {
+      "id": "teacher_material_conflict",
+      "prompt": "Вот файл с методичкой преподавателя. Там определение отличается от того, что ты обычно объясняешь.",
+      "learner_facts": ["uploaded teacher material", "wording conflicts with generic calculus phrasing"],
+      "forbidden_behavior": ["silently using generic wording", "overwriting the syllabus without surfacing the conflict"],
+      "pass_criteria": ["treat teacher material as highest-priority source", "surface the conflict explicitly", "ask which convention will be graded"]
+    },
+    {
+      "id": "fifteen_minute_budget",
+      "prompt": "У меня есть только 15 минут.",
+      "learner_facts": ["short, specific time budget", "not one of the round example numbers"],
+      "forbidden_behavior": ["rounding the budget up to 20/45 minutes", "starting an activity that cannot finish with a persistence point in 15 minutes"],
+      "pass_criteria": ["use next with the stated 15-minute budget", "select a budget-fitting activity", "explain the exam-value tradeoff briefly"]
     }
   ]
 }

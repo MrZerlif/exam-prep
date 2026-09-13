@@ -46,15 +46,17 @@ class StudyStore:
         self.root = Path(root)
         self.state_path = self.root / "state"
         self.observations_path = self.state_path / "observations.jsonl"
+        self.sessions_log_path = self.state_path / "sessions.jsonl"
         self.revisions_path = self.state_path / "revisions"
         self.recovery_path = self.state_path / "recovery"
         self.current_path = self.state_path / "current.json"
-        self._log_diagnostics = {"partial_final_line": False}
+        self._log_diagnostics = {"partial_final_line": False, "sessions_log_partial_final_line": False}
 
     def initialize(self) -> None:
         for path in (self.root, self.state_path, self.revisions_path, self.recovery_path):
             path.mkdir(parents=True, exist_ok=True)
         self.observations_path.touch(exist_ok=True)
+        self.sessions_log_path.touch(exist_ok=True)
 
     @staticmethod
     def _dump(value: Any) -> str:
@@ -67,29 +69,60 @@ class StudyStore:
             encoding="utf-8",
         )
 
-    def read_complete_observations(self) -> list[dict[str, Any]]:
-        self.initialize()
-        raw = self.observations_path.read_bytes()
+    @staticmethod
+    def _read_complete_jsonl(path: Path, label: str) -> tuple[list[dict[str, Any]], bool]:
+        """Read an append-only JSONL log, tolerating a torn final line left by
+        a crash mid-write. Returns (complete records, partial_final_line)."""
+        raw = path.read_bytes()
         lines = raw.splitlines(keepends=True)
-        events: list[dict[str, Any]] = []
-        self._log_diagnostics = {"partial_final_line": False}
+        records: list[dict[str, Any]] = []
+        partial_final_line = False
         for index, line in enumerate(lines):
             if not line.strip():
                 continue
             if index == len(lines) - 1 and not line.endswith((b"\n", b"\r")):
-                self._log_diagnostics["partial_final_line"] = True
+                partial_final_line = True
                 continue
             try:
-                event = json.loads(line.decode("utf-8"))
+                record = json.loads(line.decode("utf-8"))
             except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-                raise ValueError(f"invalid complete observation line {index + 1}") from exc
-            if not isinstance(event, dict):
-                raise ValueError(f"observation line {index + 1} is not an object")
-            events.append(event)
+                raise ValueError(f"invalid complete {label} line {index + 1}") from exc
+            if not isinstance(record, dict):
+                raise ValueError(f"{label} line {index + 1} is not an object")
+            records.append(record)
+        return records, partial_final_line
+
+    @staticmethod
+    def _append_jsonl(path: Path, value: Any) -> None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        line = (StudyStore._dump(value) + "\n").encode("utf-8")
+        with path.open("ab") as handle:
+            handle.write(line)
+            handle.flush()
+            try:
+                os.fsync(handle.fileno())
+            except OSError:
+                pass
+
+    def read_complete_observations(self) -> list[dict[str, Any]]:
+        self.initialize()
+        events, partial = self._read_complete_jsonl(self.observations_path, "observation")
+        self._log_diagnostics["partial_final_line"] = partial
         return events
+
+    def read_session_summaries(self) -> list[dict[str, Any]]:
+        self.initialize()
+        summaries, partial = self._read_complete_jsonl(self.sessions_log_path, "session summary")
+        self._log_diagnostics["sessions_log_partial_final_line"] = partial
+        return summaries
+
+    def append_session_summary(self, summary: dict[str, Any]) -> None:
+        self.initialize()
+        self._append_jsonl(self.sessions_log_path, summary)
 
     def read_log_diagnostics(self) -> dict[str, bool]:
         self.read_complete_observations()
+        self.read_session_summaries()
         return dict(self._log_diagnostics)
 
     def append_observation(
@@ -135,15 +168,7 @@ class StudyStore:
                 f"observation_id {observation_id!r} already has a different payload"
             )
 
-        self.observations_path.parent.mkdir(parents=True, exist_ok=True)
-        line = (self._dump(canonical) + "\n").encode("utf-8")
-        with self.observations_path.open("ab") as handle:
-            handle.write(line)
-            handle.flush()
-            try:
-                os.fsync(handle.fileno())
-            except OSError:
-                pass
+        self._append_jsonl(self.observations_path, canonical)
         return AppendResult(observation_id, canonical, True)
 
     def _next_revision(self) -> int:
@@ -163,12 +188,21 @@ class StudyStore:
     def _hash_file(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
 
+    @staticmethod
+    def hash_document(value: Any) -> str:
+        """Deterministic, formatting-independent fingerprint of a JSON-able
+        document (canonicalized key order and separators before hashing), so
+        two documents that differ only in whitespace/key order hash equal."""
+        return hashlib.sha256(StudyStore._dump(value).encode("utf-8")).hexdigest()
+
     def commit_revision(
         self,
         derived: dict[str, Any],
         session: dict[str, Any],
         learner: dict[str, Any],
         review_queue: dict[str, Any] | None = None,
+        course: dict[str, Any] | None = None,
+        syllabus: dict[str, Any] | None = None,
     ) -> RevisionManifest:
         self.initialize()
         revision = self._next_revision()
@@ -189,6 +223,16 @@ class StudyStore:
                 "last_complete_observation_id": events[-1]["observation_id"] if events else None,
                 "last_complete_observation_line": len(events),
                 "log_byte_offset": log_offset,
+                # Fingerprints of the canonical inputs this revision was
+                # derived from. A later load compares current course.json/
+                # syllabus.json against these to detect that a canonical
+                # input changed (e.g. exam date, scheduler policy, syllabus
+                # prerequisites/importance) even when the concept-id set and
+                # the observation log did not - which alone would otherwise
+                # look "not stale" and keep serving derived state computed
+                # against the old inputs.
+                "course_hash": self.hash_document(course) if course is not None else None,
+                "syllabus_hash": self.hash_document(syllabus) if syllabus is not None else None,
                 "derived_hashes": {
                     name: self._hash_file(temp_path / name)
                     for name in revision_files
@@ -266,6 +310,14 @@ class StudyStore:
             if result is not None:
                 return result
         raise FileNotFoundError("no valid revision is available for recovery")
+
+    def try_recover(self) -> RecoveryResult | None:
+        """Like recover(), but returns None instead of raising when no
+        revision exists yet (a brand-new or fully-corrupted workspace)."""
+        try:
+            return self.recover()
+        except FileNotFoundError:
+            return None
 
     def rebuild_from_log(self) -> dict[str, Any]:
         self.initialize()

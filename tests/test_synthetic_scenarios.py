@@ -8,14 +8,14 @@ import unittest
 from pathlib import Path
 
 
-sys.path.insert(0, "scripts")
+sys.path.insert(0, "skill/math-study/scripts")
 
 from math_study import main  # noqa: E402
 from math_study_lib.storage import ObservationConflict, StudyStore  # noqa: E402
 
 
 ROOT = Path(__file__).parents[1]
-SYLLABUS = ROOT / "syllabus" / "example-syllabus.json"
+SYLLABUS = ROOT / "skill" / "math-study" / "syllabus" / "example-syllabus.json"
 
 
 def proposal(observation_id, outcome="correct", task_type="independent_problem", errors=None):

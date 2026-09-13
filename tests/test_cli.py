@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 
 
-sys.path.insert(0, "scripts")
+sys.path.insert(0, "skill/math-study/scripts")
 
 from math_study import main  # noqa: E402
 
