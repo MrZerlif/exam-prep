@@ -118,7 +118,11 @@ def _store(workspace: str | None) -> StudyStore:
         workspace,
         git_root=discover_git_root(),
     )
-    store = StudyStore(resolved_workspace)
+    store = (
+        StudyStore.for_exam_prep(resolved_workspace)
+        if workspace is None
+        else StudyStore(resolved_workspace)
+    )
     store.initialize()
     return store
 
