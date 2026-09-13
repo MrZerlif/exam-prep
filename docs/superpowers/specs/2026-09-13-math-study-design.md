@@ -180,7 +180,7 @@ state/observations.jsonl is the append-only canonical evidence/event log. Each c
 
 The engine-enriched canonical event also contains `recorded_at` (engine clock), the active `session_id`, task metadata's `expected_seconds`, and `elapsed_seconds` measured by the CLI/session boundary when available. The LLM cannot provide or override these fields; in particular, estimated time from the LLM is never used as speed evidence.
 
-`observation_id` is the idempotency key. On retry, an absent id is appended; an existing id with an identical canonical payload is a successful no-op; an existing id with a different payload is a conflict and is not reduced. This makes append/retry safe without introducing a database.
+`observation_id` is the idempotency key. On retry, an absent id is appended; an existing id with the same learner-owned proposal payload is a successful no-op and retains the first engine-owned metadata; an existing id with a different learner payload is a conflict and is not reduced. This makes append/retry safe even when a retry has a new engine timestamp, without introducing a database.
 
 independence and hint_level are absent. The engine derives an assistance band:
 
