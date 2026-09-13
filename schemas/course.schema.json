@@ -1,0 +1,14 @@
+{
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "course_id", "title", "exam", "time_budget", "source_policy", "scheduler"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [1]},
+    "course_id": {"type": "string"},
+    "title": {"type": "string"},
+    "exam": {"type": "object"},
+    "time_budget": {"type": "object"},
+    "source_policy": {"type": "object"},
+    "scheduler": {"type": "object"}
+  }
+}
