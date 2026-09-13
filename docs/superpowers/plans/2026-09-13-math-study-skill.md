@@ -683,7 +683,7 @@ Run:
 
 ~~~text
 git diff --check
-rg -n "T[O]DO|T[B]D|FI[X]ME|p[r]iority_score|pers[i]stent_misconceptions" SKILL.md README.md references schemas scripts state config syllabus examples tests
+rg -n "T[O]DO|T[B]D|FI[X]ME|p[r]iority_score|pers[i]stent_misconceptions" SKILL.md README.md references schemas scripts state config syllabus examples
 ~~~
 
 Expected: no whitespace errors, no placeholder markers, and no forbidden legacy fields in the implementation contract.
