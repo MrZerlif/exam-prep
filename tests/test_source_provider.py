@@ -4,9 +4,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "math-study" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from math_study_lib.source_provider import (  # noqa: E402
+from exam_prep_lib.source_provider import (  # noqa: E402
     LocalSourceProvider,
     ProviderStatus,
     compute_source_coverage,

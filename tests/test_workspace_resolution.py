@@ -3,9 +3,9 @@ import unittest
 from pathlib import Path
 import sys
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "math-study" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from math_study_lib.workspace import resolve_workspace, runtime_paths
+from exam_prep_lib.workspace import resolve_workspace, runtime_paths
 
 
 class WorkspaceResolutionTests(unittest.TestCase):

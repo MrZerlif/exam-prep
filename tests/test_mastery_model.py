@@ -6,9 +6,9 @@ import sys
 import unittest
 
 
-sys.path.insert(0, "skill/math-study/scripts")
+sys.path.insert(0, "skill/exam-prep/scripts")
 
-from math_study_lib.reducer import reduce_learning_state  # noqa: E402
+from exam_prep_lib.reducer import reduce_learning_state  # noqa: E402
 
 
 SYLLABUS = {

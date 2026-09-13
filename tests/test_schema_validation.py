@@ -2,9 +2,9 @@ import sys
 import unittest
 
 
-sys.path.insert(0, "skill/math-study/scripts")
+sys.path.insert(0, "skill/exam-prep/scripts")
 
-from math_study_lib.schema_validation import (  # noqa: E402
+from exam_prep_lib.schema_validation import (  # noqa: E402
     SchemaError,
     validate_observation_proposal,
     validate_state_bundle,

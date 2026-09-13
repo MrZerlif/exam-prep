@@ -8,10 +8,10 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 
-sys.path.insert(0, "skill/math-study/scripts")
+sys.path.insert(0, "skill/exam-prep/scripts")
 
-from math_study_lib.reducer import reduce_learning_state  # noqa: E402
-from math_study_lib.scheduler import build_review_queue, select_next_activity  # noqa: E402
+from exam_prep_lib.reducer import reduce_learning_state  # noqa: E402
+from exam_prep_lib.scheduler import build_review_queue, select_next_activity  # noqa: E402
 
 
 NOW = datetime(2026, 9, 13, 12, 0, tzinfo=timezone.utc)

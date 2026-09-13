@@ -3,15 +3,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "math-study" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from math_study_lib.assessment import FrozenAssessment  # noqa: E402
-from math_study_lib.assessment_integrity import (  # noqa: E402
+from exam_prep_lib.assessment import FrozenAssessment  # noqa: E402
+from exam_prep_lib.assessment_integrity import (  # noqa: E402
     AssessmentIntegrityError,
     assess_attempt_evidence,
 )
-from math_study_lib.reducer import reduce_learning_state  # noqa: E402
-from math_study_lib.storage import AssessmentConflict, StudyStore  # noqa: E402
+from exam_prep_lib.reducer import reduce_learning_state  # noqa: E402
+from exam_prep_lib.storage import AssessmentConflict, StudyStore  # noqa: E402
 
 
 def assessment(**overrides):

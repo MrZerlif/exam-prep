@@ -3,15 +3,15 @@ import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "math-study" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from math_study_lib.curriculum import (  # noqa: E402
+from exam_prep_lib.curriculum import (  # noqa: E402
     CurriculumValidationError,
     apply_curriculum_proposal,
     build_syllabus_from_proposal,
     validate_curriculum_proposal,
 )
-from math_study_lib.storage import StudyStore  # noqa: E402
+from exam_prep_lib.storage import StudyStore  # noqa: E402
 
 
 def valid_proposal():

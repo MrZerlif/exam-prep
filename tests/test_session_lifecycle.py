@@ -7,13 +7,13 @@ import unittest
 from pathlib import Path
 
 
-sys.path.insert(0, "skill/math-study/scripts")
+sys.path.insert(0, "skill/exam-prep/scripts")
 
-from math_study import main  # noqa: E402
+from exam_prep import main  # noqa: E402
 
 
 ROOT = Path(__file__).parents[1]
-SYLLABUS = ROOT / "skill" / "math-study" / "syllabus" / "example-syllabus.json"
+SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "example-syllabus.json"
 
 
 def proposal(observation_id, outcome="incorrect", errors=None):

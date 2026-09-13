@@ -7,9 +7,9 @@ import unittest
 from pathlib import Path
 
 
-sys.path.insert(0, "skill/math-study/scripts")
+sys.path.insert(0, "skill/exam-prep/scripts")
 
-from math_study import main  # noqa: E402
+from exam_prep import main  # noqa: E402
 
 
 SYLLABUS = {

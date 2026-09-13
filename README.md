@@ -1,16 +1,16 @@
-# Math Study Agent Skill
+# Exam Prep Agent Skill
 
-Math Study is an interactive, exam-first mathematical-analysis tutor for a
+Exam Prep is an interactive, exam-first subject-neutral tutor for a
 first-year student. It keeps compact persistent evidence in a local workspace,
 lets a deterministic state engine calculate mastery/reviews/priority, and lets
 the LLM focus on teaching, debugging, and asking for independent work.
 
 ## Install
 
-`skill/math-study/` is the entire, self-contained Agent Skill package: SKILL.md,
+`skill/exam-prep/` is the entire, self-contained Agent Skill package: SKILL.md,
 references, scripts, schemas, config template, example syllabus, state
 templates, and examples all live inside that one directory. Copy or enable
-*only* `skill/math-study/` anywhere — a clean temporary directory, another
+*only* `skill/exam-prep/` anywhere — a clean temporary directory, another
 machine, a skills folder with no access to this repository's root — and it
 runs unmodified; nothing outside that directory is required. The repository
 root additionally keeps development tests and design docs that are not part
@@ -21,16 +21,16 @@ runtime configuration, database, full FSRS, or mandatory CAS is needed.
 
 ## Start
 
-From the active workspace (inside the installed `math-study/` directory, or
+From the active workspace (inside the installed `exam-prep/` directory, or
 any workspace pointed at it with `--workspace`/`MATH_STUDY_WORKSPACE`):
 
 ~~~text
-python scripts/math_study.py init
-python scripts/math_study.py load-syllabus syllabus/example-syllabus.json
-python scripts/math_study.py start
+python scripts/exam_prep.py init
+python scripts/exam_prep.py load-syllabus examples/example-syllabus.json
+python scripts/exam_prep.py start
 ~~~
 
-Then write “Продолжаем матан.” to the tutor with skill/math-study/ enabled. It reads the compact local state,
+Then write “Continue studying.” to the tutor with skill/exam-prep/ enabled. It reads the compact local state,
 shows due work, and resumes the pending action without requiring a transcript.
 
 For a teacher syllabus, export or prepare JSON with a concepts object. Each
@@ -42,13 +42,13 @@ conflicts are surfaced.
 ## Everyday commands
 
 ~~~text
-python scripts/math_study.py status
-python scripts/math_study.py next --minutes 25
-python scripts/math_study.py review-due
-python scripts/math_study.py mistakes
-python scripts/math_study.py roadmap
-python scripts/math_study.py validate
-python scripts/math_study.py end-session
+python scripts/exam_prep.py status
+python scripts/exam_prep.py next --minutes 25
+python scripts/exam_prep.py review-due
+python scripts/exam_prep.py mistakes
+python scripts/exam_prep.py roadmap
+python scripts/exam_prep.py validate
+python scripts/exam_prep.py end-session
 ~~~
 
 Natural language is preferred: “Что у меня самое слабое?”, “У меня 25 минут”
@@ -57,12 +57,12 @@ records one structured observation after each assessable attempt.
 
 ## Exam preparation
 
-Set the exam date in state/course.json after init. Use next with the real budget;
+Set the exam date in `.exam-prep/course.json` after init. Use next with the real budget;
 priority is recomputed for exam horizon, due state, prerequisites, mastery gap,
 expected points, and estimated improvement time. Use:
 
 ~~~text
-python scripts/math_study.py exam --minutes 45
+python scripts/exam_prep.py exam --minutes 45
 ~~~
 
 Exam mode is the mock exam workflow: it uses mixed tasks, no unsolicited hints,
@@ -74,7 +74,7 @@ formula, notation, speed, and careless errors.
 Use verify with a JSON request to run safe numerical checks:
 
 ~~~text
-python scripts/math_study.py verify request.json
+python scripts/exam_prep.py verify request.json
 ~~~
 
 Core derivative and antiderivative checking is numerical finite-difference
@@ -84,16 +84,16 @@ backend and is never required for the tutor.
 ## Repository layout
 
 ~~~text
-skill/math-study/            <- the entire installable, self-contained package
+skill/exam-prep/            <- the entire installable, self-contained package
 ├── SKILL.md
 ├── references/
 ├── scripts/
-│   ├── math_study.py
-│   └── math_study_lib/
+│   ├── exam_prep.py
+│   └── exam_prep_lib/
 ├── schemas/
 ├── config/
-├── syllabus/
-├── state/templates/
+├── templates/
+└── examples/
 └── examples/
 tests/                        <- development test suite (not installed)
 docs/                         <- design/plan docs (not installed)
@@ -105,17 +105,17 @@ README.md
 The active workspace stores:
 
 ~~~text
-state/course.json
-state/syllabus.json
-state/observations.jsonl
-state/sessions.jsonl
-state/concepts.json
-state/review_queue.json
-state/learner.json
-state/session.json
-state/current.json
-state/revisions/
-state/recovery/
+.exam-prep/course.json
+.exam-prep/syllabus.json
+.exam-prep/observations.jsonl
+.exam-prep/sessions.jsonl
+.exam-prep/concepts.json
+.exam-prep/review_queue.json
+.exam-prep/learner.json
+.exam-prep/session.json
+.exam-prep/current.json
+.exam-prep/revisions/
+.exam-prep/recovery/
 ~~~
 
 observations.jsonl is append-only canonical learning evidence; sessions.jsonl
@@ -148,7 +148,7 @@ A session is active only while `phase` is `study` or `exam`; `end-session`
 always returns it to `idle` and appends a summary to sessions.jsonl, so the
 next `start` always opens a new session_id instead of resuming the closed
 one. `status` surfaces the most recent closed-session summary as
-`last_session_summary` so a fresh AI context ("Продолжаем матан.") has
+`last_session_summary` so a fresh AI context ("Continue studying.") has
 continuity without needing the old chat transcript.
 
 `validate` deliberately does *not* go through the safe-loading path above -
