@@ -24,6 +24,7 @@ from math_study_lib.schema_validation import (
     load_schema,
     validate_document,
 )
+from math_study_lib.source_evidence import ingest_source_evidence
 from math_study_lib.storage import StudyStore
 from math_study_lib.verifier import verify_antiderivative, verify_derivative
 from math_study_lib.workspace import discover_git_root, resolve_workspace
@@ -265,6 +266,8 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("end-session")
     migrate = sub.add_parser("migrate")
     migrate.add_argument("--from-math-study", required=True)
+    ingest = sub.add_parser("ingest-source-evidence")
+    ingest.add_argument("path")
     return parser
 
 
@@ -274,6 +277,11 @@ def main(argv: list[str] | None = None) -> int:
         result = migrate_legacy_workspace(args.from_math_study)
         return _result(result.to_mapping())
     store = _store(args.workspace)
+
+    if args.command == "ingest-source-evidence":
+        envelope = json.loads(Path(args.path).read_text(encoding="utf-8"))
+        result = ingest_source_evidence(store, envelope)
+        return _result(result.to_mapping())
 
     if args.command == "init":
         now = _now()

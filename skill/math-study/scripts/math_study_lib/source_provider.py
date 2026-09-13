@@ -155,6 +155,8 @@ def normalize_source_evidence(value: Mapping[str, Any]) -> SourceEvidenceEnvelop
                 "locator": "",
             }
         try:
+            raw_ref = dict(raw_ref)
+            raw_ref.setdefault("provider_id", provider_id)
             ref = source_ref_from_mapping(raw_ref)
         except (TypeError, ValueError):
             diagnostics.append("ignored source evidence without valid SourceRef")
