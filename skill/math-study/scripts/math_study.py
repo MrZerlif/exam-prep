@@ -13,6 +13,7 @@ from uuid import uuid4
 
 from math_study_lib.diagnostics import run_validation
 from math_study_lib.reducer import reduce_learning_state
+from math_study_lib.migration import migrate_legacy_workspace
 from math_study_lib.scheduler import (
     build_review_queue,
     compute_priority,
@@ -262,11 +263,16 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("rebuild")
     sub.add_parser("validate")
     sub.add_parser("end-session")
+    migrate = sub.add_parser("migrate")
+    migrate.add_argument("--from-math-study", required=True)
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.command == "migrate":
+        result = migrate_legacy_workspace(args.from_math_study)
+        return _result(result.to_mapping())
     store = _store(args.workspace)
 
     if args.command == "init":
