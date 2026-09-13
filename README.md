@@ -7,10 +7,11 @@ the LLM focus on teaching, debugging, and asking for independent work.
 
 ## Install
 
-Copy or enable this directory as an Agent Skill package. Runtime data is
-relative to the active study workspace. Python 3.11+ is required; the runtime
-uses only the standard library. No YAML runtime configuration, database, full
-FSRS, or mandatory CAS is needed.
+Copy or enable skill/math-study/ as the Agent Skill package. The repository
+keeps the skill package separate from root-level scripts, tests, and project
+documentation. Runtime data is relative to the active study workspace. Python
+3.11+ is required; the runtime uses only the standard library. No YAML runtime
+configuration, database, full FSRS, or mandatory CAS is needed.
 
 ## Start
 
@@ -22,7 +23,7 @@ python scripts/math_study.py load-syllabus syllabus/example-syllabus.json
 python scripts/math_study.py start
 ~~~
 
-Then write “Продолжаем матан.” to the tutor. It reads the compact local state,
+Then write “Продолжаем матан.” to the tutor with skill/math-study/ enabled. It reads the compact local state,
 shows due work, and resumes the pending action without requiring a transcript.
 
 For a teacher syllabus, export or prepare JSON with a concepts object. Each
@@ -71,6 +72,22 @@ python scripts/math_study.py verify request.json
 Core derivative and antiderivative checking is numerical finite-difference
 consistency evidence. Symbolic differentiation belongs only to an optional CAS
 backend and is never required for the tutor.
+
+## Repository layout
+
+~~~text
+skill/math-study/
+├── SKILL.md
+└── references/
+scripts/
+tests/
+config/
+schemas/
+syllabus/
+state/templates/
+examples/
+README.md
+~~~
 
 ## State and recovery
 
