@@ -5,9 +5,28 @@ import unittest
 ROOT = Path(__file__).parents[1]
 
 
-class SkillContractRedTest(unittest.TestCase):
-    def test_skill_entrypoint_is_not_implemented_before_green_phase(self):
-        self.assertFalse((ROOT / "SKILL.md").exists())
+class SkillContractTests(unittest.TestCase):
+    def test_skill_contract_has_valid_frontmatter_and_is_concise(self):
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertTrue(text.startswith("---\nname: math-study\n"))
+        self.assertLess(len(text.splitlines()), 220)
+
+    def test_skill_mentions_engine_owned_evidence_boundary(self):
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("LLM produces structured observation", text)
+        self.assertIn("deterministic state engine", text)
+        self.assertIn("observations.jsonl", text)
+        self.assertIn("record-observation", text)
+
+    def test_skill_links_operational_references(self):
+        text = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for reference in (
+            "references/pedagogy.md",
+            "references/exam-optimizer.md",
+            "references/math-verification.md",
+            "references/source-of-truth.md",
+        ):
+            self.assertIn(reference, text)
 
 
 if __name__ == "__main__":
