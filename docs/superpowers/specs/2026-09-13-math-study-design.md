@@ -53,7 +53,7 @@ LLM tutor: task, bounded assistance, observable grading
     |
     | structured Observation JSON only
     v
-state/observations.jsonl  <--- append-only source of truth
+state/observations.jsonl  <--- append-only canonical learning evidence
     |
     v
 deterministic state engine
@@ -65,6 +65,20 @@ compact state for the next session
 ~~~
 
 The LLM may propose an observation, but the engine owns all derived scores, review dates, priority scores, and status transitions.
+
+### 4.1 Canonical ownership
+
+| Artifact | Role | Rebuildable from observations alone? |
+|---|---|---|
+| `state/course.json` | Canonical course identity, exam metadata, policy, and time inputs | No; canonical configuration input |
+| `state/syllabus.json` | Canonical source-backed concepts, dependencies, and exam metadata | No; canonical syllabus input |
+| `state/observations.jsonl` | Append-only canonical learning evidence/events | Yes; evidence is never replaced by derived snapshots |
+| `state/concepts.json` | Reducer output: multidimensional mastery, evidence counters, recurring errors, statuses | Yes, from course/syllabus plus observations |
+| `state/review_queue.json` | Reducer output: due review items and intervals | Yes, from course/syllabus plus observations |
+| `state/learner.json` | Durable preferences and explicitly promoted cross-concept patterns | No; protected profile snapshot |
+| `state/session.json` | Current runtime cursor, pending action, and recovery context | No; protected runtime snapshot |
+
+The invariant is: all evidence-derived learning state is rebuildable from the canonical course/syllabus inputs plus `observations.jsonl`. Session and learner snapshots are not claimed to be recoverable from the evidence log alone.
 
 ## 5. Package and runtime layout
 
@@ -139,14 +153,12 @@ state/syllabus.json is the authoritative dependency graph. A concept has id, tit
 
 ### 6.2 Append-only evidence
 
-state/observations.jsonl is the append-only evidence/event log and ultimate rebuild source. Each complete line is one validated interaction fact, not transcript text:
+state/observations.jsonl is the append-only canonical evidence/event log. Each complete line is one validated interaction fact, not transcript text. The LLM submits an observation proposal; the deterministic engine adds engine-owned metadata before appending the canonical event:
 
 ~~~json
 {
   "schema_version": 1,
   "observation_id": "obs-20260913-0007",
-  "session_id": "session-20260913",
-  "timestamp": "2026-09-13T18:30:00Z",
   "concept_id": "chain_rule",
   "task_id": "transfer-003",
   "task_type": "transfer",
@@ -159,14 +171,16 @@ state/observations.jsonl is the append-only evidence/event log and ultimate rebu
     "full_solution_viewed": false
   },
   "error_tags": ["conceptual_error", "prerequisite_gap"],
-  "elapsed_seconds": 180,
-  "expected_seconds": 240,
   "diagnostic_confidence": "high",
   "learner_self_confidence": "high",
   "learner_explanation": "Я считаю, что производная композиции...",
   "source_refs": ["official-exam-list:q7"]
 }
 ~~~
+
+The engine-enriched canonical event also contains `recorded_at` (engine clock), the active `session_id`, task metadata's `expected_seconds`, and `elapsed_seconds` measured by the CLI/session boundary when available. The LLM cannot provide or override these fields; in particular, estimated time from the LLM is never used as speed evidence.
+
+`observation_id` is the idempotency key. On retry, an absent id is appended; an existing id with an identical canonical payload is a successful no-op; an existing id with a different payload is a conflict and is not reduced. This makes append/retry safe without introducing a database.
 
 independence and hint_level are absent. The engine derives an assistance band:
 
@@ -217,7 +231,6 @@ state/concepts.json is a derived snapshot, never the sole evidence source:
         "delayed_recall_successes": 1
       },
       "status": "weak",
-      "priority_score": 0.86,
       "last_tested": "2026-09-13T18:30:00Z",
       "recurring_mistakes": [
         {
@@ -235,6 +248,8 @@ state/concepts.json is a derived snapshot, never the sole evidence source:
 
 The reducer maps task type to dimensions, outcome to success/partial/failure, assistance band to evidence discount, and elapsed/expected time to speed evidence. Solution views and exposure do not promote mastery. Policy defaults are configurable, but the LLM cannot override them per answer.
 
+`recurring_mistakes` is concept-local evidence: it contains concrete error summaries for this concept. Cross-concept stable patterns belong in `state/learner.json` only after promotion by deterministic or explicitly confirmed policy; a promoted pattern is a summary, not a second canonical error ledger.
+
 Statuses are locked, unseen, learning, practicing, weak, review_due, exam_ready, mastered. exam_ready requires recent independent evidence across relevant task types and one transfer or exam-style task. Perfect mastery is not a prerequisite for moving to a higher-yield concept.
 
 ### 6.4 Learner and session
@@ -250,8 +265,7 @@ state/learner.json stores durable preferences and stable patterns only:
     "explanation_length": "concise",
     "solution_policy": "delay_full_solution"
   },
-  "stable_patterns": ["benefits from algorithmic decision trees"],
-  "persistent_misconceptions": ["confuses composition with multiplication"]
+  "stable_patterns": ["benefits from algorithmic decision trees"]
 }
 ~~~
 
@@ -272,14 +286,28 @@ state/review_queue.json is derived from evidence and exam horizon:
       "interval_hours": 15,
       "lapses": 2,
       "last_outcome": "incorrect",
-      "review_kind": "targeted_recall",
-      "priority_score": 0.86
+      "review_kind": "targeted_recall"
     }
   }
 }
 ~~~
 
-Failures, recurring errors, low recall, and a near exam shorten intervals. Independent recall can lengthen them. Intervals are capped at the exam horizon and low-yield perfection may be deferred.
+Failures, recurring errors, low recall, and a near exam shorten intervals. Independent recall can lengthen them. Intervals are capped at the exam horizon and low-yield perfection may be deferred. Review items do not own a permanent priority score.
+
+Priority is a contextual decision computed on demand from current time, exam revision, budget, due status, syllabus metadata, prerequisites, and current mastery. If a cache is useful, it is explicitly contextual and stale-able:
+
+~~~json
+{
+  "priority": {
+    "score": 0.86,
+    "computed_at": "2026-09-13T18:30:00+03:00",
+    "budget_minutes": 25,
+    "exam_revision": 3
+  }
+}
+~~~
+
+The engine invalidates or recomputes this cache when any input changes; cached priority is never treated as durable concept mastery.
 
 ## 7. Revisions and crash recovery
 
@@ -309,7 +337,7 @@ For a state-changing command:
 7. Atomically replace the small current.json pointer.
 8. Materialize convenience copies only after the pointer is valid.
 
-Recovery scans the highest valid revision when the pointer is missing/corrupt, then replays unapplied complete log lines. A partial final JSONL line is ignored and diagnosed, never counted as evidence. Hash-mismatched revisions are quarantined under state/recovery/. The log is durable and rebuildable; derived JSON is a verified cache/snapshot.
+Recovery scans the highest valid revision when the pointer is missing/corrupt, then replays unapplied complete log lines. A partial final JSONL line is ignored and diagnosed, never counted as evidence. Hash-mismatched revisions are quarantined under state/recovery/. The log is durable and is the rebuild source for evidence-derived learning state when combined with canonical course/syllabus inputs; derived JSON is a verified cache/snapshot. `learner.json` and `session.json` remain protected snapshots because they contain profile/runtime information not present in every observation.
 
 ## 8. Pedagogy and tutor contract
 
@@ -337,7 +365,7 @@ For an error, preserve the last valid step, isolate the first invalid transforma
 
 ## 9. Exam-first priority
 
-For each unlocked concept:
+For each unlocked concept, on the current planning call:
 
 ~~~text
 priority =
@@ -347,7 +375,7 @@ priority =
 
 exam_value combines official importance, frequency, and expected points. mastery_gap uses dimensions required by likely exam tasks. urgency rises as the exam approaches and reviews become overdue. prerequisite_readiness permits targeted prerequisite repair. improvement_potential discounts topics unlikely to improve in available time.
 
-This is a decision aid, not an exact grade prediction. The tutor explains the choice and may explicitly defer low-yield perfection. Time budgets include 10, 20, 45, 90 minutes, and deep session; every plan fits the budget and has a persistence point.
+This is a decision aid, not an exact grade prediction. The score is not an eternal concept property: it is recomputed for the requested budget and current exam horizon. The tutor explains the choice and may explicitly defer low-yield perfection. Time budgets include 10, 20, 45, 90 minutes, and deep session; every plan fits the budget and has a persistence point.
 
 ## 10. Review, interleaving, and exam mode
 
@@ -390,11 +418,10 @@ The Skill maps natural-language requests to these operations. The CLI validates 
 
 ## 13. Testing and acceptance criteria
 
-Deterministic tests cover valid/invalid observations, append/revision creation, replay equivalence, pointer/revision recovery, partial-log-line handling, full-solution non-promotion, independent transfer evidence, recurring errors, time/exam priority, finite-difference pass/fail, and CAS absence.
+Deterministic tests cover valid/invalid observations, engine-owned metadata rejection/enrichment, append/revision creation, observation-id idempotency and conflict detection, replay equivalence, pointer/revision recovery, partial-log-line handling, full-solution non-promotion, independent transfer evidence, concept-local recurring errors, cross-concept pattern promotion rules, contextual priority recomputation/cache invalidation, time/exam priority, finite-difference pass/fail, and CAS absence.
 
-Synthetic scenarios cover beginner limits, chain-rule misconception, 24-hour triage, restart, full-solution viewing, repeated conceptual error, and exam mode with post-mortem.
+Synthetic scenarios cover beginner limits, chain-rule misconception, 24-hour triage, restart, full-solution viewing, repeated conceptual error, observation retry after a simulated crash, and exam mode with post-mortem. The restart scenario verifies that concepts/reviews rebuild from canonical inputs plus `observations.jsonl`, while session/profile snapshots recover from their latest valid revision.
 
 Before deployment, run pressure scenarios combining urgency, frustration, and requests for answers. Compare baseline without the Skill and behavior with the Skill, then close discovered loopholes.
 
-Acceptance requires fresh initialization without YAML or non-stdlib runtime dependencies; resume from local state after a new session; all derived values computed by the engine; state rebuildable from observations.jsonl; revision-based recovery without a false atomicity claim; assistance represented once with independence derived; diagnostic and learner confidence separated; core numerical verification without CAS; optional symbolic verification isolated; exam-first roadmap observable; deterministic and synthetic tests passing; and concise SKILL.md with detailed protocols in references.
-
+Acceptance requires fresh initialization without YAML or non-stdlib runtime dependencies; resume from local state after a new session; all derived values computed by the engine; all evidence-derived state rebuildable from canonical course/syllabus inputs plus `observations.jsonl` (without claiming session/profile recovery from the log alone); revision-based recovery without a false multi-file atomicity claim; assistance represented once with independence derived; diagnostic and learner confidence separated; engine-owned timing metadata with no LLM-estimated speed evidence; contextual, invalidatable priority; concept-local recurring errors with non-duplicative cross-concept summaries; core numerical finite-difference verification without CAS; optional symbolic verification isolated; exam-first roadmap observable; deterministic and synthetic tests passing; and concise SKILL.md with detailed protocols in references.
