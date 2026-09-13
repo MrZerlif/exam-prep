@@ -25,6 +25,7 @@ from math_study_lib.schema_validation import (
 )
 from math_study_lib.storage import StudyStore
 from math_study_lib.verifier import verify_antiderivative, verify_derivative
+from math_study_lib.workspace import discover_git_root, resolve_workspace
 
 
 DEFAULT_COURSE = {
@@ -112,8 +113,12 @@ def _read_json(path: Path, default: object) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _store(workspace: str) -> StudyStore:
-    store = StudyStore(Path(workspace).resolve())
+def _store(workspace: str | None) -> StudyStore:
+    resolved_workspace = resolve_workspace(
+        workspace,
+        git_root=discover_git_root(),
+    )
+    store = StudyStore(resolved_workspace)
     store.initialize()
     return store
 
@@ -230,8 +235,8 @@ def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="math_study")
     parser.add_argument(
         "--workspace",
-        default=os.environ.get("MATH_STUDY_WORKSPACE", "."),
-        help="active study workspace; defaults to the current directory",
+        default=None,
+        help="active study workspace; defaults to environment, git root, or cwd",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("init")
