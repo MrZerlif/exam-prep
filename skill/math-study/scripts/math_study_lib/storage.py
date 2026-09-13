@@ -10,11 +10,17 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from .assessment import FrozenAssessment
+from .assessment_integrity import assess_attempt_evidence
 from .schema_validation import validate_observation_proposal
 
 
 class ObservationConflict(ValueError):
     """The same observation id was submitted with a different payload."""
+
+
+class AssessmentConflict(ValueError):
+    """The same assessment id was submitted with a different frozen contract."""
 
 
 @dataclass(frozen=True)
@@ -23,6 +29,13 @@ class AppendResult:
     canonical_event: dict[str, Any]
     appended: bool
     revision_created: int | None = None
+
+
+@dataclass(frozen=True)
+class AssessmentAppendResult:
+    assessment_id: str
+    contract: dict[str, Any]
+    appended: bool
 
 
 @dataclass(frozen=True)
@@ -44,8 +57,20 @@ class RecoveryResult:
 class StudyStore:
     def __init__(self, root: Path):
         self.root = Path(root)
-        self.state_path = self.root / "state"
+        self._set_runtime_path(self.root / "state")
+
+    @classmethod
+    def for_exam_prep(cls, workspace: Path) -> "StudyStore":
+        """Create a store using the flat .exam-prep runtime directory."""
+
+        store = cls(Path(workspace))
+        store._set_runtime_path(store.root / ".exam-prep")
+        return store
+
+    def _set_runtime_path(self, runtime_path: Path) -> None:
+        self.state_path = Path(runtime_path)
         self.observations_path = self.state_path / "observations.jsonl"
+        self.assessments_path = self.state_path / "assessments.jsonl"
         self.sessions_log_path = self.state_path / "sessions.jsonl"
         self.revisions_path = self.state_path / "revisions"
         self.recovery_path = self.state_path / "recovery"
@@ -56,6 +81,7 @@ class StudyStore:
         for path in (self.root, self.state_path, self.revisions_path, self.recovery_path):
             path.mkdir(parents=True, exist_ok=True)
         self.observations_path.touch(exist_ok=True)
+        self.assessments_path.touch(exist_ok=True)
         self.sessions_log_path.touch(exist_ok=True)
 
     @staticmethod
@@ -116,6 +142,37 @@ class StudyStore:
         self._log_diagnostics["sessions_log_partial_final_line"] = partial
         return summaries
 
+    def read_assessments(self) -> list[dict[str, Any]]:
+        self.initialize()
+        assessments, _partial = self._read_complete_jsonl(
+            self.assessments_path, "assessment"
+        )
+        return assessments
+
+    def append_assessment(
+        self, assessment: FrozenAssessment | dict[str, Any]
+    ) -> AssessmentAppendResult:
+        frozen = (
+            assessment
+            if isinstance(assessment, FrozenAssessment)
+            else FrozenAssessment.from_mapping(assessment)
+        )
+        canonical = frozen.to_mapping()
+        existing = {
+            item["assessment_id"]: item
+            for item in self.read_assessments()
+            if "assessment_id" in item
+        }
+        assessment_id = frozen.assessment_id
+        if assessment_id in existing:
+            if existing[assessment_id] == canonical:
+                return AssessmentAppendResult(assessment_id, existing[assessment_id], False)
+            raise AssessmentConflict(
+                f"assessment_id {assessment_id!r} already has a different frozen contract"
+            )
+        self._append_jsonl(self.assessments_path, canonical)
+        return AssessmentAppendResult(assessment_id, canonical, True)
+
     def append_session_summary(self, summary: dict[str, Any]) -> None:
         self.initialize()
         self._append_jsonl(self.sessions_log_path, summary)
@@ -134,6 +191,23 @@ class StudyStore:
         elapsed_seconds: int | None,
     ) -> AppendResult:
         validate_observation_proposal(proposal)
+        assessment_id = proposal.get("assessment_id")
+        if assessment_id is not None:
+            frozen_by_id = {
+                item["assessment_id"]: FrozenAssessment.from_mapping(item)
+                for item in self.read_assessments()
+                if "assessment_id" in item
+            }
+            frozen = frozen_by_id.get(assessment_id)
+            if frozen is None:
+                raise AssessmentConflict(
+                    f"observation references unknown assessment_id {assessment_id!r}"
+                )
+            assess_attempt_evidence(
+                proposal,
+                frozen,
+                prior_events=self.read_complete_observations(),
+            )
         canonical = dict(proposal)
         canonical.update(
             {
