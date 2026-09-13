@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Structured SourceRef",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["source_id", "authority", "locator", "provider_id"],
+  "properties": {
+    "source_id": {"type": "string", "minLength": 1},
+    "authority": {"type": "string", "minLength": 1},
+    "locator": {"type": "string"},
+    "title": {"type": ["string", "null"]},
+    "excerpt": {"type": ["string", "null"]},
+    "content_hash": {"type": ["string", "null"]},
+    "provider_id": {"type": "string", "minLength": 1},
+    "artifact_id": {"type": ["string", "null"]},
+    "retrieved_at": {"type": ["string", "null"]}
+  }
+}
