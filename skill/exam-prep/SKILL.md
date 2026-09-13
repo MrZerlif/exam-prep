@@ -1,6 +1,6 @@
 ---
 name: exam-prep
-description: Use when a first-year student needs interactive, exam-first mathematical analysis study across sessions, especially with limited time, weak prerequisites, recurring mistakes, or a request to continue from persistent local progress.
+description: Use when a learner needs interactive, exam-first preparation for any academic or technical subject across sessions, especially with limited time, weak prerequisites, recurring mistakes, or a request to continue from persistent local progress.
 ---
 
 # Exam Prep
@@ -15,10 +15,37 @@ provider is a normal diagnostic state.
 NotebookLM MCP is an optional P2 integration after the generic
 SourceProvider/source-evidence boundary is stable. The agent host discovers
 available NotebookLM MCP capabilities, invokes the host-provided tools, and
-normalizes returned evidence/provenance before passing it to the
+normalizes returned evidence/provenance into a SourceEvidenceEnvelope before passing it to the
 ingest-source-evidence command. The Python CLI does not invoke MCP, an SDK, a
 transport, a server package, or authentication mechanism. Absence or failure
 falls back gracefully, and NotebookLM never owns canonical learner state.
+
+## Automatic curriculum generation
+
+The learner normally supplies materials, exam questions, or source references;
+the learner does not hand-author syllabus JSON. The agent or a SourceProvider
+analyzes those materials and proposes a small structured curriculum. The
+deterministic workflow is:
+
+~~~text
+sources/materials
+  -> LLM or SourceProvider analysis
+  -> CurriculumProposal
+  -> deterministic validation
+  -> LearningTargets
+  -> prerequisite graph
+  -> exam-question mapping
+  -> AssessmentCapabilities
+  -> source coverage
+  -> persisted syllabus
+~~~
+
+Use validate-curriculum before apply-curriculum. Validation rejects missing
+prerequisites, cycles, unknown SourceRefs, open capability IDs, inconsistent
+exam mappings, and coverage gaps. Applying the same proposal is idempotent;
+incremental proposals merge by stable target, question, capability, and source
+identity. PDF/DOCX/OCR parsing is outside the deterministic core: the agent
+environment or a provider may extract text before proposal generation.
 
 ## attempt-first integrity
 
@@ -32,7 +59,7 @@ the tutor policy is therefore part of the contract.
 
 ## Core contract
 
-This is an evidence-driven mathematical-analysis tutor, not a lecture prompt.
+This is an evidence-driven exam-prep tutor for any academic or technical subject, not a lecture prompt.
 LLM produces structured observation proposals; the deterministic state engine
 calculates and persists mastery, reviews, priority, and recovery state.
 
@@ -48,12 +75,12 @@ python scripts/exam_prep.py record-observation proposal.json
 
 ## Start or resume
 
-For “Продолжаем матан.”, “study”, or an equivalent request:
+For “continue studying”, “study”, or an equivalent request:
 
 1. Run status and read course, syllabus, session, due reviews, recent mistakes,
    and the current pending action.
-2. If no course exists, ask for a syllabus or run init; teacher materials and
-   official exam questions outrank generic calculus knowledge.
+2. If no course exists, ask for source materials or run init; declared teacher
+   materials and official exam questions outrank generic subject knowledge.
 3. Ask for the available time when it is unknown. Select a budget-fitting
    activity with next/roadmap; explain the exam-value tradeoff in one sentence.
 4. Continue the pending action before inventing a new lecture.
@@ -69,7 +96,7 @@ start. Make the learner produce an answer, explanation, formula reading, or
 method choice before evaluating.
 
 Use H0–H5 assistance from references/pedagogy.md. Never reveal a full solution
-just because the learner says “понятно” or asks once; solution exposure is
+just because the learner says “I understand” or asks once; solution exposure is
 recorded but does not raise mastery. After H5, require a structurally different
 attempt. In exam mode, give no unsolicited hints and minimal feedback until
 submission or stop.

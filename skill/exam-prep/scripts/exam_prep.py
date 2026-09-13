@@ -19,6 +19,7 @@ from exam_prep_lib.curriculum import (
     apply_curriculum_proposal,
     validate_curriculum_proposal,
 )
+from exam_prep_lib.assessment import FrozenAssessment
 from exam_prep_lib.scheduler import (
     build_review_queue,
     compute_priority,
@@ -31,14 +32,15 @@ from exam_prep_lib.schema_validation import (
 )
 from exam_prep_lib.source_evidence import ingest_source_evidence
 from exam_prep_lib.storage import StudyStore
+from exam_prep_lib.target_normalization import normalize_syllabus
 from exam_prep_lib.verifier import verify_antiderivative, verify_derivative
 from exam_prep_lib.workspace import discover_git_root, resolve_workspace
 
 
 DEFAULT_COURSE = {
-    "schema_version": 1,
-    "course_id": "calculus-1",
-    "title": "Mathematical analysis",
+    "schema_version": 2,
+    "course_id": "exam-prep-course",
+    "title": "Exam preparation",
     "exam": {
         "date": None,
         "timezone": "UTC",
@@ -73,7 +75,14 @@ DEFAULT_COURSE = {
         },
     },
 }
-DEFAULT_SYLLABUS = {"schema_version": 1, "concepts": {}}
+DEFAULT_SYLLABUS = {
+    "schema_version": 2,
+    "course_id": "exam-prep-course",
+    "source_refs": [],
+    "learning_targets": [],
+    "assessment_capabilities": {},
+    "exam_questions": [],
+}
 DEFAULT_LEARNER = {
     "schema_version": 1,
     "updated_at": None,
@@ -166,7 +175,7 @@ def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
         applied_line = manifest_data.get("last_complete_observation_line", 0)
         applied_id = manifest_data.get("last_complete_observation_id")
         concept_ids = set(recovered.derived.get("concepts", {}).keys())
-        syllabus_ids = set(syllabus.get("concepts", {}).keys())
+        syllabus_ids = set(normalize_syllabus(syllabus).targets)
         # Compare canonical-input fingerprints, not just the concept-id set:
         # editing course.json (exam date, scheduler policy) or syllabus.json
         # content (prerequisites, importance, expected_points) with the same
@@ -270,20 +279,22 @@ def _parser() -> argparse.ArgumentParser:
     sub.add_parser("validate")
     sub.add_parser("end-session")
     migrate = sub.add_parser("migrate")
-    migrate.add_argument("--from-exam-prep", required=True)
+    migrate.add_argument("--from-math-study", required=True)
     ingest = sub.add_parser("ingest-source-evidence")
     ingest.add_argument("path")
     validate_curriculum = sub.add_parser("validate-curriculum")
     validate_curriculum.add_argument("path")
     apply_curriculum = sub.add_parser("apply-curriculum")
     apply_curriculum.add_argument("path")
+    freeze = sub.add_parser("freeze-assessment")
+    freeze.add_argument("path")
     return parser
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     if args.command == "migrate":
-        result = migrate_legacy_workspace(args.from_exam_prep)
+        result = migrate_legacy_workspace(args.from_math_study)
         return _result(result.to_mapping())
     store = _store(args.workspace)
 
@@ -308,6 +319,20 @@ def main(argv: list[str] | None = None) -> int:
             return _result({"valid": False, "issues": exc.issues})
         return _result(result.to_mapping())
 
+    if args.command == "freeze-assessment":
+        assessment = FrozenAssessment.from_mapping(
+            json.loads(Path(args.path).read_text(encoding="utf-8"))
+        )
+        result = store.append_assessment(assessment)
+        return _result(
+            {
+                "status": "assessment_frozen",
+                "assessment_id": result.assessment_id,
+                "spec_hash": assessment.spec_hash,
+                "appended": result.appended,
+            }
+        )
+
     if args.command == "init":
         now = _now()
         course = dict(DEFAULT_COURSE)
@@ -331,7 +356,7 @@ def main(argv: list[str] | None = None) -> int:
         return _result(
             {
                 "status": "syllabus_loaded",
-                "concept_count": len(loaded.get("concepts", {})),
+                "concept_count": len(normalize_syllabus(loaded).targets),
                 "source": str(path.resolve()),
             }
         )
@@ -393,11 +418,12 @@ def main(argv: list[str] | None = None) -> int:
             None,
         )
         session = dict(session)
+        target_id = proposal.get("target_id", proposal.get("concept_id"))
         session.update(
             {
-                "current_concept": proposal["concept_id"],
+                "current_concept": target_id,
                 "current_task": proposal["task_id"],
-                "pending_action": f"continue {proposal['concept_id']} with an independent check",
+                "pending_action": f"continue {target_id} with an independent check",
             }
         )
         concepts, reviews, manifest = _persist_learning(
@@ -448,7 +474,7 @@ def main(argv: list[str] | None = None) -> int:
                 .get("availability", "available"),
                 "prerequisites": metadata.get("prerequisites", []),
             }
-            for concept_id, metadata in syllabus.get("concepts", {}).items()
+            for concept_id, metadata in normalize_syllabus(syllabus).targets.items()
         ]
         return _result({"roadmap": roadmap})
 
@@ -513,7 +539,13 @@ def main(argv: list[str] | None = None) -> int:
                 event for event in store.read_complete_observations()
                 if event.get("session_id") == active_id
             ]
-            concept_ids = sorted({event["concept_id"] for event in session_events})
+            concept_ids = sorted(
+                {
+                    event.get("target_id", event.get("concept_id"))
+                    for event in session_events
+                    if event.get("target_id", event.get("concept_id"))
+                }
+            )
             summary = {
                 "schema_version": 1,
                 "session_id": active_id,
@@ -522,9 +554,10 @@ def main(argv: list[str] | None = None) -> int:
                 "studied": concept_ids,
                 "improved": sorted(
                     {
-                        event["concept_id"]
+                        event.get("target_id", event.get("concept_id"))
                         for event in session_events
                         if event.get("outcome") == "correct"
+                        and event.get("target_id", event.get("concept_id"))
                     }
                 ),
                 "weak": sorted(

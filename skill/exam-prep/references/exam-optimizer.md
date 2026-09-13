@@ -2,7 +2,7 @@
 
 ## Decision rule
 
-For the current budget, rank unlocked concepts with:
+For the current budget, rank unlocked learning targets with:
 
 ~~~text
 exam value × mastery gap × urgency × prerequisite readiness

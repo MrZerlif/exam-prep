@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from .schema_validation import load_schema, validate_document
 from .storage import StudyStore
+from .target_normalization import normalize_event, normalize_syllabus
 
 
 def _check(name: str, fn: Callable[[], tuple[str, str] | None], path: str | None = None) -> dict[str, Any]:
@@ -112,7 +113,7 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         bad = [
             name
             for name, doc in (("course", course), ("syllabus", syllabus))
-            if doc.get("schema_version") != 1
+            if doc.get("schema_version") not in (1, 2)
         ]
         if bad:
             return "error", f"unexpected schema_version in: {', '.join(bad)}"
@@ -123,11 +124,11 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
     def check_source_refs():
         missing = [
             concept_id
-            for concept_id, metadata in syllabus.get("concepts", {}).items()
+            for concept_id, metadata in normalize_syllabus(syllabus).targets.items()
             if not metadata.get("source_refs")
         ]
         if missing:
-            return "warning", f"concepts without source_refs: {', '.join(sorted(missing))}"
+            return "warning", f"learning targets without source_refs: {', '.join(sorted(missing))}"
         return None
 
     add("syllabus_source_refs", check_source_refs)
@@ -177,10 +178,18 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
     add("observation_id_uniqueness", check_observation_id_uniqueness)
 
     def check_observation_concept_refs():
-        known = set(syllabus.get("concepts", {}).keys())
-        orphaned = sorted({event.get("concept_id") for event in events if event.get("concept_id") not in known})
+        normalized_syllabus = normalize_syllabus(syllabus)
+        normalized_events = [normalize_event(event, normalized_syllabus) for event in events]
+        known = set(normalized_syllabus.targets)
+        orphaned = sorted(
+            {
+                event.get("target_id")
+                for event in normalized_events
+                if event.get("target_id") not in known
+            }
+        )
         if orphaned:
-            return "warning", f"observations reference concept_ids not in the current syllabus: {', '.join(orphaned)}"
+            return "warning", f"observations reference target_ids not in the current syllabus: {', '.join(orphaned)}"
         return None
 
     add("observation_concept_ids_known", check_observation_concept_refs)

@@ -7,6 +7,7 @@ from typing import Any
 
 from .provenance import source_ref_from_mapping
 from .scheduler import compute_priority
+from .target_normalization import normalize_syllabus
 
 
 def rank_source_aware_targets(
@@ -20,11 +21,12 @@ def rank_source_aware_targets(
     available_source_ids: set[str] | None = None,
 ) -> list[dict[str, Any]]:
     ranked: list[dict[str, Any]] = []
-    for target_id in syllabus.get("concepts", {}):
+    targets = normalize_syllabus(syllabus).targets
+    for target_id in targets:
         priority = compute_priority(
             target_id, syllabus, concepts, reviews, course, now, budget_minutes
         )
-        metadata = syllabus.get("concepts", {}).get(target_id, {})
+        metadata = targets.get(target_id, {})
         refs = metadata.get("source_refs", [])
         coverage_gap = not refs or (
             available_source_ids is not None

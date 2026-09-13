@@ -10,6 +10,7 @@ from math_study_lib.assessment_integrity import (  # noqa: E402
     AssessmentIntegrityError,
     assess_attempt_evidence,
 )
+from math_study_lib.reducer import reduce_learning_state  # noqa: E402
 from math_study_lib.storage import AssessmentConflict, StudyStore  # noqa: E402
 
 
@@ -84,6 +85,28 @@ class AssessmentIntegrityTests(unittest.TestCase):
         self.assertTrue(decision.accepted)
         self.assertFalse(decision.mastery_eligible)
 
+    def test_downgraded_solution_exposure_flag_never_promotes_reducer_mastery(self):
+        syllabus = {"concepts": {"algebra:linear": {"prerequisites": []}}}
+        result = reduce_learning_state(
+            {},
+            syllabus,
+            [
+                {
+                    "observation_id": "exposed-work",
+                    "concept_id": "algebra:linear",
+                    "capability_id": "independent_problem",
+                    "task_type": "independent_problem",
+                    "outcome": "correct",
+                    "solution_exposed": True,
+                    "assistance": {"levels_revealed": []},
+                }
+            ],
+            {},
+        )
+        state = result["concepts"]["algebra:linear"]
+        self.assertEqual(0.0, state["mastery"]["procedural"])
+        self.assertEqual(0, state["evidence"]["independent_successes"])
+
     def test_store_assessment_is_idempotent_and_conflicts_on_divergence(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StudyStore(Path(tmp))
@@ -97,6 +120,12 @@ class AssessmentIntegrityTests(unittest.TestCase):
                     )
                 )
             self.assertEqual([frozen.assessment_id], [item["assessment_id"] for item in store.read_assessments()])
+
+    def test_store_rejects_assessment_outside_contract_ranges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore(Path(tmp))
+            with self.assertRaises(ValueError):
+                store.append_assessment(assessment(difficulty=1.5))
 
 
 if __name__ == "__main__":
