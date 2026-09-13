@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "time_budgets_minutes": [10, 20, 45, 90],
+  "mastery": {
+    "dimensions": ["conceptual", "procedural", "recall", "transfer", "speed"],
+    "exam_ready_minimum_independent_successes": 2,
+    "mastered_minimum_independent_successes": 3
+  },
+  "scheduler": {
+    "mode": "exam_cram",
+    "max_review_interval_hours": 72,
+    "review_warmup_limit": 3,
+    "recurring_mistake_sessions": 3
+  },
+  "verification": {
+    "finite_difference_tolerance": 0.0001,
+    "sample_count": 5
+  },
+  "source_policy": {
+    "priority_order": [
+      "teacher_material",
+      "official_exam_list",
+      "lecture_notes",
+      "problem_sets",
+      "general_reference"
+    ],
+    "conflicts": "flag_for_user"
+  }
+}
