@@ -3,9 +3,9 @@ import unittest
 from datetime import datetime, timedelta, timezone
 
 
-sys.path.insert(0, "skill/math-study/scripts")
+sys.path.insert(0, "skill/exam-prep/scripts")
 
-from math_study_lib.scheduler import (  # noqa: E402
+from exam_prep_lib.scheduler import (  # noqa: E402
     build_review_queue,
     compute_priority,
     select_next_activity,

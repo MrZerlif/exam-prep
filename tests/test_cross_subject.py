@@ -2,10 +2,10 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "math-study" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from math_study_lib.reducer import reduce_learning_state  # noqa: E402
-from math_study_lib.scheduler import build_review_queue, select_next_activity  # noqa: E402
+from exam_prep_lib.reducer import reduce_learning_state  # noqa: E402
+from exam_prep_lib.scheduler import build_review_queue, select_next_activity  # noqa: E402
 
 
 class CrossSubjectTests(unittest.TestCase):

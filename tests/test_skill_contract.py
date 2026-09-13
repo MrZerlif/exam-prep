@@ -3,13 +3,13 @@ import unittest
 
 
 ROOT = Path(__file__).parents[1]
-SKILL_ROOT = ROOT / "skill" / "math-study"
+SKILL_ROOT = ROOT / "skill" / "exam-prep"
 
 
 class SkillContractTests(unittest.TestCase):
     def test_skill_contract_has_valid_frontmatter_and_is_concise(self):
         text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
-        self.assertTrue(text.startswith("---\nname: math-study\n"))
+        self.assertTrue(text.startswith("---\nname: exam-prep\n"))
         self.assertLess(len(text.splitlines()), 220)
 
     def test_skill_mentions_engine_owned_evidence_boundary(self):
@@ -24,7 +24,7 @@ class SkillContractTests(unittest.TestCase):
         for reference in (
             "references/pedagogy.md",
             "references/exam-optimizer.md",
-            "references/math-verification.md",
+            "references/verification.md",
             "references/source-of-truth.md",
         ):
             self.assertIn(reference, text)

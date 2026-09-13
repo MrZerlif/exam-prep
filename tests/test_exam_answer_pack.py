@@ -2,10 +2,10 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "math-study" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from math_study_lib.assessment import FrozenAssessment  # noqa: E402
-from math_study_lib.answer_pack import ExamAnswerPack, build_exam_answer_pack  # noqa: E402
+from exam_prep_lib.assessment import FrozenAssessment  # noqa: E402
+from exam_prep_lib.answer_pack import ExamAnswerPack, build_exam_answer_pack  # noqa: E402
 
 
 class ExamAnswerPackTests(unittest.TestCase):

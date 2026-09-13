@@ -2,11 +2,11 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "math-study" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from math_study_lib.evidence_maturity import derive_evidence_maturity  # noqa: E402
-from math_study_lib.provenance import SourceRef, source_ref_from_mapping  # noqa: E402
-from math_study_lib.reducer import reduce_learning_state  # noqa: E402
+from exam_prep_lib.evidence_maturity import derive_evidence_maturity  # noqa: E402
+from exam_prep_lib.provenance import SourceRef, source_ref_from_mapping  # noqa: E402
+from exam_prep_lib.reducer import reduce_learning_state  # noqa: E402
 
 
 class ProvenanceAndMaturityTests(unittest.TestCase):

@@ -1,6 +1,6 @@
 """Acceptance test: the installed skill package must be self-contained.
 
-Copies ONLY skill/math-study/ into a clean temporary directory, with no
+Copies ONLY skill/exam-prep/ into a clean temporary directory, with no
 access to the repository root (a separate CWD, and a subprocess PYTHONPATH
 that does not include the repo), then drives the documented CLI lifecycle.
 """
@@ -16,7 +16,7 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
-SKILL_SOURCE = ROOT / "skill" / "math-study"
+SKILL_SOURCE = ROOT / "skill" / "exam-prep"
 # Inherit the OS environment (Windows needs SystemRoot etc. to start python.exe
 # at all) but strip PYTHONPATH so nothing points back at the source repository.
 ISOLATED_ENV = {key: value for key, value in os.environ.items() if key.upper() != "PYTHONPATH"}
@@ -25,7 +25,7 @@ ISOLATED_ENV = {key: value for key, value in os.environ.items() if key.upper() !
 class StandaloneInstallTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
-        self.install_root = Path(self.temp_dir.name) / "math-study"
+        self.install_root = Path(self.temp_dir.name) / "exam-prep"
         shutil.copytree(
             SKILL_SOURCE,
             self.install_root,
@@ -37,7 +37,7 @@ class StandaloneInstallTests(unittest.TestCase):
 
     def run_cli(self, *args):
         completed = subprocess.run(
-            [sys.executable, "scripts/math_study.py", *args],
+            [sys.executable, "scripts/exam_prep.py", *args],
             cwd=self.install_root,
             env=ISOLATED_ENV,
             capture_output=True,
@@ -58,7 +58,7 @@ class StandaloneInstallTests(unittest.TestCase):
         init_result = self.run_cli("init")
         self.assertEqual(init_result["status"], "initialized")
 
-        syllabus_path = self.install_root / "syllabus" / "example-syllabus.json"
+        syllabus_path = self.install_root / "examples" / "example-syllabus.json"
         self.run_cli("load-syllabus", str(syllabus_path))
 
         status_before = self.run_cli("status")

@@ -2,10 +2,10 @@ import sys
 import unittest
 
 
-sys.path.insert(0, "skill/math-study/scripts")
+sys.path.insert(0, "skill/exam-prep/scripts")
 
-from math_study_lib import symbolic_backend  # noqa: E402
-from math_study_lib.verifier import (  # noqa: E402
+from exam_prep_lib import symbolic_backend  # noqa: E402
+from exam_prep_lib.verifier import (  # noqa: E402
     UnsafeExpression,
     verify_antiderivative,
     verify_derivative,

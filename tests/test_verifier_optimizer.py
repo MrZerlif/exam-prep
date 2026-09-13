@@ -3,11 +3,11 @@ import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "math-study" / "scripts"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from math_study_lib.capabilities import AssessmentCapability  # noqa: E402
-from math_study_lib.optimizer import rank_source_aware_targets  # noqa: E402
-from math_study_lib.verifier_registry import VerifierRegistry  # noqa: E402
+from exam_prep_lib.capabilities import AssessmentCapability  # noqa: E402
+from exam_prep_lib.optimizer import rank_source_aware_targets  # noqa: E402
+from exam_prep_lib.verifier_registry import VerifierRegistry  # noqa: E402
 
 
 class VerifierAndOptimizerTests(unittest.TestCase):

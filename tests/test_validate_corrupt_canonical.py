@@ -12,15 +12,15 @@ import unittest
 from pathlib import Path
 
 
-sys.path.insert(0, "skill/math-study/scripts")
+sys.path.insert(0, "skill/exam-prep/scripts")
 
-from math_study import main  # noqa: E402
-from math_study_lib.storage import StudyStore  # noqa: E402
+from exam_prep import main  # noqa: E402
+from exam_prep_lib.storage import StudyStore  # noqa: E402
 
 
 ROOT = Path(__file__).parents[1]
-SCRIPT = ROOT / "skill" / "math-study" / "scripts" / "math_study.py"
-SYLLABUS = ROOT / "skill" / "math-study" / "syllabus" / "example-syllabus.json"
+SCRIPT = ROOT / "skill" / "exam-prep" / "scripts" / "exam_prep.py"
+SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "example-syllabus.json"
 
 
 class ValidateCorruptCanonicalTests(unittest.TestCase):
