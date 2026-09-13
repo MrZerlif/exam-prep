@@ -38,6 +38,7 @@ class RecoveryResult:
     derived: dict[str, Any]
     session: dict[str, Any]
     learner: dict[str, Any]
+    review_queue: dict[str, Any] | None = None
 
 
 class StudyStore:
@@ -141,6 +142,11 @@ class StudyStore:
         ]
         return max(revisions, default=0) + 1
 
+    def next_revision(self) -> int:
+        """Return the next revision number without changing state."""
+        self.initialize()
+        return self._next_revision()
+
     @staticmethod
     def _hash_file(path: Path) -> str:
         return hashlib.sha256(path.read_bytes()).hexdigest()
@@ -150,6 +156,7 @@ class StudyStore:
         derived: dict[str, Any],
         session: dict[str, Any],
         learner: dict[str, Any],
+        review_queue: dict[str, Any] | None = None,
     ) -> RevisionManifest:
         self.initialize()
         revision = self._next_revision()
@@ -158,6 +165,10 @@ class StudyStore:
             self._write_json(temp_path / "concepts.json", derived)
             self._write_json(temp_path / "session.json", session)
             self._write_json(temp_path / "learner.json", learner)
+            revision_files = ["concepts.json", "session.json", "learner.json"]
+            if review_queue is not None:
+                self._write_json(temp_path / "review_queue.json", review_queue)
+                revision_files.append("review_queue.json")
             events = self.read_complete_observations()
             log_offset = self.observations_path.stat().st_size
             manifest_data = {
@@ -168,7 +179,7 @@ class StudyStore:
                 "log_byte_offset": log_offset,
                 "derived_hashes": {
                     name: self._hash_file(temp_path / name)
-                    for name in ("concepts.json", "session.json", "learner.json")
+                    for name in revision_files
                 },
             }
             self._write_json(temp_path / "manifest.json", manifest_data)
@@ -185,6 +196,8 @@ class StudyStore:
             ("learner.json", learner),
         ):
             self._write_json(self.state_path / name, value)
+        if review_queue is not None:
+            self._write_json(self.state_path / "review_queue.json", review_queue)
         return RevisionManifest(revision, manifest_data)
 
     def _load_revision(self, revision_path: Path) -> RecoveryResult | None:
@@ -197,12 +210,19 @@ class StudyStore:
             derived = json.loads((revision_path / "concepts.json").read_text(encoding="utf-8"))
             session = json.loads((revision_path / "session.json").read_text(encoding="utf-8"))
             learner = json.loads((revision_path / "learner.json").read_text(encoding="utf-8"))
+            review_path = revision_path / "review_queue.json"
+            review_queue = (
+                json.loads(review_path.read_text(encoding="utf-8"))
+                if review_path.exists()
+                else None
+            )
             return RecoveryResult(
                 RevisionManifest(int(manifest_data["revision"]), manifest_data),
                 revision_path,
                 derived,
                 session,
                 learner,
+                review_queue,
             )
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             return None
