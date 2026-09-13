@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+
+state/course.json
+state/syllabus.json
+state/learner.json
+state/session.json
+state/concepts.json
+state/review_queue.json
+state/observations.jsonl
+state/current.json
+state/revisions/
+state/recovery/
+
+sessions/*.json
+reviews/*.json
+exams/runtime/
