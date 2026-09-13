@@ -26,6 +26,11 @@
     "diagnostic_confidence": {"type": "string", "enum": ["low", "medium", "high"]},
     "learner_self_confidence": {"type": "string", "enum": ["low", "medium", "high"]},
     "learner_explanation": {"type": "string"},
-    "source_refs": {"type": "array", "items": {"type": "string"}}
+    "source_refs": {"type": "array", "items": {}},
+    "assessment_id": {"type": "string", "minLength": 1},
+    "capability_id": {"type": "string", "minLength": 1},
+    "explicit_exposure_reason": {"type": "string", "minLength": 1},
+    "solution_exposed": {"type": "boolean"},
+    "evidence_facets": {"type": "array", "items": {"type": "string"}}
   }
 }
