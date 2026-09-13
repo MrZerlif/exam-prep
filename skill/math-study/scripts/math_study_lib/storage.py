@@ -71,6 +71,7 @@ class StudyStore:
         self.state_path = Path(runtime_path)
         self.observations_path = self.state_path / "observations.jsonl"
         self.assessments_path = self.state_path / "assessments.jsonl"
+        self.source_evidence_path = self.state_path / "source_evidence.jsonl"
         self.sessions_log_path = self.state_path / "sessions.jsonl"
         self.revisions_path = self.state_path / "revisions"
         self.recovery_path = self.state_path / "recovery"
@@ -82,6 +83,7 @@ class StudyStore:
             path.mkdir(parents=True, exist_ok=True)
         self.observations_path.touch(exist_ok=True)
         self.assessments_path.touch(exist_ok=True)
+        self.source_evidence_path.touch(exist_ok=True)
         self.sessions_log_path.touch(exist_ok=True)
 
     @staticmethod
@@ -172,6 +174,17 @@ class StudyStore:
             )
         self._append_jsonl(self.assessments_path, canonical)
         return AssessmentAppendResult(assessment_id, canonical, True)
+
+    def read_source_evidence(self) -> list[dict[str, Any]]:
+        self.initialize()
+        evidence, _partial = self._read_complete_jsonl(
+            self.source_evidence_path, "source evidence"
+        )
+        return evidence
+
+    def append_source_evidence(self, evidence: dict[str, Any]) -> None:
+        self.initialize()
+        self._append_jsonl(self.source_evidence_path, evidence)
 
     def append_session_summary(self, summary: dict[str, Any]) -> None:
         self.initialize()
