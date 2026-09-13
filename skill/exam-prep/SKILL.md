@@ -40,9 +40,12 @@ sources/materials
   -> persisted syllabus
 ~~~
 
-Use validate-curriculum before apply-curriculum. Validation rejects missing
-prerequisites, cycles, unknown SourceRefs, open capability IDs, inconsistent
-exam mappings, and coverage gaps. Applying the same proposal is idempotent;
+Use validate-curriculum before apply-curriculum. Structural validation rejects
+missing prerequisites, cycles, malformed or inconsistent exam mappings, and
+duplicate identifiers. Unknown SourceRefs and missing preferred materials are
+reported as explicit coverage gaps; open capability IDs are warnings and remain
+non-promoting until a descriptor defines their evidence mapping. Applying the
+same proposal is idempotent;
 incremental proposals merge by stable target, question, capability, and source
 identity. PDF/DOCX/OCR parsing is outside the deterministic core: the agent
 environment or a provider may extract text before proposal generation.
@@ -109,7 +112,7 @@ only when the learner actually stated how sure they felt; never guess or
 infer it on their behalf, and omit the field rather than invent a value. Do
 not add recorded_at, session_id, expected_seconds, elapsed_seconds,
 independence, or hint_level: the engine owns those fields. Record through the
-CLI; never hand-edit derived concepts or review state.
+CLI; never hand-edit derived target or review state.
 
 When an answer is wrong, preserve the last valid step, point to the first
 invalid transformation, classify the error, and ask for repair. Use the
@@ -123,9 +126,9 @@ recurring-mistake history instead of repeating a generic explanation.
 - Verification: use verify; treat stdlib results as numerical consistency, not proof.
 - Status: use status, mistakes, or roadmap; priority is recomputed for the
   current budget and exam horizon. roadmap reports three independent axes per
-  concept - mastery_status (unseen/learning/practicing/weak/exam_ready/mastered),
+  learning target - mastery_status (unseen/learning/practicing/weak/exam_ready/mastered),
   review_status (not_due/due/overdue), and availability (available/
-  prerequisite_blocked). Do not conflate them: a mastered concept can still be
+  prerequisite_blocked). Do not conflate them: a mastered target can still be
   due for review, and a due review can still be prerequisite_blocked.
 
 Use programmer analogies and dependency unlocks when they shorten reasoning.

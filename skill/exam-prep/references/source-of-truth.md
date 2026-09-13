@@ -17,9 +17,12 @@ definitions, notation, expected methods, and grading conventions from the
 highest-priority source. If two high-priority sources disagree, show the
 conflict and ask which convention the instructor will grade.
 
-The syllabus is canonical course input. observations.jsonl is canonical
-learning evidence. concepts.json and review_queue.json are rebuildable reducer
-outputs. learner.json and session.json are protected profile/runtime snapshots.
+The syllabus is canonical course input. In v2 it contains `LearningTarget`
+records keyed by `target_id`; `observations.jsonl` is canonical learning
+evidence keyed by `target_id` and `capability_id`. `targets.json` and
+`review_queue.json` are rebuildable reducer outputs. learner.json and
+session.json are protected profile/runtime snapshots. Legacy `concept_id` and
+`concepts.json` remain readable only through compatibility paths.
 Do not hand-edit derived mastery or review values.
 
 For a new session, read compact state through the CLI. Old session detail is

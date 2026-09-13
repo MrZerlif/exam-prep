@@ -22,7 +22,7 @@ runtime configuration, database, full FSRS, or mandatory CAS is needed.
 ## Start
 
 From the active workspace (inside the installed `exam-prep/` directory, or
-any workspace pointed at it with `--workspace`/`MATH_STUDY_WORKSPACE`):
+any workspace pointed at it with `--workspace`/`EXAM_PREP_WORKSPACE`):
 
 ~~~text
 python scripts/exam_prep.py init
@@ -33,9 +33,11 @@ python scripts/exam_prep.py start
 Then write “Continue studying.” to the tutor with skill/exam-prep/ enabled. It reads the compact local state,
 shows due work, and resumes the pending action without requiring a transcript.
 
-For a teacher syllabus, export or prepare JSON with a concepts object. Each
-concept can include prerequisites, source_refs, importance, frequency, expected
-points, estimated learning minutes, definitions, notation, and exam questions.
+Normally give the tutor materials, exam questions, or source references. The
+agent or a SourceProvider analyzes them into a v2 CurriculumProposal; the
+deterministic validator produces LearningTargets, validates the prerequisite
+graph and exam mappings, reports capability warnings and source coverage gaps,
+and persists the syllabus. New users should not hand-author concepts JSON.
 Teacher materials and official exam questions outrank generic references; source
 conflicts are surfaced.
 
@@ -94,7 +96,6 @@ skill/exam-prep/            <- the entire installable, self-contained package
 ├── config/
 ├── templates/
 └── examples/
-└── examples/
 tests/                        <- development test suite (not installed)
 docs/                         <- design/plan docs (not installed)
 README.md
@@ -109,7 +110,9 @@ The active workspace stores:
 .exam-prep/syllabus.json
 .exam-prep/observations.jsonl
 .exam-prep/sessions.jsonl
-.exam-prep/concepts.json
+.exam-prep/targets.json
+.exam-prep/assessments.jsonl
+.exam-prep/source_evidence.jsonl
 .exam-prep/review_queue.json
 .exam-prep/learner.json
 .exam-prep/session.json
@@ -120,7 +123,7 @@ The active workspace stores:
 
 observations.jsonl is append-only canonical learning evidence; sessions.jsonl
 is an append-only log of closed-session summaries (studied/improved/weak
-concepts, recurring mistakes, due reviews, next action). concepts.json and
+targets, recurring mistakes, due reviews, next action). targets.json and
 review_queue.json are derived snapshots rebuildable from course/syllabus plus
 observations.jsonl. learner.json and session.json are protected revision
 snapshots because profile/runtime details are not present in every
@@ -134,14 +137,14 @@ path: it recovers the latest valid revision (falling back through
 corrupt/incomplete/hash-mismatched revisions and a corrupt current.json
 pointer), and if that revision is stale relative to the canonical inputs -
 an observation fsynced to the log but never given a derived revision because
-the process crashed in between, a syllabus edit that changed the concept-id
+the process crashed in between, a syllabus edit that changed the target-id
 set, or course.json/syllabus.json content changing at all (exam date,
 scheduler policy, prerequisites, importance, expected_points - tracked via a
 canonicalized-JSON fingerprint stored in the revision manifest, so an edit
 with no observed effect on the hash, e.g. pure re-indentation, does not
 trigger a needless rebuild) - it replays/recomputes from the canonical
 inputs and commits a fresh revision before returning. None of them read the
-convenience JSON copies (concepts.json, review_queue.json, etc.) directly,
+convenience JSON copies (targets.json, review_queue.json, etc.) directly,
 so a corrupted or deleted convenience file never breaks a normal command.
 
 A session is active only while `phase` is `study` or `exam`; `end-session`
@@ -151,6 +154,21 @@ one. `status` surfaces the most recent closed-session summary as
 `last_session_summary` so a fresh AI context ("Continue studying.") has
 continuity without needing the old chat transcript.
 
+## Migration from math-study
+
+The new CLI never treats `<workspace>/state/` as its target. When legacy state
+is detected, migrate it explicitly:
+
+~~~text
+python skill/exam-prep/scripts/exam_prep.py migrate --from-math-study C:\path\to\math-study
+~~~
+
+Migration reads `<workspace>\state\`, writes `<workspace>\.exam-prep\`, keeps
+the legacy source untouched, fingerprints the source, rebuilds targets and the
+review queue, and records legacy evidence as `assessment_integrity:
+legacy_unfrozen`. Repeating the command for the same unchanged source is
+idempotent; a different source or an occupied unrelated target is rejected.
+
 `validate` deliberately does *not* go through the safe-loading path above -
 it reads course.json/syllabus.json itself, defensively, so a corrupt
 canonical file is reported as one row in the checklist instead of crashing
@@ -158,6 +176,6 @@ the whole command before diagnostics even start. It runs a full sweep (both
 canonical files' readability and schema, schema versions, observation-id
 uniqueness/conflicts, revision manifests and hashes, the current pointer,
 derived-state-vs-log consistency, session lifecycle, source_refs,
-review-queue timestamps, and observation concept-id references), returns a
+review-queue timestamps, and observation target-id references), returns a
 checklist report (`valid`/`status`/`checks`/`error_count`/`warning_count`),
 and exits non-zero when any check reports an error.

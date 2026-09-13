@@ -3,19 +3,10 @@ __pycache__/
 
 docs/superpowers/
 
-skill/math-study/state/course.json
-skill/math-study/state/syllabus.json
-skill/math-study/state/learner.json
-skill/math-study/state/session.json
-skill/math-study/state/concepts.json
-skill/math-study/state/review_queue.json
-skill/math-study/state/observations.jsonl
-skill/math-study/state/sessions.jsonl
-skill/math-study/state/current.json
-skill/math-study/state/revisions/
-skill/math-study/state/recovery/
+# Any active study workspace keeps runtime state outside source control.
+.exam-prep/
 
-# Any other active study workspace copied elsewhere keeps the same runtime layout.
+# Legacy adapter runtime; never used as the canonical target runtime.
 state/course.json
 state/syllabus.json
 state/learner.json
