@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "session_id": "session-example",
+  "started_at": "2026-09-13T15:00:00+00:00",
+  "studied": ["derivative_definition", "chain_rule"],
+  "improved": ["derivative_definition"],
+  "weak": ["chain_rule"],
+  "recurring_mistakes": ["forgetting the inner derivative"],
+  "due_reviews": ["chain_rule"],
+  "next_action": "solve an independent chain-rule transfer problem"
+}
