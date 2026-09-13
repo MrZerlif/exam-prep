@@ -14,6 +14,11 @@ from uuid import uuid4
 from math_study_lib.diagnostics import run_validation
 from math_study_lib.reducer import reduce_learning_state
 from math_study_lib.migration import migrate_legacy_workspace
+from math_study_lib.curriculum import (
+    CurriculumValidationError,
+    apply_curriculum_proposal,
+    validate_curriculum_proposal,
+)
 from math_study_lib.scheduler import (
     build_review_queue,
     compute_priority,
@@ -268,6 +273,10 @@ def _parser() -> argparse.ArgumentParser:
     migrate.add_argument("--from-math-study", required=True)
     ingest = sub.add_parser("ingest-source-evidence")
     ingest.add_argument("path")
+    validate_curriculum = sub.add_parser("validate-curriculum")
+    validate_curriculum.add_argument("path")
+    apply_curriculum = sub.add_parser("apply-curriculum")
+    apply_curriculum.add_argument("path")
     return parser
 
 
@@ -281,6 +290,22 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "ingest-source-evidence":
         envelope = json.loads(Path(args.path).read_text(encoding="utf-8"))
         result = ingest_source_evidence(store, envelope)
+        return _result(result.to_mapping())
+
+    if args.command == "validate-curriculum":
+        proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
+        try:
+            validated = validate_curriculum_proposal(proposal)
+        except CurriculumValidationError as exc:
+            return _result({"valid": False, "issues": exc.issues})
+        return _result({"valid": True, "proposal_id": validated["proposal_id"]})
+
+    if args.command == "apply-curriculum":
+        proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
+        try:
+            result = apply_curriculum_proposal(store, proposal)
+        except CurriculumValidationError as exc:
+            return _result({"valid": False, "issues": exc.issues})
         return _result(result.to_mapping())
 
     if args.command == "init":
