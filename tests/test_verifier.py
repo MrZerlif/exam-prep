@@ -2,7 +2,7 @@ import sys
 import unittest
 
 
-sys.path.insert(0, "scripts")
+sys.path.insert(0, "skill/math-study/scripts")
 
 from math_study_lib import symbolic_backend  # noqa: E402
 from math_study_lib.verifier import (  # noqa: E402

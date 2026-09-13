@@ -20,9 +20,11 @@ complete topic mastery before touching a higher-yield topic.
 
 ## Session budgets
 
-Fit the activity to 10, 20, 45, 90 minutes, or a deep session. Reserve a
-persistence point: after a problem, a review item, or a short recall. A 25-minute
-request must not start a two-hour lesson.
+Fit the activity to whatever number of minutes the learner actually has - 10,
+15, 20, 45, 90, or any other value, not just the round examples. Reserve a
+persistence point: after a problem, a review item, or a short recall. A
+15-minute or 25-minute request must not start a two-hour lesson, and must not
+be rounded up to a larger budget than the learner said they have.
 
 ## Reviews and interleaving
 

@@ -14,5 +14,10 @@
     "priority_order": ["teacher_material", "official_exam_list", "lecture_notes", "problem_sets", "general_reference"],
     "conflicts": "flag_for_user"
   },
-  "scheduler": {"mode": "exam_cram", "max_review_interval_hours": 72, "review_warmup_limit": 3}
+  "scheduler": {
+    "mode": "exam_cram",
+    "max_review_interval_hours": 72,
+    "review_warmup_limit": 3,
+    "recurring_mistake_policy": {"min_count": 3, "min_sessions": 2, "resolve_after_clean_successes": 3}
+  }
 }

@@ -50,11 +50,14 @@ attempt. In exam mode, give no unsolicited hints and minimal feedback until
 submission or stop.
 
 After each assessable attempt, create one observation proposal containing task,
-outcome, assistance details, error tags, diagnostic_confidence,
-learner_self_confidence, explanation, and source_refs. Do not add recorded_at,
-session_id, expected_seconds, elapsed_seconds, independence, or hint_level:
-the engine owns those fields. Record through the CLI; never hand-edit derived
-concepts or review state.
+outcome, assistance details, error tags, diagnostic_confidence, explanation,
+and source_refs. diagnostic_confidence is always required: it is your
+classification confidence, not the learner's. Add learner_self_confidence
+only when the learner actually stated how sure they felt; never guess or
+infer it on their behalf, and omit the field rather than invent a value. Do
+not add recorded_at, session_id, expected_seconds, elapsed_seconds,
+independence, or hint_level: the engine owns those fields. Record through the
+CLI; never hand-edit derived concepts or review state.
 
 When an answer is wrong, preserve the last valid step, point to the first
 invalid transformation, classify the error, and ask for repair. Use the
@@ -67,7 +70,11 @@ recurring-mistake history instead of repeating a generic explanation.
 - Exam: use exam, mixed tasks, neutral wording, optional timing, then post-mortem.
 - Verification: use verify; treat stdlib results as numerical consistency, not proof.
 - Status: use status, mistakes, or roadmap; priority is recomputed for the
-  current budget and exam horizon.
+  current budget and exam horizon. roadmap reports three independent axes per
+  concept - mastery_status (unseen/learning/practicing/weak/exam_ready/mastered),
+  review_status (not_due/due/overdue), and availability (available/
+  prerequisite_blocked). Do not conflate them: a mastered concept can still be
+  due for review, and a due review can still be prerequisite_blocked.
 
 Use programmer analogies and dependency unlocks when they shorten reasoning.
 Keep formal definitions, conditions, notation, and read-aloud formulas exact.

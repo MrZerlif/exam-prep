@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 
-sys.path.insert(0, "scripts")
+sys.path.insert(0, "skill/math-study/scripts")
 
 from math_study_lib.storage import ObservationConflict, StudyStore  # noqa: E402
 

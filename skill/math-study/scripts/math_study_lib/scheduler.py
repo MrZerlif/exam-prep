@@ -5,20 +5,53 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Iterable
 
+from .reducer import average_known_mastery
 
-def _parse_time(value: str | None, fallback: datetime) -> datetime:
+# Minimum interval floor so a review is never scheduled instantly/negatively
+# even when the exam is minutes away.
+MIN_INTERVAL_HOURS = 1 / 6  # 10 minutes
+
+
+def _parse_time(value: str | None, fallback: datetime) -> datetime | None:
     if not value:
         return fallback
-    parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    if parsed.tzinfo is None and fallback.tzinfo is not None:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return fallback
+    if parsed.tzinfo is None and fallback is not None and fallback.tzinfo is not None:
         parsed = parsed.replace(tzinfo=fallback.tzinfo)
     return parsed
 
 
+def _exam_time(course: dict[str, Any], now: datetime) -> datetime | None:
+    """The exam datetime if course.exam.date is set and parseable, else None
+    (missing exam date - no horizon to compress reviews against)."""
+    raw = course.get("exam", {}).get("date")
+    if not raw:
+        return None
+    return _parse_time(raw, now)
+
+
+def _urgency_cap_hours(remaining_hours: float) -> float:
+    """Cap a review interval to a fraction of the remaining study horizon so
+    multiple reviews still fit before the exam. Smaller fraction the closer
+    the exam is - a small, explainable heuristic, not FSRS."""
+    if remaining_hours <= 3:
+        fraction = 0.15
+    elif remaining_hours <= 24:
+        fraction = 0.25
+    elif remaining_hours <= 72:
+        fraction = 0.4
+    elif remaining_hours <= 24 * 7:
+        fraction = 0.6
+    else:
+        fraction = 1.0
+    return max(MIN_INTERVAL_HOURS, remaining_hours * fraction)
+
+
 def _average_mastery(state: dict[str, Any]) -> float:
-    mastery = state.get("mastery", {})
-    values = [float(mastery.get(key, 0.0)) for key in ("conceptual", "procedural", "recall", "transfer", "speed")]
-    return sum(values) / len(values)
+    return average_known_mastery(state.get("mastery", {}))
 
 
 def _event_band(event: dict[str, Any]) -> str:
@@ -46,16 +79,28 @@ def _review_kind(task_type: str) -> str:
     }.get(task_type, "targeted_problem")
 
 
+def _review_status(due_at: datetime, now: datetime, interval_hours: float) -> str:
+    if due_at > now:
+        return "not_due"
+    overdue_hours = (now - due_at).total_seconds() / 3600
+    grace = max(interval_hours, 1.0)
+    return "overdue" if overdue_hours > grace else "due"
+
+
 def build_review_queue(
     events: list[dict[str, Any]],
     concepts: dict[str, Any],
     course: dict[str, Any],
     now: datetime,
+    syllabus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     for event in events:
         grouped.setdefault(event.get("concept_id", ""), []).append(event)
     cap = int(course.get("scheduler", {}).get("max_review_interval_hours", 72))
+    exam_time = _exam_time(course, now)
+    has_valid_exam_horizon = exam_time is not None and exam_time > now
+    concept_metadata = (syllabus or {}).get("concepts", {})
     items: dict[str, dict[str, Any]] = {}
     for concept_id, concept_events in grouped.items():
         if not concept_id:
@@ -64,27 +109,54 @@ def build_review_queue(
         outcome = last.get("outcome")
         band = _event_band(last)
         if outcome == "solution_seen" or band == "solution_seen":
-            interval = 2
+            base_interval = 2
         elif outcome == "incorrect":
-            interval = 4
+            base_interval = 4
         elif outcome == "partial":
-            interval = 8
+            base_interval = 8
         elif outcome == "correct" and last.get("task_type") == "delayed_recall":
-            interval = 48
+            base_interval = 48
         elif outcome == "correct" and band == "independent":
-            interval = 24
+            base_interval = 24
         else:
-            interval = 12
-        interval = max(1, min(cap, interval))
+            base_interval = 12
+
         lapses = sum(item.get("outcome") in {"incorrect", "partial"} for item in concept_events)
+        average_mastery = _average_mastery(concepts.get(concept_id, {}))
+        mastery_factor = 0.5 + 0.5 * average_mastery
+        lapses_factor = max(0.4, 1.0 - 0.1 * lapses)
+        importance = float(concept_metadata.get(concept_id, {}).get("importance", 0.5))
+        importance_factor = min(1.15, max(0.85, 1.15 - 0.3 * importance))
+        interval = base_interval * mastery_factor * lapses_factor * importance_factor
+        interval = max(MIN_INTERVAL_HOURS, min(cap, interval))
+
+        reason_parts = [
+            f"base {base_interval}h for last outcome '{outcome}'",
+            f"mastery {average_mastery:.2f}",
+            f"{lapses} lapse(s)",
+            f"importance {importance:.2f}",
+        ]
+
         last_time = _parse_time(last.get("recorded_at"), now)
+        if has_valid_exam_horizon:
+            remaining_hours = max(0.0, (exam_time - now).total_seconds() / 3600)
+            urgency_cap = _urgency_cap_hours(remaining_hours)
+            if urgency_cap < interval:
+                interval = max(MIN_INTERVAL_HOURS, urgency_cap)
+                reason_parts.append(f"compressed for {remaining_hours:.1f}h exam horizon")
+            due_at = min(last_time + timedelta(hours=interval), exam_time)
+        else:
+            due_at = last_time + timedelta(hours=interval)
+
         items[concept_id] = {
-            "due_at": (last_time + timedelta(hours=interval)).isoformat(),
+            "due_at": due_at.isoformat(),
             "last_review_at": last_time.isoformat(),
-            "interval_hours": interval,
+            "interval_hours": round(interval, 4),
             "lapses": lapses,
             "last_outcome": outcome,
             "review_kind": _review_kind(last.get("task_type", "")),
+            "review_status": _review_status(due_at, now, interval),
+            "reason": ", ".join(reason_parts),
         }
     for concept_id in concepts:
         items.setdefault(
@@ -96,6 +168,8 @@ def build_review_queue(
                 "lapses": 0,
                 "last_outcome": None,
                 "review_kind": "diagnostic",
+                "review_status": "due",
+                "reason": "no prior evidence for this concept",
             },
         )
     return {"schema_version": 1, "derived_from_revision": 0, "items": items}
@@ -154,6 +228,23 @@ def compute_priority(
     }
 
 
+def _classify_activity(concept_state: dict[str, Any], review_item: dict[str, Any]) -> str:
+    """Pedagogical activity type for the selected concept. A review_queue
+    entry existing (with a due_at) is not by itself evidence of a review:
+    build_review_queue gives every concept a 'diagnostic' fallback entry
+    with due_at=now even when it has never been attempted."""
+    mastery_status = concept_state.get("mastery_status", "unseen")
+    has_prior_evidence = bool(review_item) and review_item.get("review_kind") != "diagnostic"
+    if mastery_status == "unseen" or not has_prior_evidence:
+        return "new_learning"
+    review_status = review_item.get("review_status", "not_due")
+    if review_status not in ("due", "overdue"):
+        return "targeted_learning"
+    if mastery_status in ("weak", "learning"):
+        return "targeted_review"
+    return "review"
+
+
 def select_next_activity(
     syllabus: dict[str, Any],
     concepts: dict[str, Any],
@@ -176,15 +267,14 @@ def select_next_activity(
         candidate
         for candidate in candidates
         if candidate["concept_id"] not in recent
-        and concepts.get(candidate["concept_id"], {}).get("status") != "locked"
+        and concepts.get(candidate["concept_id"], {}).get("availability") != "prerequisite_blocked"
     ]
     pool = non_recent or candidates
     selected = max(pool, key=lambda item: (item["score"], item["concept_id"]))
     if selected["concept_id"] not in recent and recent:
         selected["reason"] += "; interleaved with a non-recent concept"
-    selected["activity_type"] = (
-        "review"
-        if selected["concept_id"] in reviews and reviews[selected["concept_id"]].get("due_at")
-        else "targeted_learning"
+    selected["activity_type"] = _classify_activity(
+        concepts.get(selected["concept_id"], {}),
+        reviews.get(selected["concept_id"], {}),
     )
     return selected

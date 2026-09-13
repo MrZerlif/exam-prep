@@ -18,7 +18,7 @@
               "procedural": {"type": "number", "minimum": 0, "maximum": 1},
               "recall": {"type": "number", "minimum": 0, "maximum": 1},
               "transfer": {"type": "number", "minimum": 0, "maximum": 1},
-              "speed": {"type": "number", "minimum": 0, "maximum": 1}
+              "speed": {"type": ["number", "null"], "minimum": 0, "maximum": 1}
             }
           },
           "confidence": {
@@ -28,6 +28,14 @@
               "diagnostic": {"type": "number", "minimum": 0, "maximum": 1},
               "learner_self_report": {"type": "number", "minimum": 0, "maximum": 1}
             }
+          },
+          "mastery_status": {
+            "type": "string",
+            "enum": ["unseen", "learning", "practicing", "weak", "exam_ready", "mastered"]
+          },
+          "availability": {
+            "type": "string",
+            "enum": ["available", "prerequisite_blocked"]
           }
         }
       }

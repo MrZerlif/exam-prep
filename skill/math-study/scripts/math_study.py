@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from math_study_lib.diagnostics import run_validation
 from math_study_lib.reducer import reduce_learning_state
 from math_study_lib.scheduler import (
     build_review_queue,
@@ -52,6 +53,16 @@ DEFAULT_COURSE = {
         "mode": "exam_cram",
         "max_review_interval_hours": 72,
         "review_warmup_limit": 3,
+        # A mistake is not "recurring" after a single occurrence. It becomes
+        # recurring once it repeats min_count times, or shows up in
+        # min_sessions distinct sessions, whichever comes first. It resolves
+        # after resolve_after_clean_successes independent correct attempts on
+        # the same concept without the mistake reappearing.
+        "recurring_mistake_policy": {
+            "min_count": 3,
+            "min_sessions": 2,
+            "resolve_after_clean_successes": 3,
+        },
     },
 }
 DEFAULT_SYLLABUS = {"schema_version": 1, "concepts": {}}
@@ -80,12 +91,19 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
+def _reduction_policy(course: dict, revision: int) -> dict:
+    return {
+        "revision": revision,
+        "recurring_mistake": course.get("scheduler", {}).get("recurring_mistake_policy"),
+    }
+
+
 def _write_json(path: Path, value: object) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
-        encoding="utf-8",
-    )
+    text = json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2) + "\n"
+    temp_path = path.with_name(f".{path.name}.tmp")
+    temp_path.write_text(text, encoding="utf-8")
+    os.replace(temp_path, path)
 
 
 def _read_json(path: Path, default: object) -> object:
@@ -100,25 +118,88 @@ def _store(workspace: str) -> StudyStore:
     return store
 
 
-def _state(store: StudyStore) -> tuple[dict, dict, dict, dict, list[dict]]:
+def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
+    """The single safe-loading path for every command that needs state.
+
+    Canonical inputs (course/syllabus) are read directly - they are primary
+    source of truth, not derived. Everything else (learner/session snapshot,
+    derived concepts/review_queue) comes from the revision/recovery chain,
+    never from the convenience JSON copies directly: those copies are
+    write-only debugging aids and may be missing or corrupt without harming
+    a normal command. If the recovered revision is behind the append-only
+    observation log (a crash between append and commit, or a syllabus change
+    that added/removed concepts), derived state is recomputed from the full
+    log and a fresh revision is committed before returning - so a crashed
+    observation is replayed exactly once, and callers never see stale data.
+    """
     course = _read_json(store.state_path / "course.json", DEFAULT_COURSE.copy())
     syllabus = _read_json(store.state_path / "syllabus.json", DEFAULT_SYLLABUS.copy())
-    learner = _read_json(store.state_path / "learner.json", DEFAULT_LEARNER.copy())
-    session = _read_json(store.state_path / "session.json", DEFAULT_SESSION.copy())
-    concepts = _read_json(
-        store.state_path / "concepts.json",
-        reduce_learning_state(course, syllabus, [], {}),
-    )
-    reviews = _read_json(
-        store.state_path / "review_queue.json",
-        build_review_queue(
-            store.read_complete_observations(),
-            concepts.get("concepts", {}),
-            course,
-            datetime.now(timezone.utc),
-        ),
-    )
+    events = store.read_complete_observations()
+    current_id = events[-1]["observation_id"] if events else None
+
+    recovered = store.try_recover()
+    if recovered is None:
+        learner = dict(DEFAULT_LEARNER)
+        learner["updated_at"] = _now()
+        session = dict(DEFAULT_SESSION)
+        needs_materialization = True
+    else:
+        learner = recovered.learner
+        session = recovered.session
+        manifest_data = recovered.manifest.data
+        applied_line = manifest_data.get("last_complete_observation_line", 0)
+        applied_id = manifest_data.get("last_complete_observation_id")
+        concept_ids = set(recovered.derived.get("concepts", {}).keys())
+        syllabus_ids = set(syllabus.get("concepts", {}).keys())
+        # Compare canonical-input fingerprints, not just the concept-id set:
+        # editing course.json (exam date, scheduler policy) or syllabus.json
+        # content (prerequisites, importance, expected_points) with the same
+        # concept ids and no new observations would otherwise look identical
+        # to the last committed revision and never trigger a recompute.
+        course_changed = manifest_data.get("course_hash") != StudyStore.hash_document(course)
+        syllabus_changed = manifest_data.get("syllabus_hash") != StudyStore.hash_document(syllabus)
+        needs_materialization = (
+            applied_line != len(events)
+            or applied_id != current_id
+            or concept_ids != syllabus_ids
+            or course_changed
+            or syllabus_changed
+        )
+
+    if needs_materialization:
+        concepts, reviews, _manifest = _persist_learning(store, course, syllabus, learner, session)
+    else:
+        concepts = recovered.derived
+        reviews = recovered.review_queue
+        if reviews is None:
+            reviews = build_review_queue(
+                events, concepts.get("concepts", {}), course, datetime.now(timezone.utc), syllabus
+            )
     return course, syllabus, learner, session, concepts, reviews
+
+
+def _new_session_id() -> str:
+    return f"session-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}"
+
+
+def _activate_session(session: dict) -> tuple[dict, bool]:
+    """Start a fresh session when there is no active one. A session is
+    active only while phase is 'study' or 'exam'; end-session always sets
+    phase back to 'idle', so the *next* start always gets a new session_id
+    instead of resuming the closed one."""
+    if session.get("phase") not in ("study", "exam"):
+        activated = dict(session)
+        activated.update(
+            {
+                "session_id": _new_session_id(),
+                "phase": "study",
+                "pending_action": "choose the next budget-fitting activity",
+                "current_concept": None,
+                "current_task": None,
+            }
+        )
+        return activated, True
+    return session, False
 
 
 def _persist_learning(
@@ -130,13 +211,13 @@ def _persist_learning(
 ) -> tuple[dict, dict, object]:
     events = store.read_complete_observations()
     revision = store.next_revision()
-    concepts = reduce_learning_state(course, syllabus, events, {"revision": revision})
+    concepts = reduce_learning_state(course, syllabus, events, _reduction_policy(course, revision))
     now = datetime.now(timezone.utc)
-    reviews = build_review_queue(events, concepts.get("concepts", {}), course, now)
+    reviews = build_review_queue(events, concepts.get("concepts", {}), course, now, syllabus)
     reviews["derived_from_revision"] = revision
     learner = dict(learner)
     learner["updated_at"] = now.isoformat()
-    manifest = store.commit_revision(concepts, session, learner, reviews)
+    manifest = store.commit_revision(concepts, session, learner, reviews, course, syllabus)
     return concepts, reviews, manifest
 
 
@@ -178,16 +259,20 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
     store = _store(args.workspace)
-    course, syllabus, learner, session, concepts, reviews = _state(store)
 
     if args.command == "init":
         now = _now()
+        course = dict(DEFAULT_COURSE)
+        syllabus = dict(DEFAULT_SYLLABUS)
         learner = dict(DEFAULT_LEARNER)
         learner["updated_at"] = now
-        _write_json(store.state_path / "course.json", DEFAULT_COURSE)
-        _write_json(store.state_path / "syllabus.json", DEFAULT_SYLLABUS)
-        _write_json(store.state_path / "learner.json", learner)
-        _write_json(store.state_path / "session.json", DEFAULT_SESSION)
+        session = dict(DEFAULT_SESSION)
+        _write_json(store.state_path / "course.json", course)
+        _write_json(store.state_path / "syllabus.json", syllabus)
+        # Commit an initial revision immediately so the recovery chain has a
+        # valid baseline from the first command onward (no window where
+        # learner.json/session.json exist only as unrevisioned plain files).
+        _persist_learning(store, course, syllabus, learner, session)
         return _result({"status": "initialized", "workspace": str(store.root)})
 
     if args.command == "load-syllabus":
@@ -203,20 +288,27 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
 
+    if args.command == "validate":
+        # Deliberately runs before load_state(): validate's whole job is to
+        # diagnose a broken workspace, including a corrupt course.json or
+        # syllabus.json - the exact files load_state() (correctly, for every
+        # other command) reads eagerly and would raise on.
+        report = run_validation(store)
+        print(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2))
+        return 0 if report["valid"] else 1
+
+    course, syllabus, learner, session, concepts, reviews = load_state(store)
+
     if args.command == "start":
-        if not session.get("session_id"):
-            session = dict(session)
-            session.update(
-                {
-                    "session_id": f"session-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}-{uuid4().hex[:6]}",
-                    "phase": "study",
-                    "pending_action": "choose the next budget-fitting activity",
-                }
+        session, changed = _activate_session(session)
+        if changed:
+            concepts, reviews, _manifest = _persist_learning(
+                store, course, syllabus, learner, session
             )
-            _write_json(store.state_path / "session.json", session)
         return _result({"status": "resumed", "session": session, "concepts": concepts})
 
     if args.command == "status":
+        session_history = store.read_session_summaries()
         return _result(
             {
                 "course": {
@@ -224,6 +316,7 @@ def main(argv: list[str] | None = None) -> int:
                     "exam": course.get("exam"),
                 },
                 "session": session,
+                "last_session_summary": session_history[-1] if session_history else None,
                 "concepts": concepts,
                 "review_queue": reviews,
                 "log_diagnostics": store.read_log_diagnostics(),
@@ -243,10 +336,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "record-observation":
         proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
-        if not session.get("session_id"):
-            session = dict(session)
-            session["session_id"] = f"session-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}"
-            session["phase"] = "study"
+        session, _changed = _activate_session(session)
         result = store.append_observation(
             proposal,
             session["session_id"],
@@ -299,7 +389,15 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "concept_id": concept_id,
                 "title": metadata.get("title"),
-                "status": concepts.get("concepts", {}).get(concept_id, {}).get("status", "unseen"),
+                "mastery_status": concepts.get("concepts", {})
+                .get(concept_id, {})
+                .get("mastery_status", "unseen"),
+                "review_status": reviews.get("items", {})
+                .get(concept_id, {})
+                .get("review_status", "not_due"),
+                "availability": concepts.get("concepts", {})
+                .get(concept_id, {})
+                .get("availability", "available"),
                 "prerequisites": metadata.get("prerequisites", []),
             }
             for concept_id, metadata in syllabus.get("concepts", {}).items()
@@ -307,6 +405,7 @@ def main(argv: list[str] | None = None) -> int:
         return _result({"roadmap": roadmap})
 
     if args.command == "exam":
+        session, _changed = _activate_session(session)
         session = dict(session)
         session.update(
             {
@@ -315,7 +414,7 @@ def main(argv: list[str] | None = None) -> int:
                 "pending_action": "submit or stop the mixed mock exam for post-mortem",
             }
         )
-        _write_json(store.state_path / "session.json", session)
+        _persist_learning(store, course, syllabus, learner, session)
         return _result(
             {
                 "mode": "exam",
@@ -351,24 +450,71 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "rebuild":
         events = store.read_complete_observations()
         revision = store.next_revision() - 1
-        rebuilt = reduce_learning_state(course, syllabus, events, {"revision": revision})
+        rebuilt = reduce_learning_state(course, syllabus, events, _reduction_policy(course, revision))
         rebuilt_reviews = build_review_queue(
-            events, rebuilt.get("concepts", {}), course, datetime.now(timezone.utc)
+            events, rebuilt.get("concepts", {}), course, datetime.now(timezone.utc), syllabus
         )
         rebuilt_reviews["derived_from_revision"] = revision
         return _result({"concepts": rebuilt, "review_queue": rebuilt_reviews})
 
-    if args.command == "validate":
-        validate_document(course, load_schema("course.schema.json"))
-        validate_document(syllabus, load_schema("syllabus.schema.json"))
-        return _result({"status": "valid"})
-
     if args.command == "end-session":
+        summary = None
+        active_id = session.get("session_id")
+        if session.get("phase") in ("study", "exam") and active_id:
+            session_events = [
+                event for event in store.read_complete_observations()
+                if event.get("session_id") == active_id
+            ]
+            concept_ids = sorted({event["concept_id"] for event in session_events})
+            summary = {
+                "schema_version": 1,
+                "session_id": active_id,
+                "started_at": session_events[0]["recorded_at"] if session_events else _now(),
+                "ended_at": _now(),
+                "studied": concept_ids,
+                "improved": sorted(
+                    {
+                        event["concept_id"]
+                        for event in session_events
+                        if event.get("outcome") == "correct"
+                    }
+                ),
+                "weak": sorted(
+                    concept_id
+                    for concept_id in concept_ids
+                    if concepts.get("concepts", {}).get(concept_id, {}).get("mastery_status")
+                    in ("weak", "learning")
+                ),
+                "recurring_mistakes": sorted(
+                    {
+                        mistake["tag"]
+                        for concept_id in concept_ids
+                        for mistake in concepts.get("concepts", {})
+                        .get(concept_id, {})
+                        .get("recurring_mistakes", [])
+                        if mistake.get("recurring")
+                    }
+                ),
+                "due_reviews": sorted(
+                    concept_id
+                    for concept_id in concept_ids
+                    if reviews.get("items", {}).get(concept_id, {}).get("review_status")
+                    in ("due", "overdue")
+                ),
+                "next_action": session.get("pending_action"),
+            }
+            store.append_session_summary(summary)
         session = dict(session)
-        session["phase"] = "idle"
-        session["pending_action"] = "resume with start"
-        _write_json(store.state_path / "session.json", session)
-        return _result({"status": "session_ended", "session": session})
+        session.update(
+            {
+                "phase": "idle",
+                "pending_action": "resume with start",
+                "current_concept": None,
+                "current_task": None,
+            }
+        )
+        concepts, reviews, _manifest = _persist_learning(store, course, syllabus, learner, session)
+        return _result({"status": "session_ended", "session": session, "summary": summary})
 
     return 2
 

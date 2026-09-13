@@ -8,6 +8,8 @@
     "last_complete_observation_line": {"type": "integer", "minimum": 0},
     "log_byte_offset": {"type": "integer", "minimum": 0},
     "last_complete_observation_id": {"type": ["string", "null"]},
+    "course_hash": {"type": ["string", "null"]},
+    "syllabus_hash": {"type": ["string", "null"]},
     "derived_hashes": {"type": "object"}
   }
 }
