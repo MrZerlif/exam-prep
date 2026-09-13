@@ -1,6 +1,8 @@
 __pycache__/
 *.pyc
 
+docs/superpowers/
+
 state/course.json
 state/syllabus.json
 state/learner.json
