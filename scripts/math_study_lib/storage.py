@@ -117,7 +117,19 @@ class StudyStore:
         }
         observation_id = proposal["observation_id"]
         if observation_id in existing:
-            if existing[observation_id] == canonical:
+            engine_fields = {
+                "recorded_at",
+                "session_id",
+                "timestamp",
+                "expected_seconds",
+                "elapsed_seconds",
+            }
+            learner_payload = {
+                key: value
+                for key, value in existing[observation_id].items()
+                if key not in engine_fields
+            }
+            if learner_payload == proposal:
                 return AppendResult(observation_id, existing[observation_id], False)
             raise ObservationConflict(
                 f"observation_id {observation_id!r} already has a different payload"
