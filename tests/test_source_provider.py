@@ -18,7 +18,9 @@ class SourceProviderTests(unittest.TestCase):
     def test_local_fallback_reads_structured_manifest_only(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / "sources.json").write_text(
+            manifest = root / ".exam-prep" / "sources.json"
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
                 json.dumps(
                     {
                         "schema_version": 2,
@@ -42,6 +44,55 @@ class SourceProviderTests(unittest.TestCase):
                 ["teacher:week-1"],
                 [item.source_ref.source_id for item in provider.retrieve("limits")],
             )
+
+    def test_root_level_source_manifest_is_not_canonical(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "sources.json").write_text(
+                json.dumps(
+                    {
+                        "sources": [
+                            {
+                                "source_id": "root-only",
+                                "authority": "teacher_material",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            provider = LocalSourceProvider(root)
+            self.assertEqual([], provider.list_sources())
+
+    def test_minimal_and_notebooklm_source_refs_are_accepted_without_inference(self):
+        minimal = normalize_source_evidence(
+            {
+                "provider_id": "local",
+                "status": "ok",
+                "evidence": [{"source_ref": {"source_id": "s1"}}],
+            }
+        )
+        self.assertEqual("unknown", minimal.evidence[0].source_ref.authority)
+
+        notebooklm = normalize_source_evidence(
+            {
+                "provider_id": "notebooklm-mcp",
+                "status": "ok",
+                "evidence": [
+                    {
+                        "source_ref": {
+                            "source_id": "s1",
+                            "provider": "notebooklm-mcp",
+                            "location": {"page": 1},
+                        }
+                    }
+                ],
+            }
+        )
+        ref = notebooklm.evidence[0].source_ref
+        self.assertEqual("unknown", ref.authority)
+        self.assertEqual({"page": 1}, ref.location)
+        self.assertEqual("", ref.locator)
 
     def test_missing_provider_result_becomes_graceful_envelope(self):
         envelope = normalize_source_evidence(

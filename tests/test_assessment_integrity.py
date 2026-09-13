@@ -224,6 +224,32 @@ class AssessmentIntegrityTests(unittest.TestCase):
             )
             self.assertEqual("explicit_exposure", exposed_result.canonical_event["assessment_integrity"])
 
+    def test_new_v2_non_assessment_event_is_not_legacy_unfrozen(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            result = store.append_observation(
+                {
+                    "schema_version": 2,
+                    "observation_id": "practice-1",
+                    "target_id": "algebra:linear",
+                    "task_id": "practice-task",
+                    "capability_id": "independent_problem",
+                    "task_type": "independent_problem",
+                    "outcome": "correct",
+                    "assistance": {"levels_revealed": []},
+                    "error_tags": [],
+                    "diagnostic_confidence": "high",
+                    "source_refs": [],
+                },
+                "session-1",
+                "2026-09-13T12:00:00+00:00",
+                None,
+                None,
+            )
+            self.assertEqual(
+                "not_assessment", result.canonical_event["assessment_integrity"]
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

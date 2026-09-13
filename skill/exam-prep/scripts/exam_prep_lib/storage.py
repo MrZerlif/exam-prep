@@ -77,6 +77,7 @@ class StudyStore:
         self.observations_path = self.state_path / "observations.jsonl"
         self.assessments_path = self.state_path / "assessments.jsonl"
         self.source_evidence_path = self.state_path / "source_evidence.jsonl"
+        self.source_manifest_path = self.state_path / "sources.json"
         self.sessions_log_path = self.state_path / "sessions.jsonl"
         self.revisions_path = self.state_path / "revisions"
         self.recovery_path = self.state_path / "recovery"
@@ -242,7 +243,7 @@ class StudyStore:
             canonical["assessment_spec_hash"] = frozen.spec_hash
             canonical["assessment_integrity"] = integrity_decision.integrity
         elif canonical.get("schema_version") == 2:
-            canonical["assessment_integrity"] = "legacy_unfrozen"
+            canonical["assessment_integrity"] = "not_assessment"
         validate_observation_event(canonical)
         existing = {
             event["observation_id"]: event
@@ -323,7 +324,6 @@ class StudyStore:
         assessments = self.read_assessments()
         source_evidence = self.read_source_evidence()
         sessions = self.read_session_summaries()
-        source_manifest = self.root / "sources.json"
         return {
             "course_hash": self.hash_document(course) if course is not None else None,
             "syllabus_hash": self.hash_document(syllabus) if syllabus is not None else None,
@@ -332,7 +332,9 @@ class StudyStore:
             "source_evidence_hash": self.hash_document(source_evidence),
             "sessions_hash": self.hash_document(sessions),
             "source_manifest_hash": (
-                self._hash_file(source_manifest) if source_manifest.exists() else None
+                self._hash_file(self.source_manifest_path)
+                if self.source_manifest_path.exists()
+                else None
             ),
             "observation_count": len(events),
             "assessment_count": len(assessments),

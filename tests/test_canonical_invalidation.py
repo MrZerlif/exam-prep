@@ -141,6 +141,29 @@ class CanonicalInvalidationTests(unittest.TestCase):
         self.assertEqual(after["target_id"], "functions")
         self.assertNotEqual(after["score"], before_score)
 
+    def test_canonical_source_manifest_change_recomputes_revision(self):
+        self.ready()
+        store = __import__("exam_prep_lib.storage", fromlist=["StudyStore"]).StudyStore.for_exam_prep(self.root)
+        before = len(list(store.revisions_path.glob("[0-9]*")))
+        manifest = self.root / ".exam-prep" / "sources.json"
+        manifest.write_text(
+            json.dumps(
+                {
+                    "schema_version": 2,
+                    "sources": [
+                        {
+                            "source_id": "teacher:catalog",
+                            "authority": "teacher_material",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self.cli("status")
+        after = len(list(store.revisions_path.glob("[0-9]*")))
+        self.assertEqual(before + 1, after)
+
 
 if __name__ == "__main__":
     unittest.main()

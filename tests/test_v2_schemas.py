@@ -44,6 +44,17 @@ class V2SchemaTests(unittest.TestCase):
             load_schema("targets.schema.json"),
         )
 
+    def test_source_ref_requires_only_source_id(self):
+        validate_document({"source_id": "s1"}, load_schema("source-ref.schema.json"))
+        validate_document(
+            {
+                "source_id": "s1",
+                "provider": "notebooklm-mcp",
+                "location": {"page": 1},
+            },
+            load_schema("source-ref.schema.json"),
+        )
+
     def test_v2_observation_uses_target_id_and_capability_id(self):
         proposal = {
                 "schema_version": 2,

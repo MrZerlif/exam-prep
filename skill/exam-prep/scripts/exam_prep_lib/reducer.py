@@ -166,7 +166,6 @@ def reduce_learning_state(
         if concept_id not in concepts:
             continue
         state = concepts[concept_id]
-        add_event_to_maturity(state["evidence_maturity"], event)
         capability_id = (
             event.get("capability_id")
             if event.get("capability_id") is not None
@@ -174,6 +173,7 @@ def reduce_learning_state(
         )
         capability_resolution = capability_registry.resolve(capability_id)
         capability = capability_resolution.capability
+        add_event_to_maturity(state["evidence_maturity"], event, capability)
         if capability_resolution.warning and capability.capability_id not in unmapped_capability_events:
             unmapped_capability_events.append(capability.capability_id)
         assistance = event.get("assistance") or {}

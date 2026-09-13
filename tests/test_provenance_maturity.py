@@ -28,6 +28,26 @@ class ProvenanceAndMaturityTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             SourceRef.from_mapping({"authority": "general_reference"})
 
+    def test_source_ref_defaults_optional_metadata_without_authority_inference(self):
+        minimal = source_ref_from_mapping({"source_id": "s1"})
+        self.assertEqual("unknown", minimal.authority)
+        self.assertEqual("unknown", minimal.provider_id)
+        self.assertEqual(
+            "unknown",
+            source_ref_from_mapping({"source_id": "teacher:fake"}).authority,
+        )
+
+        notebooklm = source_ref_from_mapping(
+            {
+                "source_id": "s1",
+                "provider": "notebooklm-mcp",
+                "location": {"page": 1},
+            }
+        )
+        self.assertEqual("notebooklm-mcp", notebooklm.provider_id)
+        self.assertEqual({"page": 1}, notebooklm.location)
+        self.assertEqual("", notebooklm.locator)
+
     def test_transfer_can_be_demonstrated_without_retention(self):
         maturity = derive_evidence_maturity(
             [
@@ -64,6 +84,67 @@ class ProvenanceAndMaturityTests(unittest.TestCase):
         self.assertEqual(1, state["evidence_maturity"]["transferred"]["count"])
         self.assertIn("mastery", state)
         self.assertNotEqual(state["evidence_maturity"], state["mastery"])
+
+    def test_transfer_maturity_uses_capability_dimensions_not_task_type(self):
+        result = reduce_learning_state(
+            {},
+            {
+                "schema_version": 2,
+                "learning_targets": [
+                    {"target_id": "security:dac-mac", "prerequisites": []}
+                ],
+                "assessment_capabilities": {
+                    "scenario_application": {"affected_dimensions": ["transfer"]}
+                },
+            },
+            [
+                {
+                    "schema_version": 2,
+                    "observation_id": "scenario-1",
+                    "target_id": "security:dac-mac",
+                    "capability_id": "scenario_application",
+                    "task_type": "scenario",
+                    "outcome": "correct",
+                    "assistance": {"levels_revealed": []},
+                }
+            ],
+            {},
+        )
+        maturity = result["targets"]["security:dac-mac"]["evidence_maturity"]
+        self.assertEqual(1, maturity["transferred"]["count"])
+        self.assertEqual(0, maturity["retained"]["count"])
+
+    def test_retention_maturity_uses_capability_requirements_independently(self):
+        result = reduce_learning_state(
+            {},
+            {
+                "schema_version": 2,
+                "learning_targets": [
+                    {"target_id": "history:dates", "prerequisites": []}
+                ],
+                "assessment_capabilities": {
+                    "retrieval_check": {
+                        "affected_dimensions": ["recall"],
+                        "evidence_requirements": ["delayed_recall"],
+                    }
+                },
+            },
+            [
+                {
+                    "schema_version": 2,
+                    "observation_id": "retention-1",
+                    "target_id": "history:dates",
+                    "capability_id": "retrieval_check",
+                    "task_type": "quiz",
+                    "outcome": "correct",
+                    "assistance": {"levels_revealed": []},
+                }
+            ],
+            {},
+        )
+        maturity = result["targets"]["history:dates"]["evidence_maturity"]
+        self.assertEqual(1, maturity["retained"]["count"])
+        self.assertEqual(0, maturity["transferred"]["count"])
 
 
 if __name__ == "__main__":
