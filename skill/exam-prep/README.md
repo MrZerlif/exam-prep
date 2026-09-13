@@ -5,7 +5,8 @@ for any academic or technical subject.
 Run python scripts/exam_prep.py init once, then use status, next,
 record-observation, validate-curriculum, and apply-curriculum.
 
-Runtime state always lives in .exam-prep/. The legacy math-study/state/ layout
+Runtime state always lives in .exam-prep/, including the trusted source
+manifest at .exam-prep/sources.json. The legacy math-study/state/ layout
 is not auto-migrated; run the explicit migration command when needed. Legacy
 CLI/env/event aliases remain compatibility shims while old workspaces are
 being migrated.
