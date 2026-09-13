@@ -83,7 +83,7 @@ Red flags requiring an immediate protocol check:
 - a full solution appears before an attempt or permitted H5;
 - “понятно” changes mastery without evidence;
 - the LLM supplies session, timestamp, or timing fields;
-- derived concepts or reviews are edited by hand;
+- derived targets or reviews are edited by hand;
 - a 25-minute request starts an unbounded lesson;
 - exam mode gives unsolicited hints or early grading;
 - a recurring error is explained again without recording and testing repair.
