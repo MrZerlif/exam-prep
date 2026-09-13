@@ -1,74 +1,26 @@
 {
-  "schema_version": 1,
-  "source": {
-    "kind": "official_exam_list",
-    "ref": "example-course-outline"
-  },
-  "concepts": {
-    "functions": {
-      "title": "Functions and domains",
-      "prerequisites": [],
-      "importance": 0.7,
-      "frequency": 0.8,
-      "expected_points": 6,
-      "estimated_learning_minutes": 20,
-      "source_refs": ["teacher:lecture-01"]
-    },
-    "limits": {
-      "title": "Limits",
-      "prerequisites": ["functions"],
-      "importance": 0.9,
-      "frequency": 0.9,
-      "expected_points": 10,
-      "estimated_learning_minutes": 35,
-      "source_refs": ["official-exam-list:q1", "teacher:lecture-03"]
-    },
-    "continuity": {
-      "title": "Continuity",
-      "prerequisites": ["limits"],
-      "importance": 0.7,
-      "frequency": 0.6,
-      "expected_points": 6,
-      "estimated_learning_minutes": 25,
-      "source_refs": ["official-exam-list:q2"]
-    },
-    "derivative_definition": {
-      "title": "Derivative definition",
-      "prerequisites": ["limits", "continuity"],
-      "importance": 0.8,
-      "frequency": 0.7,
-      "expected_points": 8,
-      "estimated_learning_minutes": 30,
-      "formal_definition": "f'(a) = lim_{h->0} (f(a+h)-f(a))/h",
-      "source_refs": ["teacher:lecture-05"]
-    },
-    "derivative_rules": {
-      "title": "Derivative rules",
-      "prerequisites": ["derivative_definition"],
-      "importance": 0.9,
-      "frequency": 0.95,
-      "expected_points": 12,
-      "estimated_learning_minutes": 40,
-      "source_refs": ["official-exam-list:q4", "teacher:worksheet-2"]
-    },
-    "chain_rule": {
-      "title": "Chain rule",
-      "prerequisites": ["derivative_rules"],
-      "importance": 0.95,
-      "frequency": 0.9,
-      "expected_points": 12,
-      "estimated_learning_minutes": 35,
-      "source_refs": ["official-exam-list:q5", "teacher:worksheet-2"]
-    },
-    "function_investigation": {
-      "title": "Function investigation",
-      "prerequisites": ["limits", "derivative_rules"],
-      "importance": 0.85,
-      "frequency": 0.8,
-      "expected_points": 15,
-      "estimated_learning_minutes": 60,
-      "source_refs": ["official-exam-list:q8"]
-    }
-  }
+  "schema_version": 2,
+  "course_id": "example-course",
+  "source_refs": [
+    {"source_id": "teacher:lecture-01", "authority": "teacher_material", "locator": "lecture 1"},
+    {"source_id": "teacher:lecture-03", "authority": "teacher_material", "locator": "lecture 3"},
+    {"source_id": "teacher:lecture-05", "authority": "teacher_material", "locator": "lecture 5"},
+    {"source_id": "teacher:worksheet-2", "authority": "teacher_material", "locator": "worksheet 2"},
+    {"source_id": "official-exam-list:q1", "authority": "official_exam_list", "locator": "question 1"},
+    {"source_id": "official-exam-list:q2", "authority": "official_exam_list", "locator": "question 2"},
+    {"source_id": "official-exam-list:q4", "authority": "official_exam_list", "locator": "question 4"},
+    {"source_id": "official-exam-list:q5", "authority": "official_exam_list", "locator": "question 5"},
+    {"source_id": "official-exam-list:q8", "authority": "official_exam_list", "locator": "question 8"}
+  ],
+  "learning_targets": [
+    {"target_id": "functions", "title": "Functions and domains", "prerequisites": [], "importance": 0.7, "frequency": 0.8, "expected_points": 6, "estimated_learning_minutes": 20, "capability_ids": ["independent_problem"], "source_refs": [{"source_id": "teacher:lecture-01", "authority": "teacher_material", "locator": "lecture 1"}]},
+    {"target_id": "limits", "title": "Limits", "prerequisites": ["functions"], "importance": 0.9, "frequency": 0.9, "expected_points": 10, "estimated_learning_minutes": 35, "capability_ids": ["independent_problem"], "source_refs": [{"source_id": "official-exam-list:q1", "authority": "official_exam_list", "locator": "question 1"}, {"source_id": "teacher:lecture-03", "authority": "teacher_material", "locator": "lecture 3"}]},
+    {"target_id": "continuity", "title": "Continuity", "prerequisites": ["limits"], "importance": 0.7, "frequency": 0.6, "expected_points": 6, "estimated_learning_minutes": 25, "capability_ids": ["independent_problem"], "source_refs": [{"source_id": "official-exam-list:q2", "authority": "official_exam_list", "locator": "question 2"}]},
+    {"target_id": "derivative_definition", "title": "Derivative definition", "prerequisites": ["limits", "continuity"], "importance": 0.8, "frequency": 0.7, "expected_points": 8, "estimated_learning_minutes": 30, "capability_ids": ["definition_recall"], "formal_definition": "f'(a) = lim_{h->0} (f(a+h)-f(a))/h", "source_refs": [{"source_id": "teacher:lecture-05", "authority": "teacher_material", "locator": "lecture 5"}]},
+    {"target_id": "derivative_rules", "title": "Derivative rules", "prerequisites": ["derivative_definition"], "importance": 0.9, "frequency": 0.95, "expected_points": 12, "estimated_learning_minutes": 40, "capability_ids": ["independent_problem"], "source_refs": [{"source_id": "official-exam-list:q4", "authority": "official_exam_list", "locator": "question 4"}, {"source_id": "teacher:worksheet-2", "authority": "teacher_material", "locator": "worksheet 2"}]},
+    {"target_id": "chain_rule", "title": "Chain rule", "prerequisites": ["derivative_rules"], "importance": 0.95, "frequency": 0.9, "expected_points": 12, "estimated_learning_minutes": 35, "capability_ids": ["independent_problem"], "source_refs": [{"source_id": "official-exam-list:q5", "authority": "official_exam_list", "locator": "question 5"}, {"source_id": "teacher:worksheet-2", "authority": "teacher_material", "locator": "worksheet 2"}]},
+    {"target_id": "function_investigation", "title": "Function investigation", "prerequisites": ["limits", "derivative_rules"], "importance": 0.85, "frequency": 0.8, "expected_points": 15, "estimated_learning_minutes": 60, "capability_ids": ["transfer"], "source_refs": [{"source_id": "official-exam-list:q8", "authority": "official_exam_list", "locator": "question 8"}]}
+  ],
+  "assessment_capabilities": {},
+  "exam_questions": []
 }
-

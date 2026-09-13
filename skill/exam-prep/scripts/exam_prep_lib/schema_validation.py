@@ -22,6 +22,13 @@ ENGINE_OWNED_PROPOSAL_FIELDS = {
     "timestamp",
     "expected_seconds",
     "elapsed_seconds",
+    "assessment_integrity",
+    "assessment_spec_hash",
+    "canonical_assessment_hash",
+    "derived_evidence_maturity",
+    "independence",
+    "exposure_classification",
+    "verifier_result",
 }
 
 
@@ -120,6 +127,20 @@ def validate_observation_proposal(document: dict[str, Any]) -> None:
     validate_document(document, load_schema(schema_name))
 
 
+def validate_observation_event(document: dict[str, Any]) -> None:
+    "Validate a canonical event, dispatching explicitly between v1 and v2."
+
+    if not isinstance(document, dict):
+        raise SchemaError("$", "observation event must be an object")
+    schema_name = (
+        "observation-event-v2.schema.json"
+        if document.get("schema_version") == 2
+        else "observation-event.schema.json"
+    )
+    validate_document(document, load_schema(schema_name))
+
+
 def validate_state_bundle(bundle: dict[str, Any]) -> None:
-    validate_document(bundle, load_schema("concepts.schema.json"))
+    schema_name = "targets.schema.json" if bundle.get("schema_version") == 2 else "concepts.schema.json"
+    validate_document(bundle, load_schema(schema_name))
 

@@ -16,6 +16,26 @@
     "diagnostic_confidence": {"type": "string", "enum": ["low", "medium", "high"]},
     "learner_self_confidence": {"type": "string", "enum": ["low", "medium", "high"]},
     "learner_explanation": {"type": "string"},
-    "source_refs": {"type": "array"}
+    "source_refs": {"type": "array"},
+    "assessment_id": {"type": "string", "minLength": 1},
+    "assessment_spec_id": {"type": "string", "minLength": 1},
+    "assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "assessment_id": {"type": "string", "minLength": 1},
+        "target_id": {"type": "string", "minLength": 1},
+        "capability_id": {"type": "string", "minLength": 1},
+        "spec_hash": {"type": "string", "minLength": 1},
+        "assessment_spec_hash": {"type": "string", "minLength": 1}
+      }
+    },
+    "solution_exposed": {"type": "boolean"},
+    "explicit_exposure_reason": {"type": "string", "minLength": 1},
+    "exposure_metadata": {"type": "object", "additionalProperties": true},
+    "evaluation_context": {"type": "object", "additionalProperties": true},
+    "assessment_result": {"type": "object", "additionalProperties": true},
+    "evaluation_metadata": {"type": "object", "additionalProperties": true},
+    "activity_id": {"type": "string", "minLength": 1}
   }
 }

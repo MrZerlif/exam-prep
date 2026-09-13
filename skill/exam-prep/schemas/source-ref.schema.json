@@ -3,7 +3,7 @@
   "title": "Structured SourceRef",
   "type": "object",
   "additionalProperties": false,
-  "required": ["source_id", "authority", "locator", "provider_id"],
+  "required": ["source_id", "authority", "locator"],
   "properties": {
     "source_id": {"type": "string", "minLength": 1},
     "authority": {"type": "string", "minLength": 1},
@@ -12,8 +12,23 @@
     "excerpt": {"type": ["string", "null"]},
     "content_hash": {"type": ["string", "null"]},
     "provider_id": {"type": "string", "minLength": 1},
+    "provider": {"type": "string", "minLength": 1},
     "artifact_id": {"type": ["string", "null"]},
     "retrieved_at": {"type": ["string", "null"]}
+    ,"version": {"type": ["string", "null"]}
+    ,"raw_locator": {"type": ["string", "null"]}
+    ,"location": {
+      "type": ["object", "null"],
+      "additionalProperties": true,
+      "properties": {
+        "page": {"type": ["integer", "string", "null"]},
+        "slide": {"type": ["integer", "string", "null"]},
+        "section": {"type": ["string", "null"]},
+        "heading": {"type": ["string", "null"]},
+        "span": {"type": ["string", "null"]},
+        "locator": {"type": ["string", "null"]}
+      }
+    }
   }
 }
 

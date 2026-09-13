@@ -3,7 +3,7 @@
   "title": "LearningTarget",
   "type": "object",
   "additionalProperties": true,
-  "required": ["target_id", "title", "prerequisites", "capability_ids", "source_refs"],
+  "required": ["target_id", "title", "prerequisites", "source_refs"],
   "properties": {
     "target_id": {"type": "string", "minLength": 1},
     "title": {"type": "string", "minLength": 1},

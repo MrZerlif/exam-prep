@@ -87,21 +87,35 @@ DEFAULT_LEARNER = {
     "schema_version": 1,
     "updated_at": None,
     "preferences": {
-        "learning_style": ["interactive", "problem_solving", "programmer_analogies"],
+        "interaction_preferences": ["interactive"],
+        "explanation_preferences": ["concise", "use_analogies_when_helpful"],
+        "preferred_practice_modes": ["problem_solving"],
         "explanation_length": "concise",
         "solution_policy": "delay_full_solution",
     },
     "stable_patterns": [],
 }
 DEFAULT_SESSION = {
-    "schema_version": 1,
+    "schema_version": 2,
     "session_id": "",
     "phase": "idle",
     "pending_action": "load a syllabus and start a session",
-    "current_concept": None,
+    "current_target_id": None,
     "current_task": None,
     "time_budget_minutes": 25,
 }
+
+
+class LegacyStateDetected(ValueError):
+    """A legacy state tree needs an explicit migration before target runtime use."""
+
+
+LEGACY_STATE_MARKERS = (
+    "course.json",
+    "syllabus.json",
+    "observations.jsonl",
+    "concepts.json",
+)
 
 
 def _now() -> str:
@@ -129,16 +143,59 @@ def _read_json(path: Path, default: object) -> object:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def _has_legacy_state(workspace: Path) -> bool:
+    legacy_root = workspace / "state"
+    return legacy_root.is_dir() and any(
+        (legacy_root / marker).exists() for marker in LEGACY_STATE_MARKERS
+    )
+
+
+def _derived_items(derived: dict[str, object]) -> dict:
+    """Return target/concept state for internal reducer and scheduler callers."""
+
+    items = derived.get("targets")
+    if isinstance(items, dict):
+        return items
+    items = derived.get("concepts", {})
+    return items if isinstance(items, dict) else {}
+
+
+def _is_v2_syllabus(syllabus: dict) -> bool:
+    return normalize_syllabus(syllabus).schema_version >= 2
+
+
+def _public_derived(syllabus: dict, derived: dict) -> dict:
+    """Expose canonical v2 state under targets while preserving v1 output."""
+
+    if not _is_v2_syllabus(syllabus):
+        return derived
+    result = {key: value for key, value in derived.items() if key != "concepts"}
+    result["schema_version"] = 2
+    result["targets"] = _derived_items(derived)
+    return result
+
+
+def _public_activity(syllabus: dict, selected: dict) -> dict:
+    if not _is_v2_syllabus(syllabus):
+        return selected
+    result = dict(selected)
+    target_id = result.pop("concept_id", None)
+    if target_id is not None:
+        result["target_id"] = target_id
+    return result
+
+
 def _store(workspace: str | None) -> StudyStore:
     resolved_workspace = resolve_workspace(
         workspace,
         git_root=discover_git_root(),
     )
-    store = (
-        StudyStore.for_exam_prep(resolved_workspace)
-        if workspace is None
-        else StudyStore(resolved_workspace)
-    )
+    store = StudyStore.for_exam_prep(resolved_workspace)
+    if not store.state_path.exists() and _has_legacy_state(resolved_workspace):
+        raise LegacyStateDetected(
+            f"legacy state detected at {resolved_workspace / 'state'}; "
+            "run migrate --from-math-study explicitly before using exam-prep"
+        )
     store.initialize()
     return store
 
@@ -171,10 +228,15 @@ def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
     else:
         learner = recovered.learner
         session = recovered.session
+        if _is_v2_syllabus(syllabus) and "current_target_id" not in session:
+            session = dict(session)
+            if session.get("current_concept") is not None:
+                session["legacy_current_concept"] = session.pop("current_concept")
+            session["current_target_id"] = None
         manifest_data = recovered.manifest.data
         applied_line = manifest_data.get("last_complete_observation_line", 0)
         applied_id = manifest_data.get("last_complete_observation_id")
-        concept_ids = set(recovered.derived.get("concepts", {}).keys())
+        concept_ids = set(_derived_items(recovered.derived).keys())
         syllabus_ids = set(normalize_syllabus(syllabus).targets)
         # Compare canonical-input fingerprints, not just the concept-id set:
         # editing course.json (exam date, scheduler policy) or syllabus.json
@@ -183,12 +245,30 @@ def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
         # to the last committed revision and never trigger a recompute.
         course_changed = manifest_data.get("course_hash") != StudyStore.hash_document(course)
         syllabus_changed = manifest_data.get("syllabus_hash") != StudyStore.hash_document(syllabus)
+        expected_inputs = manifest_data.get("canonical_inputs")
+        if isinstance(expected_inputs, dict):
+            current_inputs = store.canonical_input_fingerprints(course, syllabus)
+            canonical_inputs_changed = any(
+                expected_inputs.get(key) != current_inputs.get(key)
+                for key in (
+                    "course_hash",
+                    "syllabus_hash",
+                    "observations_hash",
+                    "assessments_hash",
+                    "source_evidence_hash",
+                    "sessions_hash",
+                    "source_manifest_hash",
+                )
+            )
+        else:
+            canonical_inputs_changed = False
         needs_materialization = (
             applied_line != len(events)
             or applied_id != current_id
             or concept_ids != syllabus_ids
             or course_changed
             or syllabus_changed
+            or canonical_inputs_changed
         )
 
     if needs_materialization:
@@ -198,7 +278,7 @@ def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
         reviews = recovered.review_queue
         if reviews is None:
             reviews = build_review_queue(
-                events, concepts.get("concepts", {}), course, datetime.now(timezone.utc), syllabus
+                events, _derived_items(concepts), course, datetime.now(timezone.utc), syllabus
             )
     return course, syllabus, learner, session, concepts, reviews
 
@@ -219,7 +299,7 @@ def _activate_session(session: dict) -> tuple[dict, bool]:
                 "session_id": _new_session_id(),
                 "phase": "study",
                 "pending_action": "choose the next budget-fitting activity",
-                "current_concept": None,
+                "current_target_id": None,
                 "current_task": None,
             }
         )
@@ -238,7 +318,7 @@ def _persist_learning(
     revision = store.next_revision()
     concepts = reduce_learning_state(course, syllabus, events, _reduction_policy(course, revision))
     now = datetime.now(timezone.utc)
-    reviews = build_review_queue(events, concepts.get("concepts", {}), course, now, syllabus)
+    reviews = build_review_queue(events, _derived_items(concepts), course, now, syllabus)
     reviews["derived_from_revision"] = revision
     learner = dict(learner)
     learner["updated_at"] = now.isoformat()
@@ -308,15 +388,29 @@ def main(argv: list[str] | None = None) -> int:
         try:
             validated = validate_curriculum_proposal(proposal)
         except CurriculumValidationError as exc:
-            return _result({"valid": False, "issues": exc.issues})
-        return _result({"valid": True, "proposal_id": validated["proposal_id"]})
+            return _result({
+                "valid": False,
+                "errors": exc.issues,
+                "warnings": exc.warnings,
+                "coverage_gaps": exc.coverage_gaps,
+            })
+        return _result({
+            "valid": True,
+            "proposal_id": validated["proposal_id"],
+            "validation": validated.get("validation", {}),
+        })
 
     if args.command == "apply-curriculum":
         proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
         try:
             result = apply_curriculum_proposal(store, proposal)
         except CurriculumValidationError as exc:
-            return _result({"valid": False, "issues": exc.issues})
+            return _result({
+                "valid": False,
+                "errors": exc.issues,
+                "warnings": exc.warnings,
+                "coverage_gaps": exc.coverage_gaps,
+            })
         return _result(result.to_mapping())
 
     if args.command == "freeze-assessment":
@@ -356,7 +450,7 @@ def main(argv: list[str] | None = None) -> int:
         return _result(
             {
                 "status": "syllabus_loaded",
-                "concept_count": len(normalize_syllabus(loaded).targets),
+                ("target_count" if int(loaded.get("schema_version", 1)) >= 2 else "concept_count"): len(normalize_syllabus(loaded).targets),
                 "source": str(path.resolve()),
             }
         )
@@ -378,7 +472,15 @@ def main(argv: list[str] | None = None) -> int:
             concepts, reviews, _manifest = _persist_learning(
                 store, course, syllabus, learner, session
             )
-        return _result({"status": "resumed", "session": session, "concepts": concepts})
+        return _result(
+            {
+                "status": "resumed",
+                "session": session,
+                ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
+                    syllabus, concepts
+                ),
+            }
+        )
 
     if args.command == "status":
         session_history = store.read_session_summaries()
@@ -390,7 +492,9 @@ def main(argv: list[str] | None = None) -> int:
                 },
                 "session": session,
                 "last_session_summary": session_history[-1] if session_history else None,
-                "concepts": concepts,
+                ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
+                    syllabus, concepts
+                ),
                 "review_queue": reviews,
                 "log_diagnostics": store.read_log_diagnostics(),
             }
@@ -399,13 +503,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "next":
         selected = select_next_activity(
             syllabus,
-            concepts.get("concepts", {}),
+            _derived_items(concepts),
             reviews.get("items", {}),
             course,
             datetime.now(timezone.utc),
             args.minutes,
         )
-        return _result({"budget_minutes": args.minutes, **selected})
+        return _result(
+            {"budget_minutes": args.minutes, **_public_activity(syllabus, selected)}
+        )
 
     if args.command == "record-observation":
         proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
@@ -421,7 +527,7 @@ def main(argv: list[str] | None = None) -> int:
         target_id = proposal.get("target_id", proposal.get("concept_id"))
         session.update(
             {
-                "current_concept": target_id,
+                "current_target_id": target_id,
                 "current_task": proposal["task_id"],
                 "pending_action": f"continue {target_id} with an independent check",
             }
@@ -435,7 +541,9 @@ def main(argv: list[str] | None = None) -> int:
                 "appended": result.appended,
                 "revision": manifest.revision,
                 "session": session,
-                "concepts": concepts,
+                ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
+                    syllabus, concepts
+                ),
                 "review_queue": reviews,
             }
         )
@@ -453,7 +561,7 @@ def main(argv: list[str] | None = None) -> int:
         return _result(
             {
                 concept_id: state.get("recurring_mistakes", [])
-                for concept_id, state in concepts.get("concepts", {}).items()
+                for concept_id, state in _derived_items(concepts).items()
                 if state.get("recurring_mistakes")
             }
         )
@@ -461,15 +569,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "roadmap":
         roadmap = [
             {
-                "concept_id": concept_id,
+                ("target_id" if _is_v2_syllabus(syllabus) else "concept_id"): concept_id,
                 "title": metadata.get("title"),
-                "mastery_status": concepts.get("concepts", {})
+                "mastery_status": _derived_items(concepts)
                 .get(concept_id, {})
                 .get("mastery_status", "unseen"),
                 "review_status": reviews.get("items", {})
                 .get(concept_id, {})
                 .get("review_status", "not_due"),
-                "availability": concepts.get("concepts", {})
+                "availability": _derived_items(concepts)
                 .get(concept_id, {})
                 .get("availability", "available"),
                 "prerequisites": metadata.get("prerequisites", []),
@@ -526,10 +634,17 @@ def main(argv: list[str] | None = None) -> int:
         revision = store.next_revision() - 1
         rebuilt = reduce_learning_state(course, syllabus, events, _reduction_policy(course, revision))
         rebuilt_reviews = build_review_queue(
-            events, rebuilt.get("concepts", {}), course, datetime.now(timezone.utc), syllabus
+            events, _derived_items(rebuilt), course, datetime.now(timezone.utc), syllabus
         )
         rebuilt_reviews["derived_from_revision"] = revision
-        return _result({"concepts": rebuilt, "review_queue": rebuilt_reviews})
+        return _result(
+            {
+                ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
+                    syllabus, rebuilt
+                ),
+                "review_queue": rebuilt_reviews,
+            }
+        )
 
     if args.command == "end-session":
         summary = None
@@ -563,14 +678,14 @@ def main(argv: list[str] | None = None) -> int:
                 "weak": sorted(
                     concept_id
                     for concept_id in concept_ids
-                    if concepts.get("concepts", {}).get(concept_id, {}).get("mastery_status")
+                    if _derived_items(concepts).get(concept_id, {}).get("mastery_status")
                     in ("weak", "learning")
                 ),
                 "recurring_mistakes": sorted(
                     {
                         mistake["tag"]
                         for concept_id in concept_ids
-                        for mistake in concepts.get("concepts", {})
+                        for mistake in _derived_items(concepts)
                         .get(concept_id, {})
                         .get("recurring_mistakes", [])
                         if mistake.get("recurring")
@@ -590,7 +705,7 @@ def main(argv: list[str] | None = None) -> int:
             {
                 "phase": "idle",
                 "pending_action": "resume with start",
-                "current_concept": None,
+                "current_target_id": None,
                 "current_task": None,
             }
         )

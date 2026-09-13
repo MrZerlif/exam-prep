@@ -1,0 +1,28 @@
+{
+  "envelope_id": "notebooklm-envelope-example-1",
+  "provider_id": "notebooklm",
+  "status": "ok",
+  "retrieved_at": "2026-09-13T15:00:00+00:00",
+  "capabilities_used": ["search", "citation"],
+  "retrieval_id": "notebooklm-retrieval-example-1",
+  "evidence": [
+    {
+      "evidence_id": "evidence-example-1",
+      "excerpt": "Definition and worked context supplied by the course material.",
+      "retrieval_id": "notebooklm-retrieval-example-1",
+      "confidence": 0.92,
+      "source_ref": {
+        "source_id": "teacher:lecture-03",
+        "authority": "teacher_material",
+        "provider": "notebooklm",
+        "version": "course-pack-2026",
+        "location": {
+          "page": 4,
+          "heading": "Limits"
+        },
+        "locator": "page 4"
+      }
+    }
+  ],
+  "diagnostics": []
+}

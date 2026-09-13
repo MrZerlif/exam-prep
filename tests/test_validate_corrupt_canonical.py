@@ -55,7 +55,7 @@ class ValidateCorruptCanonicalTests(unittest.TestCase):
 
     def test_corrupt_course_json_is_diagnosed_not_a_crash(self):
         self.ready()
-        (self.root / "state" / "course.json").write_text("{not-json", encoding="utf-8")
+        (self.root / ".exam-prep" / "course.json").write_text("{not-json", encoding="utf-8")
 
         completed = self.run_validate_subprocess()
         self.assertNotEqual(completed.returncode, 0)
@@ -66,7 +66,7 @@ class ValidateCorruptCanonicalTests(unittest.TestCase):
 
     def test_corrupt_syllabus_json_is_diagnosed_not_a_crash(self):
         self.ready()
-        (self.root / "state" / "syllabus.json").write_text("[[[", encoding="utf-8")
+        (self.root / ".exam-prep" / "syllabus.json").write_text("[[[", encoding="utf-8")
 
         completed = self.run_validate_subprocess()
         self.assertNotEqual(completed.returncode, 0)
@@ -76,7 +76,7 @@ class ValidateCorruptCanonicalTests(unittest.TestCase):
 
     def test_corrupt_current_pointer_still_yields_a_report(self):
         self.ready()
-        (self.root / "state" / "current.json").write_text("{broken", encoding="utf-8")
+        (self.root / ".exam-prep" / "current.json").write_text("{broken", encoding="utf-8")
 
         completed = self.run_validate_subprocess()
         report = json.loads(completed.stdout)
@@ -84,13 +84,30 @@ class ValidateCorruptCanonicalTests(unittest.TestCase):
 
     def test_corrupt_derived_snapshot_still_yields_a_report(self):
         self.ready()
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         latest = sorted(store.revisions_path.iterdir())[-1]
         (latest / "concepts.json").write_text("{not-json-either", encoding="utf-8")
 
         completed = self.run_validate_subprocess()
         report = json.loads(completed.stdout)
         self.assertIn("checks", report)
+
+    def test_corrupt_new_revision_manifest_field_is_diagnosed(self):
+        self.ready()
+        store = StudyStore.for_exam_prep(self.root)
+        latest = sorted(store.revisions_path.iterdir())[-1]
+        manifest_path = latest / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["canonical_inputs"]["unexpected"] = "corrupt"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+
+        completed = self.run_validate_subprocess()
+        self.assertEqual(completed.returncode, 0)
+        report = json.loads(completed.stdout)
+        revision_check = next(
+            item for item in report["checks"] if item["name"] == "revision_manifests_and_hashes"
+        )
+        self.assertEqual("warning", revision_check["status"])
 
     def test_healthy_workspace_validate_still_exits_zero(self):
         self.ready()

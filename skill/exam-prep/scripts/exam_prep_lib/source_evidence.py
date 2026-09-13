@@ -64,6 +64,16 @@ def ingest_source_evidence(
                 "evidence_id": evidence_id,
                 "provider_id": envelope.provider_id,
                 "status": envelope.status,
+                **{
+                    key: value
+                    for key, value in (
+                        ("envelope_id", envelope.envelope_id),
+                        ("retrieved_at", envelope.retrieved_at),
+                        ("capabilities_used", envelope.capabilities_used),
+                        ("retrieval_id", envelope.retrieval_id),
+                    )
+                    if value is not None
+                },
                 **normalized,
             }
         )

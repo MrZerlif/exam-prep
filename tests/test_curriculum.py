@@ -70,8 +70,9 @@ class CurriculumTests(unittest.TestCase):
         validated = validate_curriculum_proposal(proposal)
         syllabus = build_syllabus_from_proposal(validated)
         self.assertEqual(2, len(syllabus["learning_targets"]))
-        self.assertEqual(["limits"], syllabus["concepts"]["derivatives"]["prerequisites"])
-        self.assertEqual(["q2"], syllabus["concepts"]["derivatives"]["exam_question_ids"])
+        derivatives = next(item for item in syllabus["learning_targets"] if item["target_id"] == "derivatives")
+        self.assertEqual(["limits"], derivatives["prerequisites"])
+        self.assertEqual(["q2"], derivatives["exam_question_ids"])
         self.assertTrue(syllabus["source_coverage"]["targets_without_sources"] == [])
 
     def test_missing_prerequisite_is_rejected(self):
@@ -84,15 +85,19 @@ class CurriculumTests(unittest.TestCase):
         proposal["learning_targets"][0]["prerequisites"] = ["derivatives"]
         self.assert_invalid(proposal, "cycle")
 
-    def test_unknown_source_ref_is_rejected(self):
+    def test_unknown_source_ref_is_a_coverage_gap(self):
         proposal = valid_proposal()
         proposal["learning_targets"][0]["source_refs"] = ["missing:source"]
-        self.assert_invalid(proposal, "unknown source")
+        validated = validate_curriculum_proposal(proposal)
+        self.assertFalse(validated["validation"]["errors"])
+        self.assertTrue(validated["validation"]["coverage_gaps"])
 
-    def test_open_capability_id_is_rejected_until_descriptor_exists(self):
+    def test_open_capability_id_is_accepted_without_mastery_mapping(self):
         proposal = valid_proposal()
         proposal["learning_targets"][0]["capability_ids"] = ["proof:short"]
-        self.assert_invalid(proposal, "unknown capability")
+        validated = validate_curriculum_proposal(proposal)
+        self.assertFalse(validated["validation"]["errors"])
+        self.assertTrue(any("proof:short" in warning for warning in validated["validation"]["warnings"]))
 
         proposal["assessment_capabilities"] = [
             {
@@ -105,14 +110,15 @@ class CurriculumTests(unittest.TestCase):
         ]
         validate_curriculum_proposal(proposal)
 
-    def test_exam_question_mapping_and_coverage_gaps_are_diagnostics(self):
+    def test_exam_question_mapping_is_error_but_coverage_gaps_are_diagnostics(self):
         proposal = valid_proposal()
         proposal["exam_questions"][0]["target_ids"] = ["missing"]
         self.assert_invalid(proposal, "exam question")
 
         proposal = valid_proposal()
         proposal["learning_targets"][0]["source_refs"] = []
-        self.assert_invalid(proposal, "coverage")
+        validated = validate_curriculum_proposal(proposal)
+        self.assertTrue(validated["validation"]["coverage_gaps"])
 
     def test_curriculum_updates_are_incremental_and_idempotent(self):
         with tempfile.TemporaryDirectory() as tmp:

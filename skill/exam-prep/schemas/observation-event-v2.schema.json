@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Canonical v2 EvidenceEvent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version", "observation_id", "recorded_at", "session_id",
+    "target_id", "task_id", "capability_id", "task_type", "outcome",
+    "assistance", "error_tags", "diagnostic_confidence", "source_refs",
+    "expected_seconds", "elapsed_seconds", "assessment_integrity"
+  ],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [2]},
+    "observation_id": {"type": "string", "minLength": 1},
+    "recorded_at": {"type": ["string", "null"]},
+    "session_id": {"type": ["string", "null"]},
+    "target_id": {"type": "string", "minLength": 1},
+    "legacy_concept_id": {"type": ["string", "null"]},
+    "task_id": {"type": "string", "minLength": 1},
+    "activity_id": {"type": ["string", "null"]},
+    "capability_id": {"type": "string", "minLength": 1},
+    "task_type": {"type": "string", "minLength": 1},
+    "outcome": {"type": "string", "enum": ["correct", "partial", "incorrect", "skipped", "solution_seen"]},
+    "assistance": {"type": "object", "additionalProperties": true},
+    "error_tags": {"type": "array", "items": {"type": "string"}},
+    "diagnostic_confidence": {"type": "string", "enum": ["low", "medium", "high"]},
+    "learner_self_confidence": {"type": ["string", "null"]},
+    "learner_explanation": {"type": ["string", "null"]},
+    "source_refs": {"type": "array"},
+    "expected_seconds": {"type": ["integer", "null"], "minimum": 0},
+    "elapsed_seconds": {"type": ["integer", "null"], "minimum": 0},
+    "assessment_id": {"type": ["string", "null"]},
+    "assessment_spec_id": {"type": ["string", "null"]},
+    "assessment_spec_hash": {"type": ["string", "null"]},
+    "assessment": {
+      "type": ["object", "null"],
+      "additionalProperties": false,
+      "properties": {
+        "assessment_id": {"type": "string", "minLength": 1},
+        "target_id": {"type": "string", "minLength": 1},
+        "capability_id": {"type": "string", "minLength": 1},
+        "spec_hash": {"type": "string", "minLength": 1},
+        "assessment_spec_hash": {"type": "string", "minLength": 1}
+      }
+    },
+    "assessment_integrity": {"type": "string", "enum": ["frozen_attempt", "explicit_exposure", "legacy_unfrozen", "invalid_downgraded"]},
+    "solution_exposed": {"type": "boolean"},
+    "explicit_exposure_reason": {"type": ["string", "null"]},
+    "exposure_metadata": {"type": "object", "additionalProperties": true},
+    "evidence_facets": {"type": "array", "items": {"type": "string"}},
+    "evaluation_context": {"type": "object", "additionalProperties": true},
+    "assessment_result": {"type": "object", "additionalProperties": true},
+    "evaluation_metadata": {"type": "object", "additionalProperties": true},
+    "verifier_result": {"type": "object", "additionalProperties": true},
+    "diagnostics": {"type": "array", "items": {"type": "string"}},
+    "legacy_schema_version": {"type": ["integer", "null"]}
+  }
+}

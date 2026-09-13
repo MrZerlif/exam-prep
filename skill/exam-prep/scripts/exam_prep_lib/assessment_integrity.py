@@ -17,6 +17,7 @@ class AttemptEvidenceDecision:
     accepted: bool
     mastery_eligible: bool
     diagnostic: str | None = None
+    integrity: str = "frozen_attempt"
 
 
 def _is_attempt(event: dict[str, Any]) -> bool:
@@ -40,6 +41,29 @@ def assess_attempt_evidence(
 ) -> AttemptEvidenceDecision:
     if event.get("assessment_id") != assessment.assessment_id:
         raise AssessmentIntegrityError("event assessment_id does not match frozen assessment")
+    if event.get("target_id") != assessment.target_id:
+        raise AssessmentIntegrityError("event target_id does not match frozen assessment")
+    if event.get("capability_id") != assessment.capability_id:
+        raise AssessmentIntegrityError("event capability_id does not match frozen assessment")
+    linked_contract = event.get("assessment")
+    if linked_contract is not None:
+        if not isinstance(linked_contract, dict):
+            raise AssessmentIntegrityError("event assessment linkage must be an object")
+        if (
+            linked_contract.get("assessment_id") is not None
+            and linked_contract.get("assessment_id") != assessment.assessment_id
+        ):
+            raise AssessmentIntegrityError("linked assessment_id does not match frozen assessment")
+        if linked_contract.get("target_id") != assessment.target_id:
+            raise AssessmentIntegrityError("linked assessment target_id does not match frozen assessment")
+        if linked_contract.get("capability_id") != assessment.capability_id:
+            raise AssessmentIntegrityError("linked assessment capability_id does not match frozen assessment")
+        linked_hash = linked_contract.get("spec_hash", linked_contract.get("assessment_spec_hash"))
+        if linked_hash is not None and linked_hash != assessment.spec_hash:
+            raise AssessmentIntegrityError("linked assessment spec hash does not match frozen assessment")
+    supplied_hash = event.get("assessment_spec_hash", event.get("spec_hash"))
+    if supplied_hash is not None and supplied_hash != assessment.spec_hash:
+        raise AssessmentIntegrityError("event assessment spec hash does not match frozen assessment")
 
     previous = [
         prior
@@ -59,6 +83,9 @@ def assess_attempt_evidence(
             accepted=True,
             mastery_eligible=False,
             diagnostic="solution_exposure_downgraded",
+            integrity="explicit_exposure",
         )
-    return AttemptEvidenceDecision(accepted=True, mastery_eligible=True)
+    return AttemptEvidenceDecision(
+        accepted=True, mastery_eligible=True, integrity="frozen_attempt"
+    )
 

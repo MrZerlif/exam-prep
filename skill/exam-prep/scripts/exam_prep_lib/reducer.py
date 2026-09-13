@@ -177,7 +177,10 @@ def reduce_learning_state(
         if capability_resolution.warning and capability.capability_id not in unmapped_capability_events:
             unmapped_capability_events.append(capability.capability_id)
         assistance = event.get("assistance") or {}
-        if event.get("solution_exposed"):
+        if (
+            event.get("solution_exposed")
+            or event.get("assessment_integrity") == "explicit_exposure"
+        ):
             assistance = {**assistance, "full_solution_viewed": True}
         assistance_band = derive_assistance_band(assistance)
         outcome = event.get("outcome", "skipped")
@@ -287,11 +290,19 @@ def reduce_learning_state(
         )
         state["availability"] = "prerequisite_blocked" if blocked else "available"
 
-    result = {
-        "schema_version": 1,
-        "derived_from_revision": int(policy.get("revision", 0)),
-        "concepts": concepts,
-    }
+    if normalized_syllabus.schema_version >= 2:
+        result = {
+            "schema_version": 2,
+            "derived_from_revision": int(policy.get("revision", 0)),
+            "targets": concepts,
+            "aliases": dict(normalized_syllabus.aliases),
+        }
+    else:
+        result = {
+            "schema_version": 1,
+            "derived_from_revision": int(policy.get("revision", 0)),
+            "concepts": concepts,
+        }
     if unmapped_capability_events:
         result["unmapped_capability_events"] = unmapped_capability_events
     return result

@@ -56,6 +56,39 @@ class SourceProviderTests(unittest.TestCase):
         self.assertEqual([], envelope.evidence)
         self.assertTrue(envelope.diagnostics)
 
+    def test_structured_source_location_and_complete_envelope_metadata_survive_normalization(self):
+        envelope = normalize_source_evidence(
+            {
+                "envelope_id": "env-1",
+                "provider_id": "recorded-host",
+                "status": "ok",
+                "retrieved_at": "2026-09-13T12:00:00+00:00",
+                "capabilities_used": ["search", "citation"],
+                "retrieval_id": "retrieval-1",
+                "evidence": [
+                    {
+                        "source_ref": {
+                            "source_id": "teacher:week-1",
+                            "authority": "teacher_material",
+                            "provider_id": "recorded-host",
+                            "version": "v2",
+                            "location": {"page": 3, "heading": "Limits"},
+                        },
+                        "excerpt": "A limit describes...",
+                        "retrieval_id": "citation-1",
+                        "confidence": 0.8,
+                    }
+                ],
+            }
+        )
+        mapping = envelope.to_mapping()
+        self.assertEqual("env-1", mapping["envelope_id"])
+        self.assertEqual(["search", "citation"], mapping["capabilities_used"])
+        ref = mapping["evidence"][0]["source_ref"]
+        self.assertEqual("v2", ref["version"])
+        self.assertEqual({"page": 3, "heading": "Limits"}, ref["location"])
+        self.assertEqual("citation-1", mapping["evidence"][0]["retrieval_id"])
+
     def test_coverage_gaps_are_explicit_and_unknown_refs_are_reported(self):
         gaps = compute_source_coverage(
             {

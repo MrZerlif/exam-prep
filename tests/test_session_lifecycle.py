@@ -87,7 +87,7 @@ class SessionLifecycleTests(unittest.TestCase):
         result = self.record(proposal("obs-s2", errors=["conceptual_error"]))
         self.cli("end-session")
 
-        mistakes = result["concepts"]["concepts"]["chain_rule"]["recurring_mistakes"]
+        mistakes = result["targets"]["targets"]["chain_rule"]["recurring_mistakes"]
         self.assertEqual(mistakes[0]["sessions_seen"], 2)
 
 

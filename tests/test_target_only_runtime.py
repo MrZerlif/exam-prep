@@ -59,11 +59,11 @@ def event():
 class TargetOnlyRuntimeTests(unittest.TestCase):
     def test_reducer_and_scheduler_use_learning_targets_as_canonical_ids(self):
         reduced = reduce_learning_state({}, syllabus(), [event()], {})
-        self.assertIn("algebra:linear", reduced["concepts"])
-        self.assertGreater(reduced["concepts"]["algebra:linear"]["mastery"]["procedural"], 0)
+        self.assertIn("algebra:linear", reduced["targets"])
+        self.assertGreater(reduced["targets"]["algebra:linear"]["mastery"]["procedural"], 0)
         selected = select_next_activity(
             syllabus(),
-            reduced["concepts"],
+            reduced["targets"],
             {"items": {}},
             {},
             datetime.now(timezone.utc),
@@ -95,6 +95,40 @@ class TargetOnlyRuntimeTests(unittest.TestCase):
             checks = {item["name"]: item for item in report["checks"]}
             self.assertEqual("ok", checks["schema_versions"]["status"])
             self.assertEqual("ok", checks["syllabus_source_refs"]["status"])
+
+    def test_v2_store_revision_and_cli_output_use_targets_not_concepts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            syllabus_path = root / "syllabus.json"
+            syllabus_path.write_text(json.dumps(syllabus()), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, main(["--workspace", str(root), "init"]))
+                self.assertEqual(0, main(["--workspace", str(root), "load-syllabus", str(syllabus_path)]))
+                self.assertEqual(0, main(["--workspace", str(root), "status"]))
+            state_root = root / ".exam-prep"
+            self.assertTrue((state_root / "targets.json").exists())
+            self.assertFalse((state_root / "concepts.json").exists())
+            revision_dirs = [path for path in (state_root / "revisions").iterdir() if path.is_dir()]
+            self.assertTrue(revision_dirs)
+            self.assertTrue((revision_dirs[-1] / "targets.json").exists())
+            self.assertFalse((revision_dirs[-1] / "concepts.json").exists())
+
+    def test_v2_session_output_uses_current_target_id(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            syllabus_path = root / "syllabus.json"
+            syllabus_path.write_text(json.dumps(syllabus()), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                main(["--workspace", str(root), "init"])
+                main(["--workspace", str(root), "load-syllabus", str(syllabus_path)])
+                started = main(["--workspace", str(root), "start"])
+            del started
+            status_output = io.StringIO()
+            with contextlib.redirect_stdout(status_output):
+                main(["--workspace", str(root), "status"])
+            session = json.loads(status_output.getvalue())["session"]
+            self.assertIn("current_target_id", session)
+            self.assertNotIn("current_concept", session)
 
 
 if __name__ == "__main__":

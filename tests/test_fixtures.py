@@ -17,6 +17,8 @@ class FixtureTests(unittest.TestCase):
             SKILL_ROOT / "templates" / "session.json",
             SKILL_ROOT / "templates" / "current.json",
             SKILL_ROOT / "examples" / "observation-proposal.json",
+            SKILL_ROOT / "examples" / "assessment.json",
+            SKILL_ROOT / "examples" / "source-evidence-envelope.json",
             SKILL_ROOT / "examples" / "session-summary.json",
             SKILL_ROOT / "examples" / "mock-exam.json",
         ]
@@ -28,8 +30,8 @@ class FixtureTests(unittest.TestCase):
         syllabus = json.loads(
             (SKILL_ROOT / "examples" / "example-syllabus.json").read_text(encoding="utf-8")
         )
-        self.assertTrue(any(item.get("prerequisites") for item in syllabus["concepts"].values()))
-        self.assertTrue(all(item.get("source_refs") for item in syllabus["concepts"].values()))
+        self.assertTrue(any(item.get("prerequisites") for item in syllabus["learning_targets"]))
+        self.assertTrue(all(item.get("source_refs") for item in syllabus["learning_targets"]))
 
     def test_templates_contain_no_runtime_observations(self):
         for path in (SKILL_ROOT / "templates").glob("*.json"):

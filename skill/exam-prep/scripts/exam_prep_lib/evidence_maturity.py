@@ -19,7 +19,12 @@ def _event_facets(event: dict[str, Any]) -> set[str]:
     if event.get("outcome") != "correct":
         return set()
     assistance = event.get("assistance") or {}
-    if event.get("outcome") == "solution_seen" or event.get("solution_exposed") or assistance.get("full_solution_viewed"):
+    if (
+        event.get("outcome") == "solution_seen"
+        or event.get("solution_exposed")
+        or event.get("assessment_integrity") == "explicit_exposure"
+        or assistance.get("full_solution_viewed")
+    ):
         return set()
     explicit = event.get("evidence_facets")
     if isinstance(explicit, list):

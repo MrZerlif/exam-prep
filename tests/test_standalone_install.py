@@ -62,16 +62,17 @@ class StandaloneInstallTests(unittest.TestCase):
         self.run_cli("load-syllabus", str(syllabus_path))
 
         status_before = self.run_cli("status")
-        self.assertIn("concepts", status_before)
+        self.assertIn("targets", status_before)
 
         start_result = self.run_cli("start")
         self.assertEqual(start_result["session"]["phase"], "study")
 
-        concept_id = next(iter(status_before["concepts"]["concepts"]))
+        target_id = next(iter(status_before["targets"]["targets"]))
         proposal = {
-            "schema_version": 1,
+            "schema_version": 2,
             "observation_id": "obs-standalone-1",
-            "concept_id": concept_id,
+            "target_id": target_id,
+            "capability_id": "independent_problem",
             "task_id": "standalone-1",
             "task_type": "independent_problem",
             "outcome": "correct",

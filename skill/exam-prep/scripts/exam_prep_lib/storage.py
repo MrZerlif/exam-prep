@@ -12,7 +12,12 @@ from typing import Any
 
 from .assessment import FrozenAssessment
 from .assessment_integrity import assess_attempt_evidence
-from .schema_validation import load_schema, validate_document, validate_observation_proposal
+from .schema_validation import (
+    load_schema,
+    validate_document,
+    validate_observation_event,
+    validate_observation_proposal,
+)
 
 
 class ObservationConflict(ValueError):
@@ -206,6 +211,8 @@ class StudyStore:
     ) -> AppendResult:
         validate_observation_proposal(proposal)
         assessment_id = proposal.get("assessment_id")
+        integrity_decision = None
+        frozen = None
         if assessment_id is not None:
             frozen_by_id = {
                 item["assessment_id"]: FrozenAssessment.from_mapping(item)
@@ -217,7 +224,7 @@ class StudyStore:
                 raise AssessmentConflict(
                     f"observation references unknown assessment_id {assessment_id!r}"
                 )
-            assess_attempt_evidence(
+            integrity_decision = assess_attempt_evidence(
                 proposal,
                 frozen,
                 prior_events=self.read_complete_observations(),
@@ -231,6 +238,12 @@ class StudyStore:
                 "elapsed_seconds": elapsed_seconds,
             }
         )
+        if integrity_decision is not None:
+            canonical["assessment_spec_hash"] = frozen.spec_hash
+            canonical["assessment_integrity"] = integrity_decision.integrity
+        elif canonical.get("schema_version") == 2:
+            canonical["assessment_integrity"] = "legacy_unfrozen"
+        validate_observation_event(canonical)
         existing = {
             event["observation_id"]: event
             for event in self.read_complete_observations()
@@ -244,6 +257,8 @@ class StudyStore:
                 "timestamp",
                 "expected_seconds",
                 "elapsed_seconds",
+                "assessment_spec_hash",
+                "assessment_integrity",
             }
             learner_payload = {
                 key: value
@@ -283,6 +298,47 @@ class StudyStore:
         two documents that differ only in whitespace/key order hash equal."""
         return hashlib.sha256(StudyStore._dump(value).encode("utf-8")).hexdigest()
 
+    @staticmethod
+    def _derived_filename(derived: dict[str, Any]) -> str:
+        """Use target snapshots for v2 and read/write concepts only for v1."""
+
+        return "targets.json" if derived.get("schema_version") == 2 else "concepts.json"
+
+    @staticmethod
+    def _derived_items(derived: dict[str, Any]) -> dict[str, Any]:
+        items = derived.get("targets")
+        if isinstance(items, dict):
+            return items
+        items = derived.get("concepts", {})
+        return items if isinstance(items, dict) else {}
+
+    def canonical_input_fingerprints(
+        self,
+        course: dict[str, Any] | None = None,
+        syllabus: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        "The stable fingerprints used to decide whether a revision is stale."
+
+        events = self.read_complete_observations()
+        assessments = self.read_assessments()
+        source_evidence = self.read_source_evidence()
+        sessions = self.read_session_summaries()
+        source_manifest = self.root / "sources.json"
+        return {
+            "course_hash": self.hash_document(course) if course is not None else None,
+            "syllabus_hash": self.hash_document(syllabus) if syllabus is not None else None,
+            "observations_hash": self.hash_document(events),
+            "assessments_hash": self.hash_document(assessments),
+            "source_evidence_hash": self.hash_document(source_evidence),
+            "sessions_hash": self.hash_document(sessions),
+            "source_manifest_hash": (
+                self._hash_file(source_manifest) if source_manifest.exists() else None
+            ),
+            "observation_count": len(events),
+            "assessment_count": len(assessments),
+            "source_evidence_count": len(source_evidence),
+        }
+
     def commit_revision(
         self,
         derived: dict[str, Any],
@@ -296,17 +352,32 @@ class StudyStore:
         revision = self._next_revision()
         with tempfile.TemporaryDirectory(dir=self.revisions_path, prefix=".revision-") as temp_name:
             temp_path = Path(temp_name)
-            self._write_json(temp_path / "concepts.json", derived)
+            derived_name = self._derived_filename(derived)
+            self._write_json(temp_path / derived_name, derived)
             self._write_json(temp_path / "session.json", session)
             self._write_json(temp_path / "learner.json", learner)
-            revision_files = ["concepts.json", "session.json", "learner.json"]
+            revision_files = [derived_name, "session.json", "learner.json"]
             if review_queue is not None:
                 self._write_json(temp_path / "review_queue.json", review_queue)
                 revision_files.append("review_queue.json")
             events = self.read_complete_observations()
             log_offset = self.observations_path.stat().st_size
+            canonical_inputs = self.canonical_input_fingerprints(course, syllabus)
+            schema_versions = {
+                "course": course.get("schema_version") if course else None,
+                "syllabus": syllabus.get("schema_version") if syllabus else None,
+                "derived": derived.get("schema_version"),
+                "observations": sorted(
+                    {event.get("schema_version") for event in events}
+                    - {None}
+                ),
+                "assessments": sorted(
+                    {item.get("schema_version") for item in self.read_assessments()}
+                    - {None}
+                ),
+            }
             manifest_data = {
-                "schema_version": 1,
+                "schema_version": 2,
                 "revision": revision,
                 "last_complete_observation_id": events[-1]["observation_id"] if events else None,
                 "last_complete_observation_line": len(events),
@@ -321,6 +392,9 @@ class StudyStore:
                 # against the old inputs.
                 "course_hash": self.hash_document(course) if course is not None else None,
                 "syllabus_hash": self.hash_document(syllabus) if syllabus is not None else None,
+                "canonical_inputs": canonical_inputs,
+            "schema_versions": schema_versions,
+                "derived_snapshot_hash": self._hash_file(temp_path / derived_name),
                 "derived_hashes": {
                     name: self._hash_file(temp_path / name)
                     for name in revision_files
@@ -330,12 +404,12 @@ class StudyStore:
             revision_path = self.revisions_path / f"{revision:06d}"
             os.replace(temp_path, revision_path)
 
-        pointer = {"schema_version": 1, "revision": revision}
+        pointer = {"schema_version": 2, "revision": revision}
         pointer_temp = self.state_path / ".current.json.tmp"
         self._write_json(pointer_temp, pointer)
         os.replace(pointer_temp, self.current_path)
         for name, value in (
-            ("concepts.json", derived),
+            (self._derived_filename(derived), derived),
             ("session.json", session),
             ("learner.json", learner),
         ):
@@ -348,10 +422,18 @@ class StudyStore:
         manifest_path = revision_path / "manifest.json"
         try:
             manifest_data = json.loads(manifest_path.read_text(encoding="utf-8"))
+            validate_document(manifest_data, load_schema("revision-manifest.schema.json"))
+            if int(manifest_data["revision"]) != int(revision_path.name):
+                return None
             for name, expected_hash in manifest_data["derived_hashes"].items():
                 if self._hash_file(revision_path / name) != expected_hash:
                     return None
-            derived = json.loads((revision_path / "concepts.json").read_text(encoding="utf-8"))
+            derived_name = (
+                "targets.json"
+                if (revision_path / "targets.json").exists()
+                else "concepts.json"
+            )
+            derived = json.loads((revision_path / derived_name).read_text(encoding="utf-8"))
             session = json.loads((revision_path / "session.json").read_text(encoding="utf-8"))
             learner = json.loads((revision_path / "learner.json").read_text(encoding="utf-8"))
             review_path = revision_path / "review_queue.json"
@@ -376,6 +458,7 @@ class StudyStore:
         candidates: list[Path] = []
         try:
             pointer = json.loads(self.current_path.read_text(encoding="utf-8"))
+            validate_document(pointer, load_schema("current.schema.json"))
             candidates.append(self.revisions_path / f"{int(pointer['revision']):06d}")
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError):
             pass

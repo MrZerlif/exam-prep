@@ -15,7 +15,7 @@
       "prerequisites": [],
       "capability_ids": ["independent_problem"],
       "exam_question_ids": ["exam:q1"],
-      "source_refs": ["teacher:week-1"]
+      "source_refs": [{"source_id": "teacher:week-1", "authority": "teacher_material", "locator": "page 2"}]
     }
   ],
   "assessment_capabilities": [],

@@ -13,9 +13,16 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable
 
-from .schema_validation import load_schema, validate_document
+from .schema_validation import (
+    load_schema,
+    validate_document,
+    validate_observation_event,
+    validate_state_bundle,
+)
 from .storage import StudyStore
 from .target_normalization import normalize_event, normalize_syllabus
+from .assessment import FrozenAssessment
+from .provenance import source_ref_from_mapping
 
 
 def _check(name: str, fn: Callable[[], tuple[str, str] | None], path: str | None = None) -> dict[str, Any]:
@@ -105,6 +112,10 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         if syllabus_issue:
             return "warning", "skipped: syllabus.json could not be parsed"
         validate_document(syllabus, load_schema("syllabus.schema.json"))
+        if syllabus.get("schema_version") == 2:
+            target_schema = load_schema("learning-target.schema.json")
+            for index, target in enumerate(syllabus.get("learning_targets", [])):
+                validate_document(target, target_schema, f"$.learning_targets[{index}]")
         return None
 
     add("syllabus_schema", check_syllabus_schema, path=str(syllabus_path))
@@ -139,6 +150,8 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
     def check_observations_readable():
         nonlocal events
         events = store.read_complete_observations()
+        for event in events:
+            validate_observation_event(event)
         diagnostics = store.read_log_diagnostics()
         if diagnostics.get("partial_final_line"):
             return "warning", "observations.jsonl has a torn final line (ignored, likely a mid-write crash)"
@@ -193,6 +206,51 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         return None
 
     add("observation_concept_ids_known", check_observation_concept_refs)
+    add("observation_target_ids_known", check_observation_concept_refs)
+
+    # --- assessments and source evidence -----------------------------------
+    assessments: list[dict[str, Any]] = []
+
+    def check_assessments_readable():
+        nonlocal assessments
+        assessments = store.read_assessments()
+        for item in assessments:
+            frozen = FrozenAssessment.from_mapping(item)
+            validate_document(frozen.to_mapping(), load_schema("assessment.schema.json"))
+        return None
+
+    add("assessments_jsonl_readable", check_assessments_readable, path=str(store.assessments_path))
+
+    source_evidence: list[dict[str, Any]] = []
+
+    def check_source_evidence_readable():
+        nonlocal source_evidence
+        source_evidence = store.read_source_evidence()
+        for item in source_evidence:
+            ref = item.get("source_ref")
+            if isinstance(ref, dict):
+                source_ref_from_mapping(ref)
+        return None
+
+    add("source_evidence_jsonl_readable", check_source_evidence_readable, path=str(store.source_evidence_path))
+
+    def check_source_manifest():
+        paths = [store.root / "sources.json", store.state_path / "sources.json"]
+        for manifest_path in paths:
+            if not manifest_path.exists():
+                continue
+            manifest, issue = _safe_read_canonical_json(manifest_path)
+            if issue:
+                return "error", f"{manifest_path.name}: {issue}"
+            if not isinstance(manifest.get("sources", []), list):
+                return "error", f"{manifest_path.name} sources must be an array"
+            for index, source in enumerate(manifest["sources"]):
+                if not isinstance(source, dict):
+                    return "error", f"{manifest_path.name} source {index} must be an object"
+                source_ref_from_mapping(source)
+        return None
+
+    add("source_manifest", check_source_manifest, path=str(store.root / "sources.json"))
 
     # --- revisions, manifests, hashes, current pointer ----------------------
     def check_current_pointer():
@@ -200,7 +258,10 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
             return "warning", "current.json is missing (no committed revision yet)"
         try:
             pointer = json.loads(store.current_path.read_text(encoding="utf-8"))
+            validate_document(pointer, load_schema("current.schema.json"))
             int(pointer["revision"])
+            if not (store.revisions_path / f"{int(pointer['revision']):06d}").is_dir():
+                return "warning", "current.json points to a revision directory that is missing"
         except (OSError, KeyError, TypeError, ValueError, json.JSONDecodeError) as exc:
             return "warning", f"current.json is corrupt, recovery will scan revisions/ instead: {exc}"
         return None
@@ -218,6 +279,12 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
             manifest_path = revision_dir / "manifest.json"
             try:
                 manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+                validate_document(
+                    manifest,
+                    load_schema("revision-manifest.schema.json"),
+                )
+                if int(manifest["revision"]) != int(revision_dir.name):
+                    raise ValueError("revision number does not match its directory")
                 for filename, expected_hash in manifest["derived_hashes"].items():
                     actual = StudyStore._hash_file(revision_dir / filename)
                     if actual != expected_hash:
@@ -232,6 +299,44 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         return None
 
     add("revision_manifests_and_hashes", check_revisions, path=str(store.revisions_path))
+
+    def check_canonical_input_fingerprints():
+        try:
+            recovered = store.recover()
+        except FileNotFoundError:
+            return None
+        expected = recovered.manifest.data.get("canonical_inputs")
+        if not isinstance(expected, dict):
+            return None
+        current = store.canonical_input_fingerprints(course, syllabus)
+        mismatched = [
+            key
+            for key in (
+                "course_hash",
+                "syllabus_hash",
+                "observations_hash",
+                "assessments_hash",
+                "source_evidence_hash",
+                "source_manifest_hash",
+                "sessions_hash",
+            )
+            if expected.get(key) != current.get(key)
+        ]
+        if mismatched:
+            return "warning", "canonical inputs changed since the latest revision: " + ", ".join(mismatched)
+        return None
+
+    add("canonical_input_fingerprints", check_canonical_input_fingerprints)
+
+    def check_derived_snapshot():
+        try:
+            recovered = store.recover()
+        except FileNotFoundError:
+            return None
+        validate_state_bundle(recovered.derived)
+        return None
+
+    add("derived_target_snapshot", check_derived_snapshot)
 
     def check_derived_revision_consistency():
         try:
@@ -265,6 +370,39 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         return None
 
     add("session_lifecycle", check_session_lifecycle)
+
+    def check_learner_snapshot():
+        try:
+            recovered = store.recover()
+        except FileNotFoundError:
+            return None
+        validate_document(recovered.learner, load_schema("learner.schema.json"))
+        return None
+
+    add("learner_snapshot", check_learner_snapshot)
+
+    def check_closed_session_summaries():
+        for summary in store.read_session_summaries():
+            if not summary.get("session_id"):
+                return "error", "closed session summary has no session_id"
+        return None
+
+    add("closed_session_summaries", check_closed_session_summaries)
+
+    def check_migration_metadata():
+        path = store.state_path / "migration.json"
+        if not path.exists():
+            return None
+        marker, issue = _safe_read_canonical_json(path)
+        if issue:
+            return "error", issue
+        if marker.get("mode") != "from-math-study":
+            return "error", "migration.json has an invalid mode"
+        if not marker.get("source_fingerprint"):
+            return "error", "migration.json has no source_fingerprint"
+        return None
+
+    add("migration_metadata", check_migration_metadata, path=str(store.state_path / "migration.json"))
 
     # --- review queue ----------------------------------------------------
     def check_review_queue_timestamps():

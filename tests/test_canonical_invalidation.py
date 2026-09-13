@@ -69,13 +69,13 @@ class CanonicalInvalidationTests(unittest.TestCase):
         self.cli("start")
 
     def edit_course(self, mutate):
-        path = self.root / "state" / "course.json"
+        path = self.root / ".exam-prep" / "course.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         mutate(data)
         path.write_text(json.dumps(data), encoding="utf-8")
 
     def edit_syllabus(self, mutate):
-        path = self.root / "state" / "syllabus.json"
+        path = self.root / ".exam-prep" / "syllabus.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         mutate(data)
         path.write_text(json.dumps(data), encoding="utf-8")
@@ -104,11 +104,15 @@ class CanonicalInvalidationTests(unittest.TestCase):
 
     def test_syllabus_prerequisite_change_recomputes_availability(self):
         self.ready()
-        before = self.cli("status")["concepts"]["concepts"]["chain_rule"]["availability"]
+        before = self.cli("status")["targets"]["targets"]["chain_rule"]["availability"]
 
-        self.edit_syllabus(lambda d: d["concepts"]["chain_rule"].__setitem__("prerequisites", []))
+        self.edit_syllabus(
+            lambda d: next(
+                item for item in d["learning_targets"] if item["target_id"] == "chain_rule"
+            ).__setitem__("prerequisites", [])
+        )
 
-        after = self.cli("status")["concepts"]["concepts"]["chain_rule"]["availability"]
+        after = self.cli("status")["targets"]["targets"]["chain_rule"]["availability"]
         self.assertNotEqual(before, after)
         self.assertEqual(after, "available")
 
@@ -120,13 +124,21 @@ class CanonicalInvalidationTests(unittest.TestCase):
         # priority into a cached snapshot).
         self.ready()
         before = self.cli("next", "--minutes", "25")
-        before_score = before["score"] if before["concept_id"] == "functions" else None
+        before_score = before["score"] if before["target_id"] == "functions" else None
 
-        self.edit_syllabus(lambda d: d["concepts"]["functions"].__setitem__("importance", 0.99))
-        self.edit_syllabus(lambda d: d["concepts"]["functions"].__setitem__("expected_points", 40))
+        self.edit_syllabus(
+            lambda d: next(
+                item for item in d["learning_targets"] if item["target_id"] == "functions"
+            ).__setitem__("importance", 0.99)
+        )
+        self.edit_syllabus(
+            lambda d: next(
+                item for item in d["learning_targets"] if item["target_id"] == "functions"
+            ).__setitem__("expected_points", 40)
+        )
 
         after = self.cli("next", "--minutes", "25")
-        self.assertEqual(after["concept_id"], "functions")
+        self.assertEqual(after["target_id"], "functions")
         self.assertNotEqual(after["score"], before_score)
 
 

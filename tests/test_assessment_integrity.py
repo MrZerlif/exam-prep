@@ -53,13 +53,20 @@ class AssessmentIntegrityTests(unittest.TestCase):
         frozen = FrozenAssessment.from_mapping(assessment())
         with self.assertRaises(AssessmentIntegrityError):
             assess_attempt_evidence(
-                {"assessment_id": frozen.assessment_id, "outcome": "solution_seen"},
+                {
+                    "assessment_id": frozen.assessment_id,
+                    "target_id": frozen.target_id,
+                    "capability_id": frozen.capability_id,
+                    "outcome": "solution_seen",
+                },
                 frozen,
                 prior_events=[],
             )
         decision = assess_attempt_evidence(
             {
                 "assessment_id": frozen.assessment_id,
+                "target_id": frozen.target_id,
+                "capability_id": frozen.capability_id,
                 "outcome": "solution_seen",
                 "explicit_exposure_reason": "learner requested a worked example",
             },
@@ -74,12 +81,19 @@ class AssessmentIntegrityTests(unittest.TestCase):
         decision = assess_attempt_evidence(
             {
                 "assessment_id": frozen.assessment_id,
+                "target_id": frozen.target_id,
+                "capability_id": frozen.capability_id,
                 "outcome": "correct",
                 "assistance": {"full_solution_viewed": True},
             },
             frozen,
             prior_events=[
-                {"assessment_id": frozen.assessment_id, "outcome": "incorrect"}
+                {
+                    "assessment_id": frozen.assessment_id,
+                    "target_id": frozen.target_id,
+                    "capability_id": frozen.capability_id,
+                    "outcome": "incorrect",
+                }
             ],
         )
         self.assertTrue(decision.accepted)
@@ -107,6 +121,29 @@ class AssessmentIntegrityTests(unittest.TestCase):
         self.assertEqual(0.0, state["mastery"]["procedural"])
         self.assertEqual(0, state["evidence"]["independent_successes"])
 
+    def test_explicit_exposure_integrity_state_alone_is_non_promoting(self):
+        result = reduce_learning_state(
+            {},
+            {"schema_version": 2, "learning_targets": [{"target_id": "algebra:linear"}]},
+            [
+                {
+                    "schema_version": 2,
+                    "observation_id": "exposed-integrity",
+                    "target_id": "algebra:linear",
+                    "capability_id": "independent_problem",
+                    "task_type": "independent_problem",
+                    "outcome": "correct",
+                    "assessment_integrity": "explicit_exposure",
+                    "assistance": {},
+                    "error_tags": [],
+                }
+            ],
+            {},
+        )
+        state = result["targets"]["algebra:linear"]
+        self.assertEqual(0.0, state["mastery"]["procedural"])
+        self.assertEqual(0, state["evidence"]["independent_successes"])
+
     def test_store_assessment_is_idempotent_and_conflicts_on_divergence(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StudyStore(Path(tmp))
@@ -126,6 +163,66 @@ class AssessmentIntegrityTests(unittest.TestCase):
             store = StudyStore(Path(tmp))
             with self.assertRaises(ValueError):
                 store.append_assessment(assessment(difficulty=1.5))
+
+    def test_frozen_linkage_requires_target_capability_and_spec_hash(self):
+        frozen = FrozenAssessment.from_mapping(assessment())
+        for mismatch in (
+            {"target_id": "other-target"},
+            {"capability_id": "transfer"},
+            {"assessment_spec_hash": "wrong-hash"},
+        ):
+            event = {
+                "assessment_id": frozen.assessment_id,
+                "target_id": frozen.target_id,
+                "capability_id": frozen.capability_id,
+                "outcome": "correct",
+                **mismatch,
+            }
+            with self.assertRaises(AssessmentIntegrityError):
+                assess_attempt_evidence(event, frozen, prior_events=[])
+
+    def test_store_persists_integrity_decision_on_canonical_v2_event(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            frozen = FrozenAssessment.from_mapping(assessment())
+            store.append_assessment(frozen)
+            proposal = {
+                "schema_version": 2,
+                "observation_id": "frozen-obs",
+                "target_id": frozen.target_id,
+                "task_id": "assessment-task",
+                "capability_id": frozen.capability_id,
+                "task_type": "independent_problem",
+                "outcome": "correct",
+                "assistance": {"levels_revealed": []},
+                "error_tags": [],
+                "diagnostic_confidence": "high",
+                "source_refs": [],
+                "assessment_id": frozen.assessment_id,
+            }
+            result = store.append_observation(
+                proposal,
+                "session-1",
+                "2026-09-13T12:00:00+00:00",
+                60,
+                30,
+            )
+            self.assertEqual("frozen_attempt", result.canonical_event["assessment_integrity"])
+            self.assertEqual(frozen.spec_hash, result.canonical_event["assessment_spec_hash"])
+
+            exposed = dict(proposal)
+            exposed["observation_id"] = "exposed-obs"
+            exposed["outcome"] = "solution_seen"
+            exposed["explicit_exposure_reason"] = "cram"
+            exposed["solution_exposed"] = True
+            exposed_result = store.append_observation(
+                exposed,
+                "session-1",
+                "2026-09-13T12:01:00+00:00",
+                60,
+                30,
+            )
+            self.assertEqual("explicit_exposure", exposed_result.canonical_event["assessment_integrity"])
 
 
 if __name__ == "__main__":

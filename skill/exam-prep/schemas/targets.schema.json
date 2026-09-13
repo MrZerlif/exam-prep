@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Canonical v2 target snapshot",
+  "type": "object",
+  "additionalProperties": true,
+  "required": ["schema_version", "targets", "aliases"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [2]},
+    "derived_from_revision": {"type": "integer", "minimum": 0},
+    "targets": {"type": "object", "additionalProperties": true},
+    "aliases": {"type": "object", "additionalProperties": {"type": "string"}}
+  }
+}
