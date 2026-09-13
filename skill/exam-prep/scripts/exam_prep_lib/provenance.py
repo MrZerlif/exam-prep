@@ -21,12 +21,12 @@ AUTHORITY_RANKS = {
 @dataclass(frozen=True)
 class SourceRef:
     source_id: str
-    authority: str
+    authority: str = "unknown"
     locator: str = ""
     title: str | None = None
     excerpt: str | None = None
     content_hash: str | None = None
-    provider_id: str = "local"
+    provider_id: str = "unknown"
     artifact_id: str | None = None
     retrieved_at: str | None = None
     version: str | None = None
@@ -36,11 +36,18 @@ class SourceRef:
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "SourceRef":
         source_id = value.get("source_id")
-        authority = value.get("authority")
+        authority = value.get("authority", "unknown")
+        provider_id = value.get("provider_id", value.get("provider", "unknown"))
         if not isinstance(source_id, str) or not source_id.strip():
             raise ValueError("source_ref.source_id must be a non-empty string")
+        if authority is None:
+            authority = "unknown"
         if not isinstance(authority, str) or not authority.strip():
             raise ValueError("source_ref.authority must be a non-empty string")
+        if provider_id is None:
+            provider_id = "unknown"
+        if not isinstance(provider_id, str) or not provider_id.strip():
+            raise ValueError("source_ref.provider must be a non-empty string")
         return cls(
             source_id=source_id,
             authority=authority,
@@ -52,7 +59,7 @@ class SourceRef:
             title=value.get("title"),
             excerpt=value.get("excerpt"),
             content_hash=value.get("content_hash"),
-            provider_id=str(value.get("provider_id", value.get("provider", "local"))),
+            provider_id=provider_id,
             artifact_id=value.get("artifact_id"),
             retrieved_at=value.get("retrieved_at"),
             version=str(value["version"]) if value.get("version") is not None else None,

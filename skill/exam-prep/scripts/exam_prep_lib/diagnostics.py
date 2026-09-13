@@ -235,7 +235,7 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
     add("source_evidence_jsonl_readable", check_source_evidence_readable, path=str(store.source_evidence_path))
 
     def check_source_manifest():
-        paths = [store.root / "sources.json", store.state_path / "sources.json"]
+        paths = [store.source_manifest_path]
         for manifest_path in paths:
             if not manifest_path.exists():
                 continue
@@ -250,7 +250,7 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
                 source_ref_from_mapping(source)
         return None
 
-    add("source_manifest", check_source_manifest, path=str(store.root / "sources.json"))
+    add("source_manifest", check_source_manifest, path=str(store.source_manifest_path))
 
     # --- revisions, manifests, hashes, current pointer ----------------------
     def check_current_pointer():

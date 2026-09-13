@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol
 
 from .provenance import SourceRef, source_ref_from_mapping
+from .workspace import runtime_paths
 
 
 @dataclass(frozen=True)
@@ -98,7 +99,7 @@ class LocalSourceProvider:
         self.manifest_path = (
             Path(manifest_path).expanduser().resolve()
             if manifest_path is not None
-            else self.workspace / "sources.json"
+            else runtime_paths(self.workspace).sources
         )
 
     def _entries(self) -> list[dict[str, Any]]:
@@ -158,6 +159,67 @@ class LocalSourceProvider:
             (ref for ref in self.list_sources() if ref.source_id == source_id),
             None,
         )
+
+
+def _catalog_values(
+    values: Iterable[SourceRef | Mapping[str, Any]] | Mapping[str, Any] | None,
+) -> Iterable[SourceRef | Mapping[str, Any]]:
+    if values is None:
+        return ()
+    if isinstance(values, Mapping):
+        if "source_id" in values:
+            return (values,)
+        return (
+            (
+                {**value.to_mapping(), "source_id": key}
+                if isinstance(value, SourceRef)
+                else {**dict(value), "source_id": key}
+            )
+            for key, value in values.items()
+            if isinstance(value, (Mapping, SourceRef))
+        )
+    return values
+
+
+def build_verified_source_catalog(
+    refs: Iterable[SourceRef | Mapping[str, Any]] | Mapping[str, Any] | None = None,
+    *,
+    source_evidence: Iterable[Mapping[str, Any]] = (),
+) -> dict[str, SourceRef]:
+    """Build a trusted source-ID catalog from provider/runtime records.
+
+    Proposal-declared references are intentionally not accepted here. The
+    caller must supply provider-backed manifest refs or normalized persisted
+    source evidence.
+    """
+
+    catalog: dict[str, SourceRef] = {}
+
+    def add(value: SourceRef | Mapping[str, Any]) -> None:
+        raw = value.get("source_ref", value) if isinstance(value, Mapping) else value
+        try:
+            ref = source_ref_from_mapping(raw)
+        except (TypeError, ValueError):
+            return
+        existing = catalog.get(ref.source_id)
+        if existing is None or ref.authority_rank > existing.authority_rank:
+            catalog[ref.source_id] = ref
+
+    for value in _catalog_values(refs):
+        add(value)
+    for value in source_evidence:
+        add(value)
+    return catalog
+
+
+def build_runtime_source_catalog(store: Any) -> dict[str, SourceRef]:
+    """Read the trusted local/provider state for one runtime store."""
+
+    provider = LocalSourceProvider(store.root)
+    return build_verified_source_catalog(
+        provider.list_sources(),
+        source_evidence=store.read_source_evidence(),
+    )
 
 
 def normalize_source_evidence(value: Mapping[str, Any]) -> SourceEvidenceEnvelope:

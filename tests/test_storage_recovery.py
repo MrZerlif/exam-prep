@@ -147,6 +147,23 @@ class StorageRecoveryTests(unittest.TestCase):
         self.assertTrue(inputs["source_evidence_hash"])
         self.assertEqual(2, manifest.data["schema_versions"]["derived"])
 
+    def test_source_manifest_fingerprint_uses_canonical_runtime_path(self):
+        canonical = self.store.state_path / "sources.json"
+        canonical.write_text(
+            json.dumps({"sources": [{"source_id": "canonical"}]}),
+            encoding="utf-8",
+        )
+        root_level = self.store.root / "sources.json"
+        root_level.write_text(
+            json.dumps({"sources": [{"source_id": "root"}]}),
+            encoding="utf-8",
+        )
+        fingerprints = self.store.canonical_input_fingerprints()
+        self.assertEqual(
+            StudyStore._hash_file(canonical),
+            fingerprints["source_manifest_hash"],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 from .capabilities import CapabilityRegistry
-from .provenance import normalize_source_refs
-from .source_provider import compute_source_coverage
+from .provenance import SourceRef, normalize_source_refs
+from .reducer import reduce_learning_state
+from .scheduler import build_review_queue
+from .source_provider import (
+    build_runtime_source_catalog,
+    build_verified_source_catalog,
+    compute_source_coverage,
+)
 from .storage import StudyStore
 
 
@@ -73,6 +80,119 @@ def _source_id(value: Any) -> str | None:
     return None
 
 
+def _declared_source_map(
+    proposal: Mapping[str, Any], source_refs: Iterable[Mapping[str, Any]]
+) -> dict[str, dict[str, Any]]:
+    """Collect proposal references without treating them as verified sources."""
+
+    declared: dict[str, dict[str, Any]] = {}
+
+    def add(value: Any) -> None:
+        try:
+            normalized = normalize_source_refs([value])
+        except (TypeError, ValueError):
+            return
+        for ref in normalized:
+            declared.setdefault(str(ref["source_id"]), ref)
+
+    for ref in source_refs:
+        add(ref)
+    for target in _target_list(proposal):
+        refs = target.get("source_refs", [])
+        if isinstance(refs, list):
+            for ref in refs:
+                add(ref)
+    for question in _question_list(proposal):
+        refs = question.get("source_refs", [])
+        if isinstance(refs, list):
+            for ref in refs:
+                add(ref)
+    return declared
+
+
+def _effective_source_ref(
+    value: Mapping[str, Any], verified_catalog: Mapping[str, SourceRef]
+) -> dict[str, Any]:
+    source_id = str(value["source_id"])
+    trusted = verified_catalog.get(source_id)
+    if trusted is not None:
+        return trusted.to_mapping()
+    # Preserve the reference for diagnostics and later resolution, but never
+    # persist proposal-supplied authority as if it were verified metadata.
+    unresolved = dict(value)
+    unresolved["authority"] = "unknown"
+    unresolved["provider_id"] = "unknown"
+    return unresolved
+
+
+def _read_runtime_json(store: StudyStore, name: str, default: dict[str, Any]) -> dict[str, Any]:
+    path = store.state_path / name
+    if not path.exists():
+        return dict(default)
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        raise CurriculumValidationError([f"existing {name} is not valid JSON"]) from exc
+    return dict(value) if isinstance(value, Mapping) else dict(default)
+
+
+def _default_course() -> dict[str, Any]:
+    return {
+        "schema_version": 2,
+        "course_id": "exam-prep-course",
+        "title": "Exam preparation",
+        "exam": {
+            "date": None,
+            "timezone": "UTC",
+            "format": "mixed",
+            "expected_total_points": 100,
+            "revision": 1,
+        },
+        "time_budget": {"default_minutes": 25, "available_minutes_by_day": {}},
+        "source_policy": {
+            "priority_order": [
+                "teacher_material",
+                "official_exam_list",
+                "lecture_notes",
+                "problem_sets",
+                "general_reference",
+            ],
+            "conflicts": "flag_for_user",
+        },
+        "scheduler": {
+            "mode": "exam_cram",
+            "max_review_interval_hours": 72,
+            "review_warmup_limit": 3,
+            "recurring_mistake_policy": {
+                "min_count": 3,
+                "min_sessions": 2,
+                "resolve_after_clean_successes": 3,
+            },
+        },
+    }
+
+
+def _default_learner() -> dict[str, Any]:
+    return {
+        "schema_version": 1,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "preferences": {},
+        "stable_patterns": [],
+    }
+
+
+def _default_session() -> dict[str, Any]:
+    return {
+        "schema_version": 2,
+        "session_id": "",
+        "phase": "idle",
+        "pending_action": "load a syllabus and start a session",
+        "current_target_id": None,
+        "current_task": None,
+        "time_budget_minutes": 25,
+    }
+
+
 def _target_list(proposal: Mapping[str, Any]) -> list[dict[str, Any]]:
     raw = proposal.get("learning_targets", proposal.get("targets", []))
     if not isinstance(raw, list):
@@ -125,6 +245,10 @@ def _find_cycles(targets: Mapping[str, Mapping[str, Any]]) -> list[str]:
 
 def validate_curriculum_proposal(
     proposal: Mapping[str, Any],
+    *,
+    verified_source_catalog: (
+        Iterable[SourceRef | Mapping[str, Any]] | Mapping[str, Any] | None
+    ) = None,
 ) -> dict[str, Any]:
     """Validate the small proposal contract and return a normalized copy."""
 
@@ -188,15 +312,24 @@ def validate_curriculum_proposal(
     except (TypeError, ValueError) as exc:
         issues.append(f"source_refs are malformed: {exc}")
         source_refs = []
-    source_ids = {str(item["source_id"]) for item in source_refs}
+    verified_catalog = build_verified_source_catalog(verified_source_catalog)
+    declared_sources = _declared_source_map(proposal, source_refs)
+    for source_id, declared in declared_sources.items():
+        trusted = verified_catalog.get(source_id)
+        if trusted is None:
+            coverage_gaps.append(
+                f"unknown source ref {source_id!r} in curriculum proposal"
+            )
+        elif (
+            declared.get("authority") not in (None, "unknown", trusted.authority)
+        ):
+            warnings.append(
+                f"proposal authority for source {source_id!r} conflicts with verified catalog authority"
+            )
     for target_id, target in target_map.items():
         refs = target.get("source_refs", [])
         if not refs:
             coverage_gaps.append(f"target {target_id!r} has no source refs")
-        for ref in refs:
-            source_id = _source_id(ref)
-            if source_id not in source_ids:
-                coverage_gaps.append(f"unknown source ref {source_id!r} for target {target_id!r}")
 
     descriptors = _capability_descriptors(proposal)
     raw_descriptors = proposal.get("assessment_capabilities", proposal.get("capabilities", []))
@@ -246,10 +379,6 @@ def validate_curriculum_proposal(
         for capability_id in question.get("capability_ids", []) if isinstance(question.get("capability_ids", []), list) else []:
             if not registry.resolve(str(capability_id)).capability.is_registered:
                 warnings.append(f"unknown capability {capability_id!r} in exam question {question_id!r}")
-        for ref in question.get("source_refs", []) if isinstance(question.get("source_refs", []), list) else []:
-            source_id = _source_id(ref)
-            if source_id not in source_ids:
-                coverage_gaps.append(f"unknown source ref {source_id!r} in exam question {question_id!r}")
 
     for target_id, target in target_map.items():
         for question_id in target.get("exam_question_ids", []):
@@ -298,10 +427,20 @@ def validate_curriculum_proposal(
     return normalized
 
 
-def build_syllabus_from_proposal(proposal: Mapping[str, Any]) -> dict[str, Any]:
+def build_syllabus_from_proposal(
+    proposal: Mapping[str, Any],
+    *,
+    verified_source_catalog: (
+        Iterable[SourceRef | Mapping[str, Any]] | Mapping[str, Any] | None
+    ) = None,
+) -> dict[str, Any]:
+    verified_catalog = build_verified_source_catalog(verified_source_catalog)
+    declared_sources = _declared_source_map(
+        proposal, normalize_source_refs(proposal.get("source_refs", []))
+    )
     source_by_id = {
-        str(ref["source_id"]): ref
-        for ref in normalize_source_refs(proposal.get("source_refs", []))
+        source_id: _effective_source_ref(ref, verified_catalog)
+        for source_id, ref in declared_sources.items()
     }
     targets: list[dict[str, Any]] = []
     target_map: dict[str, dict[str, Any]] = {}
@@ -332,7 +471,7 @@ def build_syllabus_from_proposal(proposal: Mapping[str, Any]) -> dict[str, Any]:
         "exam_questions": _question_list(proposal),
     }
     syllabus["source_coverage"] = compute_source_coverage(
-        syllabus, available_source_ids=set(source_by_id)
+        syllabus, available_source_ids=set(verified_catalog)
     )
     return syllabus
 
@@ -400,24 +539,36 @@ def apply_curriculum_proposal(
         except (OSError, ValueError, json.JSONDecodeError) as exc:
             raise CurriculumValidationError(["existing syllabus is not valid JSON"]) from exc
     merged = _merge_proposals(current, proposal)
-    validated = validate_curriculum_proposal(merged)
-    syllabus = build_syllabus_from_proposal(validated)
+    verified_catalog = build_runtime_source_catalog(store)
+    validated = validate_curriculum_proposal(
+        merged, verified_source_catalog=verified_catalog
+    )
+    syllabus = build_syllabus_from_proposal(
+        validated, verified_source_catalog=verified_catalog
+    )
     changed = current is None or StudyStore.hash_document(current) != StudyStore.hash_document(syllabus)
     if changed:
         store._write_json(syllabus_path, syllabus)
-        store._write_json(
-            store.state_path / "targets.json",
-            {
-                "schema_version": 2,
-                "targets": {
-                    str(item["target_id"]): dict(item)
-                    for item in syllabus["learning_targets"]
-                },
-                "aliases": {
-                    str(item["target_id"]): str(item["target_id"])
-                    for item in syllabus["learning_targets"]
-                },
-            },
+        course = _read_runtime_json(store, "course.json", _default_course())
+        learner = _read_runtime_json(store, "learner.json", _default_learner())
+        session = _read_runtime_json(store, "session.json", _default_session())
+        if not (store.state_path / "course.json").exists():
+            store._write_json(store.state_path / "course.json", course)
+        revision = store.next_revision()
+        events = store.read_complete_observations()
+        derived = reduce_learning_state(
+            course, syllabus, events, {"revision": revision}
+        )
+        reviews = build_review_queue(
+            events,
+            derived.get("targets", derived.get("concepts", {})),
+            course,
+            datetime.now(timezone.utc),
+            syllabus,
+        )
+        reviews["derived_from_revision"] = revision
+        store.commit_revision(
+            derived, session, learner, reviews, course, syllabus
         )
     report_data = validated.get("validation", {})
     report = CurriculumValidationReport(

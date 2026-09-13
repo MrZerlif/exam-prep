@@ -386,7 +386,12 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "validate-curriculum":
         proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
         try:
-            validated = validate_curriculum_proposal(proposal)
+            from exam_prep_lib.source_provider import build_runtime_source_catalog
+
+            validated = validate_curriculum_proposal(
+                proposal,
+                verified_source_catalog=build_runtime_source_catalog(store),
+            )
         except CurriculumValidationError as exc:
             return _result({
                 "valid": False,

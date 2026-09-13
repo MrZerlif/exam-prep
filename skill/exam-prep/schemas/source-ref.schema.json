@@ -3,7 +3,7 @@
   "title": "Structured SourceRef",
   "type": "object",
   "additionalProperties": false,
-  "required": ["source_id", "authority", "locator"],
+  "required": ["source_id"],
   "properties": {
     "source_id": {"type": "string", "minLength": 1},
     "authority": {"type": "string", "minLength": 1},

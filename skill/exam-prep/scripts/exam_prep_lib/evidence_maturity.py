@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any, Iterable
 
+from .capabilities import AssessmentCapability
+
 
 FACETS = ("demonstrated", "retained", "transferred")
 
@@ -15,7 +17,10 @@ def empty_evidence_maturity() -> dict[str, dict[str, Any]]:
     }
 
 
-def _event_facets(event: dict[str, Any]) -> set[str]:
+def _event_facets(
+    event: dict[str, Any],
+    capability: AssessmentCapability | None = None,
+) -> set[str]:
     if event.get("outcome") != "correct":
         return set()
     assistance = event.get("assistance") or {}
@@ -26,24 +31,44 @@ def _event_facets(event: dict[str, Any]) -> set[str]:
         or assistance.get("full_solution_viewed")
     ):
         return set()
+    if capability is not None and not capability.is_registered:
+        return set()
     explicit = event.get("evidence_facets")
     if isinstance(explicit, list):
         return {str(facet) for facet in explicit if str(facet) in FACETS}
 
     facets = {"demonstrated"}
-    task_type = event.get("task_type")
-    if task_type == "delayed_recall":
+    if capability is None:
+        task_type = event.get("task_type")
+        transfer_evidence = task_type in {"transfer", "exam_problem"}
+        retention_evidence = task_type == "delayed_recall"
+    else:
+        requirements = set(capability.evidence_requirements)
+        transfer_evidence = (
+            "transfer" in capability.affected_dimensions
+            or "transfer" in requirements
+            or "transferred" in requirements
+            or capability.capability_id in {"transfer", "exam_problem"}
+        )
+        retention_evidence = (
+            "retained" in requirements
+            or "delayed_recall" in requirements
+            or capability.capability_id == "delayed_recall"
+        )
+    if retention_evidence:
         facets.add("retained")
-    if task_type in {"transfer", "exam_problem"}:
+    if transfer_evidence:
         facets.add("transferred")
     return facets
 
 
 def add_event_to_maturity(
-    maturity: dict[str, dict[str, Any]], event: dict[str, Any]
+    maturity: dict[str, dict[str, Any]],
+    event: dict[str, Any],
+    capability: AssessmentCapability | None = None,
 ) -> dict[str, dict[str, Any]]:
     recorded_at = event.get("recorded_at")
-    for facet in _event_facets(event):
+    for facet in _event_facets(event, capability):
         item = maturity[facet]
         item["count"] += 1
         if recorded_at is not None:
