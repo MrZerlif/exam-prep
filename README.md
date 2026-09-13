@@ -112,6 +112,7 @@ The active workspace stores:
 .exam-prep/sessions.jsonl
 .exam-prep/targets.json
 .exam-prep/assessments.jsonl
+.exam-prep/sources.json
 .exam-prep/source_evidence.jsonl
 .exam-prep/review_queue.json
 .exam-prep/learner.json

@@ -9,8 +9,10 @@ description: Use when a learner needs interactive, exam-first preparation for an
 
 Learning targets, not chat memory, are the stable unit of the syllabus. Use
 structured SourceRef records and report explicit source-coverage gaps. The
-Python core depends only on the generic SourceProvider contract; a missing
-provider is a normal diagnostic state.
+verified source catalog is runtime state in .exam-prep/sources.json plus
+normalized ingested source evidence; proposal-declared refs never establish
+source existence. The Python core depends only on the generic SourceProvider
+contract; a missing provider is a normal diagnostic state.
 
 NotebookLM MCP is an optional P2 integration after the generic
 SourceProvider/source-evidence boundary is stable. The agent host discovers
