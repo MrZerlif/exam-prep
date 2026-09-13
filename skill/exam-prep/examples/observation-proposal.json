@@ -1,8 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "observation_id": "obs-example-0001",
-  "concept_id": "chain_rule",
+  "target_id": "chain_rule",
   "task_id": "transfer-003",
+  "capability_id": "transfer",
   "task_type": "transfer",
   "outcome": "partial",
   "assistance": {
@@ -16,6 +17,13 @@
   "diagnostic_confidence": "high",
   "learner_self_confidence": "medium",
   "learner_explanation": "Я выбрал композицию, но не записал внутреннюю производную.",
-  "source_refs": ["official-exam-list:q5"]
+  "source_refs": [
+    {
+      "source_id": "official-exam-list:q5",
+      "authority": "official_exam_list",
+      "provider": "local",
+      "location": {"section": "question 5"}
+    }
+  ]
 }
 

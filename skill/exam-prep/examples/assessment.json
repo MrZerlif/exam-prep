@@ -1,0 +1,24 @@
+{
+  "assessment_id": "assessment:limits-independent-1",
+  "target_id": "limits",
+  "capability_id": "independent_problem",
+  "prompt": "Evaluate the limit and justify the method you selected.",
+  "rubric": {
+    "criteria": [
+      "selects a valid method",
+      "shows the key transformation",
+      "states the result with required conditions"
+    ]
+  },
+  "expected_evidence": ["independent attempt", "method justification"],
+  "source_refs": [
+    {
+      "source_id": "official-exam-list:q1",
+      "authority": "official_exam_list",
+      "locator": "question 1"
+    }
+  ],
+  "difficulty": 0.45,
+  "question_version": 1,
+  "rubric_version": 1
+}

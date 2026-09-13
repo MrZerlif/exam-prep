@@ -96,6 +96,57 @@ class StorageRecoveryTests(unittest.TestCase):
         recovered = self.store.recover()
         self.assertEqual(recovered.manifest.revision, 1)
 
+    def test_corrupt_new_manifest_fields_fall_back_to_newest_valid_revision(self):
+        first = self.store.commit_revision(
+            {"schema_version": 1, "derived_from_revision": 1, "concepts": {}},
+            {"schema_version": 1, "session_id": "", "phase": "idle", "pending_action": "resume"},
+            {"schema_version": 1, "updated_at": self.now, "preferences": {}, "stable_patterns": []},
+        )
+        second = self.store.commit_revision(
+            {"schema_version": 1, "derived_from_revision": 2, "concepts": {}},
+            {"schema_version": 1, "session_id": "", "phase": "idle", "pending_action": "resume"},
+            {"schema_version": 1, "updated_at": self.now, "preferences": {}, "stable_patterns": []},
+        )
+        manifest_path = self.store.revisions_path / "000002" / "manifest.json"
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        manifest["canonical_inputs"]["unexpected"] = "corrupt"
+        manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+        self.assertEqual(first.revision, self.store.recover().manifest.revision)
+        self.assertEqual(second.revision, 2)
+
+    def test_revision_manifest_fingerprints_expanded_canonical_inputs(self):
+        course = {"schema_version": 2, "course_id": "course-1"}
+        syllabus = {"schema_version": 2, "learning_targets": []}
+        self.store._write_json(self.store.state_path / "course.json", course)
+        self.store._write_json(self.store.state_path / "syllabus.json", syllabus)
+        self.store.append_source_evidence(
+            {
+                "evidence_id": "evidence-1",
+                "provider_id": "local",
+                "status": "ok",
+                "source_ref": {
+                    "source_id": "teacher:1",
+                    "authority": "teacher_material",
+                    "locator": "page 1",
+                    "provider_id": "local",
+                },
+            }
+        )
+        manifest = self.store.commit_revision(
+            {"schema_version": 2, "derived_from_revision": 1, "targets": {}},
+            {"schema_version": 1, "session_id": "", "phase": "idle"},
+            {"schema_version": 1, "updated_at": self.now, "preferences": {}, "stable_patterns": []},
+            course=course,
+            syllabus=syllabus,
+        )
+        inputs = manifest.data["canonical_inputs"]
+        self.assertEqual(StudyStore.hash_document(course), inputs["course_hash"])
+        self.assertEqual(StudyStore.hash_document(syllabus), inputs["syllabus_hash"])
+        self.assertTrue(inputs["observations_hash"])
+        self.assertTrue(inputs["assessments_hash"])
+        self.assertTrue(inputs["source_evidence_hash"])
+        self.assertEqual(2, manifest.data["schema_versions"]["derived"])
+
 
 if __name__ == "__main__":
     unittest.main()

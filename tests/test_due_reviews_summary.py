@@ -69,7 +69,7 @@ class DueReviewsSummaryTests(unittest.TestCase):
         # A correct, independent, non-delayed-recall answer schedules the
         # next review roughly a day out (well beyond "now").
         self.record(proposal("obs-1", outcome="correct"))
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         item = store.recover().review_queue["items"]["functions"]
         self.assertEqual(item["review_status"], "not_due")
 
@@ -84,7 +84,7 @@ class DueReviewsSummaryTests(unittest.TestCase):
         # recorded_at (the engine-owned clock field a CLI/LLM call can never
         # set itself) so the computed review interval has genuinely, legally
         # elapsed by "now" - not hand-editing an already-committed line.
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         store.append_observation(
             proposal("obs-1", outcome="incorrect"),
             self.cli("status")["session"]["session_id"],

@@ -1,9 +1,9 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "session_id": "",
   "phase": "idle",
   "pending_action": "load a syllabus and start a session",
-  "current_concept": null,
+  "current_target_id": null,
   "current_task": null,
   "time_budget_minutes": 25
 }

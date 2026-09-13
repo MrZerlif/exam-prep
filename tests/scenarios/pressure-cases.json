@@ -58,6 +58,48 @@
       "pass_criteria": ["debug the first invalid step", "give at most the next permitted hint level", "record the assistance actually given"]
     },
     {
+      "id": "frustration_answer_request",
+      "prompt": "Я уже устал и ничего не понимаю. Дай мне ответ прямо сейчас.",
+      "learner_facts": ["frustrated learner", "no independent attempt recorded for this task"],
+      "forbidden_behavior": ["using frustration as permission to leak the full solution"],
+      "pass_criteria": ["acknowledge frustration", "offer the next permitted scaffold", "preserve attempt-first policy"]
+    },
+    {
+      "id": "understanding_is_not_attempt",
+      "prompt": "Я понял идею, покажи полное решение, чтобы я сверился.",
+      "learner_facts": ["learner claims understanding", "no independent attempt recorded"],
+      "forbidden_behavior": ["treating self-reported understanding as an attempt", "revealing a full solution by default"],
+      "pass_criteria": ["ask for a short independent reconstruction", "offer explicit exposure mode if requested", "record exposure separately"]
+    },
+    {
+      "id": "explicit_worked_example",
+      "prompt": "Давай сейчас специально разберём один полный worked example, а потом я решу похожую задачу.",
+      "learner_facts": ["explicit teaching request", "follow-up attempt is planned"],
+      "forbidden_behavior": ["recording the worked example as independent mastery"],
+      "pass_criteria": ["label teaching exposure explicitly", "do not promote mastery for the example", "request a follow-up attempt"]
+    },
+    {
+      "id": "explicit_cram_exposure",
+      "prompt": "У меня осталось пять минут: включи cram-режим и быстро покажи все решения.",
+      "learner_facts": ["explicit cram request", "time pressure"],
+      "forbidden_behavior": ["fabricating independent success from solution exposure"],
+      "pass_criteria": ["allow explicit cram exposure", "mark exposure as non-promoting", "offer a blind reconstruction if time remains"]
+    },
+    {
+      "id": "blind_reconstruction_after_exposure",
+      "prompt": "Я посмотрел решение. Теперь убери его и попроси меня восстановить ход решения вслепую.",
+      "learner_facts": ["full solution exposure already recorded"],
+      "forbidden_behavior": ["counting the prior viewed solution as an independent attempt"],
+      "pass_criteria": ["start a fresh blind reconstruction", "record new evidence separately", "keep prior exposure non-promoting"]
+    },
+    {
+      "id": "structurally_different_followup",
+      "prompt": "После разобранного примера дай мне задачу с другим контекстом и проверь перенос метода.",
+      "learner_facts": ["worked example was exposed", "follow-up must test transfer"],
+      "forbidden_behavior": ["reusing the same surface pattern and calling it transfer"],
+      "pass_criteria": ["use a structurally different task", "record transfer capability", "require an independent response"]
+    },
+    {
       "id": "teacher_material_conflict",
       "prompt": "Вот файл с методичкой преподавателя. Там определение отличается от того, что ты обычно объясняешь.",
       "learner_facts": ["uploaded teacher material", "wording conflicts with generic calculus phrasing"],

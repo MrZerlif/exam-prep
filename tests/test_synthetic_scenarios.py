@@ -74,11 +74,11 @@ class SyntheticScenarioTests(unittest.TestCase):
         status = self.cli("status")
         rebuilt = self.cli("rebuild")
         self.assertIn("pending_action", status["session"])
-        self.assertEqual(rebuilt["concepts"], status["concepts"])
-        store = StudyStore(self.root)
+        self.assertEqual(rebuilt["targets"], status["targets"])
+        store = StudyStore.for_exam_prep(self.root)
         store.current_path.write_text("{broken", encoding="utf-8")
         recovered = store.recover()
-        self.assertEqual(recovered.derived, status["concepts"])
+        self.assertEqual(recovered.derived, status["targets"])
         with store.observations_path.open("ab") as handle:
             handle.write(b'{"observation_id":"partial"')
         self.assertTrue(store.read_log_diagnostics()["partial_final_line"])
@@ -93,14 +93,14 @@ class SyntheticScenarioTests(unittest.TestCase):
                     errors=["conceptual_error"],
                 )
             )
-        mistakes = result["concepts"]["concepts"]["chain_rule"]["recurring_mistakes"]
+        mistakes = result["targets"]["targets"]["chain_rule"]["recurring_mistakes"]
         self.assertEqual(mistakes[0]["count"], 3)
         self.assertEqual(mistakes[0]["sessions_seen"], 1)
 
     def test_solution_seen_does_not_promote_mastery(self):
         self.ready()
         result = self.record(proposal("obs-solution", outcome="solution_seen", task_type="worked_example"))
-        state = result["concepts"]["concepts"]["chain_rule"]
+        state = result["targets"]["targets"]["chain_rule"]
         self.assertEqual(state["mastery"]["conceptual"], 0.0)
         self.assertEqual(state["evidence"]["solution_views"], 1)
 
@@ -111,7 +111,7 @@ class SyntheticScenarioTests(unittest.TestCase):
         second = self.record(item)
         self.assertTrue(first["appended"])
         self.assertFalse(second["appended"])
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         with self.assertRaises(ObservationConflict):
             store.append_observation(
                 proposal("obs-retry", outcome="incorrect"),
@@ -135,7 +135,7 @@ class SyntheticScenarioTests(unittest.TestCase):
         )
         self.assertEqual(result["session"]["phase"], "exam")
         self.assertEqual(
-            result["concepts"]["concepts"]["chain_rule"]["evidence"]["failures"], 1
+            result["targets"]["targets"]["chain_rule"]["evidence"]["failures"], 1
         )
 
 

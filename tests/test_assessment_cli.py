@@ -44,7 +44,7 @@ class AssessmentCliTests(unittest.TestCase):
             self.assertEqual(0, code)
             result = json.loads(output.getvalue())
             self.assertEqual("assessment-cli-1", result["assessment_id"])
-            stored = json.loads((root / "state" / "assessments.jsonl").read_text(encoding="utf-8").splitlines()[0])
+            stored = json.loads((root / ".exam-prep" / "assessments.jsonl").read_text(encoding="utf-8").splitlines()[0])
             self.assertEqual(assessment_spec_hash(stored), stored["spec_hash"])
 
 

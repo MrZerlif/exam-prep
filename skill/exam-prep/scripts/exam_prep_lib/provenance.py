@@ -29,6 +29,9 @@ class SourceRef:
     provider_id: str = "local"
     artifact_id: str | None = None
     retrieved_at: str | None = None
+    version: str | None = None
+    location: dict[str, Any] | None = None
+    raw_locator: str | None = None
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "SourceRef":
@@ -41,18 +44,31 @@ class SourceRef:
         return cls(
             source_id=source_id,
             authority=authority,
-            locator=str(value.get("locator", "")),
+            locator=(
+                str(value.get("locator"))
+                if isinstance(value.get("locator"), str)
+                else str(value.get("raw_locator", ""))
+            ),
             title=value.get("title"),
             excerpt=value.get("excerpt"),
             content_hash=value.get("content_hash"),
-            provider_id=str(value.get("provider_id", "local")),
+            provider_id=str(value.get("provider_id", value.get("provider", "local"))),
             artifact_id=value.get("artifact_id"),
             retrieved_at=value.get("retrieved_at"),
+            version=str(value["version"]) if value.get("version") is not None else None,
+            location=dict(value["location"]) if isinstance(value.get("location"), Mapping) else None,
+            raw_locator=str(value["raw_locator"]) if value.get("raw_locator") is not None else None,
         )
 
     @property
     def authority_rank(self) -> int:
         return AUTHORITY_RANKS.get(self.authority, 0)
+
+    @property
+    def provider(self) -> str:
+        """Provider alias used by the product-neutral SourceRef contract."""
+
+        return self.provider_id
 
     def to_mapping(self) -> dict[str, Any]:
         result: dict[str, Any] = {
@@ -71,6 +87,12 @@ class SourceRef:
             value = getattr(self, field)
             if value is not None:
                 result[field] = value
+        if self.version is not None:
+            result["version"] = self.version
+        if self.location is not None:
+            result["location"] = dict(self.location)
+        if self.raw_locator is not None:
+            result["raw_locator"] = self.raw_locator
         return result
 
 

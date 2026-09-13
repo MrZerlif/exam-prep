@@ -73,7 +73,7 @@ class ValidateDiagnosticsTests(unittest.TestCase):
 
     def test_detects_observation_referencing_unknown_concept(self):
         self.ready()
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         store.append_observation(
             proposal("obs-orphan", concept_id="not_in_syllabus"),
             "session-x",
@@ -88,10 +88,10 @@ class ValidateDiagnosticsTests(unittest.TestCase):
     def test_detects_hash_mismatched_revision(self):
         self.ready()
         self.record(proposal("obs-1"))
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         latest = sorted(store.revisions_path.iterdir())[-1]
-        (latest / "concepts.json").write_text(
-            json.dumps({"schema_version": 1, "derived_from_revision": 1, "concepts": {}}),
+        (latest / "targets.json").write_text(
+            json.dumps({"schema_version": 2, "derived_from_revision": 1, "targets": {}, "aliases": {}}),
             encoding="utf-8",
         )
         report = self.cli("validate")
@@ -101,7 +101,7 @@ class ValidateDiagnosticsTests(unittest.TestCase):
     def test_detects_torn_final_observation_line(self):
         self.ready()
         self.record(proposal("obs-1"))
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         with store.observations_path.open("ab") as handle:
             handle.write(b'{"observation_id":"partial"')
         report = self.cli("validate")

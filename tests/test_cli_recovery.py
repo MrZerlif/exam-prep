@@ -70,75 +70,75 @@ class CliRecoveryTests(unittest.TestCase):
     def test_status_survives_corrupt_convenience_concepts_json(self):
         self.ready()
         self.record(proposal("obs-1"))
-        (self.root / "state" / "concepts.json").write_text("{not-json", encoding="utf-8")
+        (self.root / ".exam-prep" / "targets.json").write_text("{not-json", encoding="utf-8")
         status = self.cli("status")
-        self.assertIn("chain_rule", status["concepts"]["concepts"])
+        self.assertIn("chain_rule", status["targets"]["targets"])
 
     def test_status_survives_missing_convenience_files(self):
         self.ready()
         self.record(proposal("obs-1"))
-        for name in ("concepts.json", "review_queue.json", "session.json", "learner.json"):
-            (self.root / "state" / name).unlink()
+        for name in ("targets.json", "review_queue.json", "session.json", "learner.json"):
+            (self.root / ".exam-prep" / name).unlink()
         status = self.cli("status")
-        self.assertIn("chain_rule", status["concepts"]["concepts"])
+        self.assertIn("chain_rule", status["targets"]["targets"])
         self.assertTrue(status["session"]["session_id"])
 
     def test_status_survives_corrupt_current_pointer(self):
         self.ready()
         self.record(proposal("obs-1"))
-        (self.root / "state" / "current.json").write_text("{broken", encoding="utf-8")
+        (self.root / ".exam-prep" / "current.json").write_text("{broken", encoding="utf-8")
         status = self.cli("status")
-        self.assertIn("chain_rule", status["concepts"]["concepts"])
+        self.assertIn("chain_rule", status["targets"]["targets"])
 
     def test_status_survives_incomplete_revision_directory(self):
         self.ready()
         self.record(proposal("obs-1"))
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         latest = sorted(store.revisions_path.iterdir())[-1]
         (latest / "manifest.json").unlink()
         status = self.cli("status")
-        self.assertIn("chain_rule", status["concepts"]["concepts"])
+        self.assertIn("chain_rule", status["targets"]["targets"])
 
     def test_status_survives_hash_mismatch_in_latest_revision(self):
         self.ready()
         self.record(proposal("obs-1"))
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         latest = sorted(store.revisions_path.iterdir())[-1]
-        (latest / "concepts.json").write_text(
-            json.dumps({"schema_version": 1, "derived_from_revision": 1, "concepts": {}}),
+        (latest / "targets.json").write_text(
+            json.dumps({"schema_version": 2, "derived_from_revision": 1, "targets": {}, "aliases": {}}),
             encoding="utf-8",
         )
         status = self.cli("status")
-        self.assertIn("chain_rule", status["concepts"]["concepts"])
+        self.assertIn("chain_rule", status["targets"]["targets"])
 
     def test_unapplied_observation_after_crash_is_replayed_exactly_once(self):
         """Simulate: observation fsynced to the log, process died before the
         derived revision (and convenience concepts.json) were written."""
         self.ready()
-        store = StudyStore(self.root)
+        store = StudyStore.for_exam_prep(self.root)
         crash_proposal = proposal("obs-crash")
         store.append_observation(crash_proposal, "session-x", "2026-09-13T10:00:00+00:00", None, None)
-        # No commit_revision call happened: state/concepts.json is still stale
-        # relative to observations.jsonl (still empty concepts, revision 1).
+        # No commit_revision call happened: targets.json is still stale relative
+        # to observations.jsonl (still empty targets, revision 1).
         status = self.cli("status")
-        state = status["concepts"]["concepts"]["chain_rule"]
+        state = status["targets"]["targets"]["chain_rule"]
         self.assertEqual(state["evidence"]["independent_successes"], 1)
         # Replaying again must not double-count (idempotent materialization).
         status_again = self.cli("status")
         self.assertEqual(
-            status_again["concepts"]["concepts"]["chain_rule"]["evidence"]["independent_successes"],
+            status_again["targets"]["targets"]["chain_rule"]["evidence"]["independent_successes"],
             1,
         )
 
     def test_mistakes_and_roadmap_and_review_due_use_recovery_path_too(self):
         self.ready()
         self.record(proposal("obs-1", outcome="incorrect"))
-        (self.root / "state" / "concepts.json").write_text("{not-json", encoding="utf-8")
-        (self.root / "state" / "review_queue.json").write_text("{not-json", encoding="utf-8")
+        (self.root / ".exam-prep" / "targets.json").write_text("{not-json", encoding="utf-8")
+        (self.root / ".exam-prep" / "review_queue.json").write_text("{not-json", encoding="utf-8")
         mistakes = self.cli("mistakes")
         self.assertIsInstance(mistakes, dict)
         roadmap = self.cli("roadmap")
-        self.assertTrue(any(item["concept_id"] == "chain_rule" for item in roadmap["roadmap"]))
+        self.assertTrue(any(item["target_id"] == "chain_rule" for item in roadmap["roadmap"]))
         due = self.cli("review-due")
         self.assertIsInstance(due["due"], dict)
 

@@ -13,9 +13,10 @@ from exam_prep import main  # noqa: E402
 
 
 SYLLABUS = {
-    "schema_version": 1,
-    "concepts": {
-        "limits": {
+    "schema_version": 2,
+    "learning_targets": [
+        {
+            "target_id": "limits",
             "title": "Limits",
             "prerequisites": [],
             "importance": 0.9,
@@ -23,7 +24,8 @@ SYLLABUS = {
             "expected_points": 10,
             "estimated_learning_minutes": 25,
         },
-        "derivative_rules": {
+        {
+            "target_id": "derivative_rules",
             "title": "Derivative rules",
             "prerequisites": ["limits"],
             "importance": 0.8,
@@ -31,7 +33,7 @@ SYLLABUS = {
             "expected_points": 10,
             "estimated_learning_minutes": 30,
         },
-    },
+    ],
 }
 
 
@@ -79,8 +81,8 @@ class CliTests(unittest.TestCase):
     def test_init_creates_json_state_workspace(self):
         result = self.run_cli("init")
         self.assertEqual(result["status"], "initialized")
-        self.assertTrue((self.root / "state" / "observations.jsonl").exists())
-        self.assertTrue((self.root / "state" / "course.json").exists())
+        self.assertTrue((self.root / ".exam-prep" / "observations.jsonl").exists())
+        self.assertTrue((self.root / ".exam-prep" / "course.json").exists())
 
     def test_load_syllabus_and_record_observation(self):
         self.run_cli("init")
@@ -90,7 +92,7 @@ class CliTests(unittest.TestCase):
         event = result["event"]
         self.assertEqual(event["session_id"], result["session"]["session_id"])
         self.assertIn("recorded_at", event)
-        self.assertNotIn("priority_score", result["concepts"]["concepts"]["limits"])
+        self.assertNotIn("priority_score", result["targets"]["targets"]["limits"])
 
     def test_new_process_status_and_next_are_compact_and_budget_aware(self):
         self.run_cli("init")
@@ -101,7 +103,7 @@ class CliTests(unittest.TestCase):
         self.assertIn("pending_action", status["session"])
         next_action = self.run_cli("next", "--minutes", "25")
         self.assertEqual(next_action["budget_minutes"], 25)
-        self.assertIn("concept_id", next_action)
+        self.assertIn("target_id", next_action)
 
     def test_rebuild_matches_persisted_concepts(self):
         self.run_cli("init")
@@ -110,7 +112,7 @@ class CliTests(unittest.TestCase):
         self.run_cli("record-observation", str(self.proposal_path))
         rebuilt = self.run_cli("rebuild")
         status = self.run_cli("status")
-        self.assertEqual(rebuilt["concepts"], status["concepts"])
+        self.assertEqual(rebuilt["targets"], status["targets"])
 
     def test_exam_command_enters_stateful_exam_mode(self):
         self.run_cli("init")

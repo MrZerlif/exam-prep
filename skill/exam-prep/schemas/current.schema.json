@@ -1,0 +1,9 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "revision"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [1, 2]},
+    "revision": {"type": "integer", "minimum": 0}
+  }
+}

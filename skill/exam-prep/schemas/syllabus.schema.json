@@ -9,7 +9,23 @@
     },
     {
       "required": ["learning_targets"],
-      "properties": {"schema_version": {"enum": [2]}}
+      "properties": {
+        "schema_version": {"enum": [2]},
+        "learning_targets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["target_id"],
+            "properties": {
+              "target_id": {"type": "string", "minLength": 1},
+              "prerequisites": {"type": "array"},
+              "capability_ids": {"type": "array"},
+              "exam_question_ids": {"type": "array"},
+              "source_refs": {"type": "array"}
+            }
+          }
+        }
+      }
     }
   ],
   "properties": {

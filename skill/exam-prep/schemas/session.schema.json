@@ -3,11 +3,13 @@
   "additionalProperties": false,
   "required": ["schema_version", "session_id", "phase", "pending_action"],
   "properties": {
-    "schema_version": {"type": "integer", "enum": [1]},
+    "schema_version": {"type": "integer", "enum": [1, 2]},
     "session_id": {"type": "string"},
     "phase": {"type": "string"},
     "pending_action": {"type": "string"},
     "current_concept": {"type": ["string", "null"]},
+    "current_target_id": {"type": ["string", "null"]},
+    "legacy_current_concept": {"type": ["string", "null"]},
     "current_task": {"type": ["string", "null"]},
     "time_budget_minutes": {"type": ["integer", "null"], "minimum": 0}
   }

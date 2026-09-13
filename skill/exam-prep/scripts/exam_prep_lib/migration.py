@@ -4,11 +4,17 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
+import tempfile
+import hashlib
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .provenance import normalize_source_refs
+from .reducer import reduce_learning_state
+from .scheduler import build_review_queue
 from .storage import StudyStore
 
 
@@ -24,6 +30,7 @@ class MigrationResult:
     id_map: dict[str, str]
     observation_count: int
     legacy_unfrozen_count: int
+    source_fingerprint: str
 
     def to_mapping(self) -> dict[str, Any]:
         return {
@@ -33,6 +40,7 @@ class MigrationResult:
             "id_map": self.id_map,
             "observation_count": self.observation_count,
             "legacy_unfrozen_count": self.legacy_unfrozen_count,
+            "source_fingerprint": self.source_fingerprint,
         }
 
 
@@ -77,6 +85,62 @@ def _legacy_workspace(path: Path) -> Path:
     return resolved.parent if resolved.name == "state" else resolved
 
 
+def _source_fingerprint(source: Path) -> str:
+    entries: list[dict[str, str]] = []
+    for path in sorted((item for item in source.rglob("*") if item.is_file())):
+        entries.append(
+            {
+                "path": path.relative_to(source).as_posix(),
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        )
+    payload = {"source_root": str(source.resolve()), "files": entries}
+    return StudyStore.hash_document(payload)
+
+
+def _legacy_revision_metadata(source: Path) -> dict[str, Any]:
+    # Keep source revision metadata as history without copying revisions one-for-one.
+    pointer = _read_json(source / "current.json", None)
+    manifests: list[dict[str, Any]] = []
+    revisions = source / "revisions"
+    if revisions.is_dir():
+        for revision_dir in sorted(
+            (path for path in revisions.iterdir() if path.is_dir() and path.name.isdigit()),
+            key=lambda path: int(path.name),
+        ):
+            manifest = _read_json(revision_dir / "manifest.json", None)
+            if isinstance(manifest, dict):
+                manifests.append(
+                    {
+                        "revision_directory": revision_dir.name,
+                        "manifest": manifest,
+                    }
+                )
+    return {
+        "source_current_pointer": pointer,
+        "source_revision_manifests": manifests,
+    }
+
+
+def _existing_migration(marker: Path, source: Path, destination: Path) -> MigrationResult:
+    existing = _read_json(marker, {})
+    fingerprint = existing.get("source_fingerprint")
+    current = _source_fingerprint(source)
+    if fingerprint != current:
+        raise MigrationError(
+            "migration source fingerprint differs from the existing migration marker"
+        )
+    return MigrationResult(
+        migrated=False,
+        source_root=str(source),
+        destination_root=str(destination),
+        id_map=dict(existing.get("id_map", {})),
+        observation_count=int(existing.get("observation_count", 0)),
+        legacy_unfrozen_count=int(existing.get("legacy_unfrozen_count", 0)),
+        source_fingerprint=str(fingerprint),
+    )
+
+
 def migrate_legacy_workspace(legacy_workspace: str | Path) -> MigrationResult:
     """Convert old state into .exam-prep without mutating the source tree."""
 
@@ -87,15 +151,19 @@ def migrate_legacy_workspace(legacy_workspace: str | Path) -> MigrationResult:
     destination = workspace / ".exam-prep"
     marker = destination / "migration.json"
     if marker.exists():
-        existing = _read_json(marker, {})
-        return MigrationResult(
-            migrated=False,
-            source_root=str(source),
-            destination_root=str(destination),
-            id_map=dict(existing.get("id_map", {})),
-            observation_count=int(existing.get("observation_count", 0)),
-            legacy_unfrozen_count=int(existing.get("legacy_unfrozen_count", 0)),
-        )
+        return _existing_migration(marker, source, destination)
+    if destination.exists():
+        try:
+            occupied = any(destination.iterdir())
+        except OSError as exc:
+            raise MigrationError(f"cannot inspect migration target: {destination}") from exc
+        if occupied:
+            raise MigrationError(
+                f"refusing to overwrite existing unrelated target: {destination}"
+            )
+        destination.rmdir()
+
+    source_fingerprint = _source_fingerprint(source)
 
     old_syllabus = _read_json(source / "syllabus.json", {"concepts": {}})
     old_concepts = old_syllabus.get("concepts", {})
@@ -105,7 +173,6 @@ def migrate_legacy_workspace(legacy_workspace: str | Path) -> MigrationResult:
         str(old_id): f"legacy:math-study:{old_id}"
         for old_id in old_concepts
     }
-    new_concepts: dict[str, dict[str, Any]] = {}
     learning_targets: list[dict[str, Any]] = []
     for old_id, value in old_concepts.items():
         if not isinstance(value, dict):
@@ -119,69 +186,207 @@ def migrate_legacy_workspace(legacy_workspace: str | Path) -> MigrationResult:
             for prerequisite in value.get("prerequisites", [])
         ]
         target["source_refs"] = normalize_source_refs(value.get("source_refs", []))
-        new_concepts[new_id] = target
         learning_targets.append(dict(target))
 
-    migrated_syllabus = dict(old_syllabus)
+    migrated_syllabus = {
+        key: value
+        for key, value in old_syllabus.items()
+        if key not in {"concepts", "targets", "learning_targets"}
+    }
     migrated_syllabus["schema_version"] = 2
-    migrated_syllabus["concepts"] = new_concepts
     migrated_syllabus["learning_targets"] = learning_targets
     migrated_syllabus["target_aliases"] = id_map
+    migrated_syllabus["legacy_metadata"] = {
+        "source_schema_version": old_syllabus.get("schema_version", 1),
+        "source_kind": "math-study",
+    }
 
     old_events = _read_jsonl(source / "observations.jsonl")
     migrated_events: list[dict[str, Any]] = []
     for old_event in old_events:
-        event = dict(old_event)
-        old_target = event.get("target_id", event.get("concept_id"))
+        # Build the v2 event from an explicit compatibility allowlist. Legacy
+        # records may contain implementation-specific fields (for example a
+        # "timestamp" alias); carrying those through would make the resulting
+        # strict v2 event invalid. Required historical values are retained,
+        # while unknown legacy extensions are intentionally not promoted into
+        # canonical learner evidence.
+        event = {
+            key: old_event[key]
+            for key in (
+                "observation_id",
+                "recorded_at",
+                "session_id",
+                "expected_seconds",
+                "elapsed_seconds",
+                "task_id",
+                "task_type",
+                "outcome",
+                "assistance",
+                "error_tags",
+                "diagnostic_confidence",
+                "learner_self_confidence",
+                "learner_explanation",
+                "source_refs",
+                "assessment_id",
+                "assessment_spec_id",
+                "activity_id",
+                "explicit_exposure_reason",
+                "solution_exposed",
+                "exposure_metadata",
+                "evidence_facets",
+                "evaluation_context",
+                "assessment_result",
+                "evaluation_metadata",
+                "legacy_schema_version",
+            )
+            if key in old_event
+        }
+        event["legacy_schema_version"] = event.get("schema_version", 1)
+        event["schema_version"] = 2
+        old_target = old_event.get("target_id", old_event.get("concept_id"))
         if old_target is not None:
             old_target = str(old_target)
             new_target = id_map.get(old_target, f"legacy:math-study:{old_target}")
             event["target_id"] = new_target
-            event["concept_id"] = new_target
             event["legacy_concept_id"] = old_target
+        else:
+            event["target_id"] = "legacy:math-study:unassigned"
+            event["legacy_concept_id"] = None
+        event.pop("concept_id", None)
+        event.setdefault("capability_id", event.get("task_type", "legacy_unclassified"))
+        event.setdefault("task_id", f"legacy-task:{event.get('observation_id', len(migrated_events))}")
+        event["recorded_at"] = event.get("recorded_at", old_event.get("timestamp"))
+        event["session_id"] = event.get("session_id")
+        event["expected_seconds"] = event.get("expected_seconds")
+        event["elapsed_seconds"] = event.get("elapsed_seconds")
         event["source_refs"] = normalize_source_refs(event.get("source_refs", []))
-        event.pop("spec_hash", None)
-        event.pop("rubric", None)
+        for field in ("spec_hash", "assessment_spec_hash", "canonical_assessment_hash", "rubric"):
+            event.pop(field, None)
         event["assessment_integrity"] = "legacy_unfrozen"
         migrated_events.append(event)
 
-    flat_store = StudyStore.for_exam_prep(workspace)
-    flat_store.initialize()
-    _write_json(
-        flat_store.state_path / "course.json",
-        {**_read_json(source / "course.json", {}), "schema_version": 2},
-    )
-    _write_json(flat_store.state_path / "syllabus.json", migrated_syllabus)
-    _write_json(flat_store.state_path / "learner.json", _read_json(source / "learner.json", {}))
-    _write_json(flat_store.state_path / "session.json", _read_json(source / "session.json", {}))
-    _write_json(
-        flat_store.state_path / "targets.json",
+    course = dict(_read_json(source / "course.json", {}))
+    course["schema_version"] = 2
+    course.setdefault("course_id", "migrated-math-study")
+    course.setdefault("title", "Migrated exam preparation")
+    course.setdefault(
+        "exam",
         {
-            "schema_version": 2,
-            "targets": new_concepts,
-            "aliases": id_map,
+            "date": None,
+            "timezone": "UTC",
+            "format": "mixed",
+            "expected_total_points": 100,
+            "revision": 1,
         },
     )
-    for event in migrated_events:
-        flat_store._append_jsonl(flat_store.observations_path, event)
-    for summary in _read_jsonl(source / "sessions.jsonl"):
-        flat_store._append_jsonl(flat_store.sessions_log_path, summary)
+    course.setdefault("time_budget", {"default_minutes": 25, "available_minutes_by_day": {}})
+    course.setdefault(
+        "source_policy",
+        {
+            "priority_order": [
+                "teacher_material",
+                "official_exam_list",
+                "lecture_notes",
+                "problem_sets",
+                "general_reference",
+            ],
+            "conflicts": "flag_for_user",
+        },
+    )
+    course.setdefault(
+        "scheduler",
+        {
+            "mode": "exam_cram",
+            "max_review_interval_hours": 72,
+            "review_warmup_limit": 3,
+            "recurring_mistake_policy": {
+                "min_count": 3,
+                "min_sessions": 2,
+                "resolve_after_clean_successes": 3,
+            },
+        },
+    )
+    learner = dict(_read_json(source / "learner.json", {}))
+    learner.setdefault("schema_version", 1)
+    if not isinstance(learner.get("updated_at"), str):
+        learner["updated_at"] = datetime.now(timezone.utc).isoformat()
+    preferences = dict(learner.get("preferences", {}))
+    if "learning_style" in preferences:
+        preferences["legacy_learning_style"] = preferences.pop("learning_style")
+    learner["preferences"] = preferences
+    learner.setdefault("stable_patterns", [])
+    session = dict(_read_json(source / "session.json", {}))
+    old_current_concept = session.pop("current_concept", None)
+    if session.get("current_target_id") is None and old_current_concept is not None:
+        session["current_target_id"] = id_map.get(
+            str(old_current_concept), f"legacy:math-study:{old_current_concept}"
+        )
+        session["legacy_current_concept"] = str(old_current_concept)
+    session.setdefault("schema_version", 2)
+    if not isinstance(session.get("session_id"), str):
+        session["session_id"] = ""
+    if session.get("phase") not in {"idle", "study", "exam"}:
+        session["phase"] = "idle"
+    if not isinstance(session.get("pending_action"), str):
+        session["pending_action"] = "resume with start"
+    session.setdefault("current_target_id", None)
+    session.setdefault("current_task", None)
+    if not isinstance(session.get("time_budget_minutes"), int) or session["time_budget_minutes"] < 0:
+        session["time_budget_minutes"] = 25
+    source_revision_metadata = _legacy_revision_metadata(source)
 
-    result = MigrationResult(
-        migrated=True,
-        source_root=str(source),
-        destination_root=str(destination),
-        id_map=id_map,
-        observation_count=len(migrated_events),
-        legacy_unfrozen_count=len(migrated_events),
-    )
-    _write_json(
-        marker,
-        {
-            "schema_version": 1,
-            "mode": "from-exam-prep",
-            **result.to_mapping(),
-        },
-    )
+    staging_root = Path(tempfile.mkdtemp(prefix=".exam-prep-migration-", dir=workspace))
+    try:
+        flat_store = StudyStore.for_exam_prep(staging_root)
+        flat_store.initialize()
+        _write_json(flat_store.state_path / "course.json", course)
+        _write_json(flat_store.state_path / "syllabus.json", migrated_syllabus)
+        _write_json(flat_store.state_path / "learner.json", learner)
+        _write_json(flat_store.state_path / "session.json", session)
+        for event in migrated_events:
+            flat_store._append_jsonl(flat_store.observations_path, event)
+        for summary in _read_jsonl(source / "sessions.jsonl"):
+            flat_store._append_jsonl(flat_store.sessions_log_path, summary)
+        for evidence in _read_jsonl(source / "source_evidence.jsonl"):
+            flat_store._append_jsonl(flat_store.source_evidence_path, evidence)
+
+        derived = reduce_learning_state(
+            course, migrated_syllabus, migrated_events, {"revision": 0}
+        )
+        reviews = build_review_queue(
+            migrated_events,
+            derived.get("targets", {}),
+            course,
+            datetime.now(timezone.utc),
+            migrated_syllabus,
+        )
+        reviews["derived_from_revision"] = 1
+        flat_store.commit_revision(
+            derived, session, learner, reviews, course, migrated_syllabus
+        )
+        result = MigrationResult(
+            migrated=True,
+            source_root=str(source),
+            destination_root=str(destination),
+            id_map=id_map,
+            observation_count=len(migrated_events),
+            legacy_unfrozen_count=len(migrated_events),
+            source_fingerprint=source_fingerprint,
+        )
+        _write_json(
+            flat_store.state_path / "migration.json",
+            {
+                "schema_version": 1,
+                "mode": "from-math-study",
+                "source_revision_metadata": source_revision_metadata,
+                **result.to_mapping(),
+            },
+        )
+        os.replace(flat_store.state_path, destination)
+    except Exception:
+        shutil.rmtree(staging_root, ignore_errors=True)
+        raise
+    else:
+        shutil.rmtree(staging_root, ignore_errors=True)
     return result
 

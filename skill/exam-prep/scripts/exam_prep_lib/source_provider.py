@@ -23,6 +23,8 @@ class SourceEvidence:
     excerpt: str | None = None
     evidence_id: str | None = None
     relevance: float | None = None
+    retrieval_id: str | None = None
+    confidence: float | None = None
 
     def to_mapping(self) -> dict[str, Any]:
         result = {
@@ -33,6 +35,10 @@ class SourceEvidence:
             result["evidence_id"] = self.evidence_id
         if self.relevance is not None:
             result["relevance"] = self.relevance
+        if self.retrieval_id is not None:
+            result["retrieval_id"] = self.retrieval_id
+        if self.confidence is not None:
+            result["confidence"] = self.confidence
         return result
 
 
@@ -42,14 +48,28 @@ class SourceEvidenceEnvelope:
     status: str
     evidence: list[SourceEvidence]
     diagnostics: list[str]
+    envelope_id: str | None = None
+    retrieved_at: str | None = None
+    capabilities_used: list[str] | None = None
+    retrieval_id: str | None = None
 
     def to_mapping(self) -> dict[str, Any]:
-        return {
+        result = {
             "provider_id": self.provider_id,
             "status": self.status,
             "evidence": [item.to_mapping() for item in self.evidence],
             "diagnostics": list(self.diagnostics),
         }
+        for key, value in (
+            ("envelope_id", self.envelope_id),
+            ("retrieved_at", self.retrieved_at),
+            ("retrieval_id", self.retrieval_id),
+        ):
+            if value is not None:
+                result[key] = value
+        if self.capabilities_used is not None:
+            result["capabilities_used"] = list(self.capabilities_used)
+        return result
 
 
 class SourceProvider(Protocol):
@@ -127,6 +147,8 @@ class LocalSourceProvider:
                     excerpt=entry.get("excerpt"),
                     evidence_id=entry.get("evidence_id"),
                     relevance=entry.get("relevance"),
+                    retrieval_id=entry.get("retrieval_id"),
+                    confidence=entry.get("confidence"),
                 )
             )
         return result
@@ -139,11 +161,30 @@ class LocalSourceProvider:
 
 
 def normalize_source_evidence(value: Mapping[str, Any]) -> SourceEvidenceEnvelope:
-    provider_id = str(value.get("provider_id", "unknown"))
+    if not isinstance(value, Mapping):
+        return SourceEvidenceEnvelope(
+            "unknown",
+            "failed",
+            [],
+            ["malformed source evidence envelope: expected an object"],
+        )
+    provider_id = str(value.get("provider_id", value.get("provider", "unknown")))
     status = str(value.get("status", "failed"))
-    diagnostics = [str(item) for item in value.get("diagnostics", [])]
+    diagnostics_raw = value.get("diagnostics", [])
+    diagnostics = (
+        [str(item) for item in diagnostics_raw]
+        if isinstance(diagnostics_raw, list)
+        else ["malformed diagnostics: expected an array"]
+    )
+    if status not in {"ok", "unavailable", "failed"}:
+        diagnostics.append(f"unsupported source provider status: {status}")
+        status = "failed"
     evidence: list[SourceEvidence] = []
-    for item in value.get("evidence", []):
+    evidence_raw = value.get("evidence", [])
+    if not isinstance(evidence_raw, list):
+        diagnostics.append("malformed evidence: expected an array")
+        evidence_raw = []
+    for item in evidence_raw:
         if not isinstance(item, Mapping):
             diagnostics.append("ignored non-object source evidence")
             continue
@@ -156,7 +197,8 @@ def normalize_source_evidence(value: Mapping[str, Any]) -> SourceEvidenceEnvelop
             }
         try:
             raw_ref = dict(raw_ref)
-            raw_ref.setdefault("provider_id", provider_id)
+            if "provider_id" not in raw_ref and "provider" not in raw_ref:
+                raw_ref["provider_id"] = provider_id
             ref = source_ref_from_mapping(raw_ref)
         except (TypeError, ValueError):
             diagnostics.append("ignored source evidence without valid SourceRef")
@@ -167,9 +209,20 @@ def normalize_source_evidence(value: Mapping[str, Any]) -> SourceEvidenceEnvelop
                 excerpt=item.get("excerpt"),
                 evidence_id=item.get("evidence_id"),
                 relevance=item.get("relevance"),
+                retrieval_id=item.get("retrieval_id", value.get("retrieval_id")),
+                confidence=item.get("confidence"),
             )
         )
-    return SourceEvidenceEnvelope(provider_id, status, evidence, diagnostics)
+    return SourceEvidenceEnvelope(
+        provider_id,
+        status,
+        evidence,
+        diagnostics,
+        envelope_id=str(value["envelope_id"]) if value.get("envelope_id") is not None else None,
+        retrieved_at=str(value["retrieved_at"]) if value.get("retrieved_at") is not None else None,
+        capabilities_used=[str(item) for item in value.get("capabilities_used", [])],
+        retrieval_id=str(value["retrieval_id"]) if value.get("retrieval_id") is not None else None,
+    )
 
 
 def _target_items(syllabus: Mapping[str, Any]) -> Iterable[tuple[str, Mapping[str, Any]]]:
