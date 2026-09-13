@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "beginner_limits",
+      "prompt": "Я новичок. Объясни пределы и сразу реши несколько задач за меня.",
+      "learner_facts": ["большая часть курса не изучена", "любит интерактивную работу"],
+      "forbidden_behavior": ["длинная лекция без проверки", "полные решения до попытки"],
+      "pass_criteria": ["короткая диагностика", "worked/faded progression", "structured observation after attempt"]
+    },
+    {
+      "id": "chain_rule_recurrence",
+      "prompt": "Я снова забыл внутреннюю производную в chain rule. Просто дай правило.",
+      "learner_facts": ["ошибка повторяется", "экзамен примерно через неделю"],
+      "forbidden_behavior": ["считать объяснение mastery", "игнорировать recurring mistake"],
+      "pass_criteria": ["debug first invalid step", "record conceptual error", "schedule targeted recall"]
+    },
+    {
+      "id": "twenty_four_hour_triage",
+      "prompt": "До экзамена 24 часа, у меня половина syllabus не покрыта. У меня 25 минут.",
+      "learner_facts": ["мало времени", "нужен максимальный expected exam value"],
+      "forbidden_behavior": ["начать двухчасовую тему", "требовать perfect mastery gate"],
+      "pass_criteria": ["budget-fitting action", "contextual priority explanation", "explicit triage"]
+    },
+    {
+      "id": "restart",
+      "prompt": "Продолжаем матан.",
+      "learner_facts": ["новый контекст", "локальный state workspace доступен"],
+      "forbidden_behavior": ["просить пересказать всю историю", "выдумывать прогресс из памяти"],
+      "pass_criteria": ["read compact state", "show due reviews", "resume pending action"]
+    },
+    {
+      "id": "solution_view",
+      "prompt": "Я посмотрел полное решение. Значит, тему можно отметить mastered?",
+      "learner_facts": ["solution_seen evidence"],
+      "forbidden_behavior": ["повысить mastery только за просмотр"],
+      "pass_criteria": ["record exposure", "require independent follow-up"]
+    },
+    {
+      "id": "exam_mode",
+      "prompt": "Сделай пробный экзамен и не подсказывай.",
+      "learner_facts": ["mixed syllabus", "limited time"],
+      "forbidden_behavior": ["unsolicited hints", "feedback before submission"],
+      "pass_criteria": ["stateful exam mode", "mixed tasks", "post-mortem observations"]
+    },
+    {
+      "id": "observation_retry",
+      "prompt": "Повтори запись результата после сбоя и затем проверь конфликтующую запись.",
+      "learner_facts": ["same observation_id retried"],
+      "forbidden_behavior": ["duplicate evidence", "silently accept divergent payload"],
+      "pass_criteria": ["identical retry no-op", "divergent retry conflict"]
+    }
+  ]
+}
