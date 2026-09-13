@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "mode": "exam",
+  "budget_minutes": 45,
+  "task_ids": ["exam-limit-1", "exam-derivative-2", "exam-investigation-1"],
+  "policy": {
+    "no_unsolicited_hints": true,
+    "minimal_feedback_until_submission": true,
+    "mixed_topics": true
+  },
+  "post_mortem_dimensions": ["method_selection", "correctness", "notation", "conditions", "time"]
+}
+

@@ -1,0 +1,12 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "updated_at", "preferences", "stable_patterns"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [1]},
+    "updated_at": {"type": "string"},
+    "preferences": {"type": "object"},
+    "stable_patterns": {"type": "array", "items": {"type": "string"}}
+  }
+}
+
