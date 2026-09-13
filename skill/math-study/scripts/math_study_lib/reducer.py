@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
+from .capabilities import CapabilityRegistry
 
 DIMENSIONS = ("conceptual", "procedural", "recall", "transfer", "speed")
 # Every dimension except speed always starts at a known 0.0 (every scored task
@@ -148,6 +149,8 @@ def reduce_learning_state(
 ) -> dict[str, Any]:
     del course
     mistake_policy = {**DEFAULT_RECURRING_MISTAKE_POLICY, **(policy.get("recurring_mistake") or {})}
+    capability_registry = CapabilityRegistry.from_syllabus(syllabus)
+    unmapped_capability_events: list[str] = []
     concepts: dict[str, dict[str, Any]] = {
         concept_id: _empty_concept()
         for concept_id in syllabus.get("concepts", {})
@@ -158,6 +161,15 @@ def reduce_learning_state(
         if concept_id not in concepts:
             continue
         state = concepts[concept_id]
+        capability_id = (
+            event.get("capability_id")
+            if event.get("capability_id") is not None
+            else event.get("task_type")
+        )
+        capability_resolution = capability_registry.resolve(capability_id)
+        capability = capability_resolution.capability
+        if capability_resolution.warning and capability.capability_id not in unmapped_capability_events:
+            unmapped_capability_events.append(capability.capability_id)
         assistance_band = derive_assistance_band(event.get("assistance", {}))
         outcome = event.get("outcome", "skipped")
         signal = _outcome_signal(outcome)
@@ -167,20 +179,24 @@ def reduce_learning_state(
         if outcome in {"incorrect", "partial"}:
             state["evidence"]["failures"] += 1
         if outcome == "correct":
-            if assistance_band == "independent":
+            if capability.is_registered and assistance_band == "independent":
                 state["evidence"]["independent_successes"] += 1
-            elif assistance_band != "solution_seen":
+            elif capability.is_registered and assistance_band != "solution_seen":
                 state["evidence"]["hinted_successes"] += 1
-            if event.get("task_type") == "delayed_recall":
+            if capability.is_registered and capability.capability_id == "delayed_recall":
                 state["evidence"]["delayed_recall_successes"] += 1
-            if event.get("task_type") == "transfer":
+            if capability.is_registered and capability.capability_id == "transfer":
                 state["evidence"]["transfer_successes"] += 1
-            if event.get("task_type") == "exam_problem":
+            if capability.is_registered and capability.capability_id == "exam_problem":
                 state["evidence"]["exam_successes"] += 1
 
-        if signal is not None and assistance_band != "solution_seen":
+        if (
+            signal is not None
+            and capability.is_registered
+            and assistance_band != "solution_seen"
+        ):
             alpha = 0.22 * ASSISTANCE_WEIGHTS[assistance_band]
-            for dimension in TASK_DIMENSIONS.get(event.get("task_type"), ()):
+            for dimension in capability.affected_dimensions:
                 state["mastery"][dimension] = _update(
                     state["mastery"][dimension], signal, alpha
                 )
@@ -262,8 +278,11 @@ def reduce_learning_state(
         )
         state["availability"] = "prerequisite_blocked" if blocked else "available"
 
-    return {
+    result = {
         "schema_version": 1,
         "derived_from_revision": int(policy.get("revision", 0)),
         "concepts": concepts,
     }
+    if unmapped_capability_events:
+        result["unmapped_capability_events"] = unmapped_capability_events
+    return result
