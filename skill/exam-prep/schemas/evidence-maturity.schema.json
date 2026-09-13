@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Orthogonal evidence maturity",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["demonstrated", "retained", "transferred"],
+  "properties": {
+    "demonstrated": {"$ref": "#/$defs/facet"},
+    "retained": {"$ref": "#/$defs/facet"},
+    "transferred": {"$ref": "#/$defs/facet"}
+  },
+  "$defs": {
+    "facet": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["count", "first_at", "last_at"],
+      "properties": {
+        "count": {"type": "integer", "minimum": 0},
+        "first_at": {"type": ["string", "null"]},
+        "last_at": {"type": ["string", "null"]}
+      }
+    }
+  }
+}
+
