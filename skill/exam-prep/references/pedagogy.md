@@ -34,6 +34,15 @@ ticket → brief answer structure → model answer → comprehension check
        → delayed recall
 ~~~
 
+Ask for the brief answer structure as its own step, separate from the full
+attempt: which theorem/definition, its hypotheses and conclusion (or the
+formula and what each symbol means), and the shape of the argument in one
+or two sentences - before requesting or giving the full statement and
+proof. It is a lower-stakes checkpoint that catches "doesn't know where to
+start" before the learner commits to a full graded attempt. Do not skip
+from "give me ticket N" straight to "recite it in full" - that collapses
+two stages into one and drops the checkpoint.
+
 The exam itself *is* independent, unprompted reproduction of the ticket -
 do not force a practice-problem stage onto a syllabus that has no problems
 in it. A follow-up-questions stage only applies when the blueprint declares
