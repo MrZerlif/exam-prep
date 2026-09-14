@@ -260,6 +260,61 @@ def _required_mastery_dimensions(
     return tuple(dimension for dimension in DIMENSIONS if dimension in dimensions)
 
 
+# ticket_list exams reward recall (verbatim/definition retrieval matters
+# more than novel transfer); problem_set exams reward the opposite. These
+# multiplicatively re-weight each dimension's contribution to the mastery
+# gap (see _mastery_gap) rather than adding/removing dimensions from the
+# required set - the target's own capabilities still decide *which*
+# dimensions matter, the blueprint only decides how much each one counts.
+QUESTION_MODEL_DIMENSION_WEIGHTS: dict[str, dict[str, float]] = {
+    "ticket_list": {"recall": 1.5, "transfer": 0.5},
+    "problem_set": {"recall": 0.5, "transfer": 1.5},
+}
+
+# Oral delivery is live, unprompted recitation - the same recall emphasis
+# ticket_list gets, applied independently of question_model (an oral
+# problem_set defense still rewards being able to state the setup from
+# memory under live questioning). An earlier version of this function tried
+# to express "oral" by adding "speed" to the required dimensions instead,
+# but that is inert: the CLI never records elapsed/expected_seconds (see
+# reducer.py's SCORED_AT_START comment and roadmap item 7.2), so
+# mastery["speed"] is always None, and _mastery_gap drops None-valued
+# dimensions from its weighted average before weights are ever applied -
+# there is no live measurement for a weight to multiply. Recall weighting
+# and the independence requirement below are what's actually measurable
+# today; speed stays deferred to 7.2, where it belongs.
+ORAL_RECALL_WEIGHT = 1.5
+
+
+def _blueprint_dimension_weights(exam: dict[str, Any] | None) -> dict[str, float]:
+    exam = exam or {}
+    weights = dict(QUESTION_MODEL_DIMENSION_WEIGHTS.get(exam.get("question_model"), {}))
+    if exam.get("delivery") == "oral":
+        weights["recall"] = max(weights.get("recall", 1.0), ORAL_RECALL_WEIGHT)
+    return weights
+
+
+def _independence_pressure(state: dict[str, Any], exam: dict[str, Any] | None) -> float:
+    """Oral delivery is judged live and unaided, so mastery built mostly on
+    hinted attempts is not yet oral-ready even where the mastery *value*
+    already looks solid (hinted attempts still move it, just more slowly -
+    see reducer.py's ASSISTANCE_WEIGHTS). This keeps such a target under
+    priority pressure until independent evidence catches up. A 1.0 (no-op)
+    multiplier for any other delivery, and where there is no evidence yet
+    to judge - gap/urgency alone decide in that case."""
+
+    if (exam or {}).get("delivery") != "oral":
+        return 1.0
+    evidence = state.get("evidence", {})
+    independent = float(evidence.get("independent_successes", 0))
+    hinted = float(evidence.get("hinted_successes", 0))
+    total = independent + hinted
+    if total <= 0:
+        return 1.0
+    independent_ratio = independent / total
+    return 1.0 + 0.5 * (1.0 - independent_ratio)
+
+
 def _capability_evidence_facets(
     metadata: dict[str, Any], syllabus: dict[str, Any]
 ) -> set[str]:
@@ -312,18 +367,25 @@ def _prerequisite_unlock_value(
 
 
 def _mastery_gap(
-    state: dict[str, Any], required_dimensions: tuple[str, ...] | None
+    state: dict[str, Any],
+    required_dimensions: tuple[str, ...] | None,
+    dimension_weights: dict[str, float] | None = None,
 ) -> float:
     if required_dimensions is None:
         return max(0.0, 1.0 - _average_mastery(state))
-    values = [
-        state.get("mastery", {}).get(dimension)
+    weights = dimension_weights or {}
+    entries = [
+        (1.0 - float(value), weights.get(dimension, 1.0))
         for dimension in required_dimensions
-        if state.get("mastery", {}).get(dimension) is not None
+        for value in (state.get("mastery", {}).get(dimension),)
+        if value is not None
     ]
-    if not values:
+    if not entries:
         return max(0.0, 1.0 - _average_mastery(state))
-    return max(0.0, sum(1.0 - float(value) for value in values) / len(values))
+    total_weight = sum(weight for _, weight in entries)
+    if total_weight <= 0:
+        return max(0.0, 1.0 - _average_mastery(state))
+    return max(0.0, sum(gap * weight for gap, weight in entries) / total_weight)
 
 
 def compute_priority(
@@ -339,9 +401,9 @@ def compute_priority(
     targets = normalized_syllabus.targets
     metadata = targets.get(concept_id, {})
     state = concepts.get(concept_id, {})
-    required_dimensions = _required_mastery_dimensions(metadata, syllabus)
-    gap = _mastery_gap(state, required_dimensions)
     exam = course.get("exam", {})
+    required_dimensions = _required_mastery_dimensions(metadata, syllabus)
+    gap = _mastery_gap(state, required_dimensions, _blueprint_dimension_weights(exam))
     exam_time = _exam_time(course, now)
     if exam_time is None:
         exam_time = now + timedelta(days=7)
@@ -364,6 +426,7 @@ def compute_priority(
     review = reviews.get(concept_id, reviews.get("items", {}).get(concept_id, {}))
     due = bool(review and review.get("due_at") and _parse_time(review["due_at"], now) <= now)
     due_multiplier = 1.25 if due else 1.0
+    independence_pressure = _independence_pressure(state, exam)
     improvement = max(0.1, gap * time_fit)
     raw_score = (
         exam_value
@@ -374,6 +437,7 @@ def compute_priority(
         * evidence_factor
         * improvement
         / estimated
+        * independence_pressure
     )
     score = round(raw_score * due_multiplier, 6)
     required_text = (
@@ -383,10 +447,16 @@ def compute_priority(
     )
     prereq_text = "no prerequisites" if not prerequisites else f"prerequisite readiness {prerequisite_readiness:.2f}"
     due_text = ", due review 1.25x" if due else ""
+    independence_text = (
+        f", independence pressure {independence_pressure:.2f}x"
+        if independence_pressure != 1.0
+        else ""
+    )
     reason = (
         f"exam value {exam_value:.2f}, mastery gap {gap:.2f} ({required_text}), "
         f"{prereq_text}, unlock value {prerequisite_unlock_value:.2f}, "
-        f"evidence factor {evidence_factor:.2f}, time fit {time_fit:.2f}{due_text}"
+        f"evidence factor {evidence_factor:.2f}, time fit {time_fit:.2f}"
+        f"{due_text}{independence_text}"
     )
     exam_revision = int(exam.get("revision", course.get("exam_revision", 1)))
     return {

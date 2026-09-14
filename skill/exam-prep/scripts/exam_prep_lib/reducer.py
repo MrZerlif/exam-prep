@@ -39,7 +39,16 @@ TASK_DIMENSIONS = {
     "independent_problem": ("procedural",),
     "transfer": ("procedural", "transfer"),
     "exam_problem": ("procedural", "transfer"),
-    "delayed_recall": ("recall", "transfer"),
+    # delayed_recall is recall under delay, not novel transfer - crediting
+    # transfer here overstated readiness for exactly the ticket-memorization
+    # scenario this dimension exists to measure. Transfer credit for a
+    # delayed task is opt-in via delayed_transfer instead. Keep this in sync
+    # with CapabilityRegistry.with_defaults() in capabilities.py - both
+    # define the same mapping for the v1/v2 task-type lookup, and
+    # test_capabilities.py's test_task_dimensions_and_default_capability_
+    # registry_agree fails if they drift apart.
+    "delayed_recall": ("recall",),
+    "delayed_transfer": ("recall", "transfer"),
 }
 MISTAKE_SUMMARIES = {
     "conceptual_error": "misunderstanding the governing concept",
@@ -177,7 +186,7 @@ def reduce_learning_state(
     events: list[dict[str, Any]],
     policy: dict[str, Any],
 ) -> dict[str, Any]:
-    del course
+    question_model = (course.get("exam") or {}).get("question_model")
     mistake_policy = {**DEFAULT_RECURRING_MISTAKE_POLICY, **(policy.get("recurring_mistake") or {})}
     normalized_syllabus = normalize_syllabus(syllabus)
     capability_registry = CapabilityRegistry.from_syllabus(syllabus)
@@ -239,7 +248,7 @@ def reduce_learning_state(
             exam_success = (
                 capability.capability_id == "exam_problem"
                 if legacy_task_semantics
-                else capability.counts_as_exam_success()
+                else capability.counts_as_exam_success(question_model)
             )
             if retention_success and assistance_band == "independent":
                 state["evidence"]["delayed_recall_successes"] += 1

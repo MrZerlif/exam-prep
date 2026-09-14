@@ -35,15 +35,54 @@ learner to choose the method before calculating. Avoid long homogeneous runs.
 
 ## Exam mode and post-mortem
 
-Exam mode is stateful and mixed:
+`exam` is stateful and blueprint-driven: it assembles tickets from the
+`mock`-purpose assessment pool (see "Authoring: freeze-assessment and
+mint-assessments" below), sized and timed by `course.exam` -
+`question_count`, `time_limit_minutes` or `per_question_minutes`,
+`delivery`, `follow_up_questions`, `grading_criteria`. With no mock pool
+minted yet it falls back to a plain budgeted session, not an error.
 
 - no unsolicited hints;
 - neutral wording;
-- optional timing;
 - minimal feedback until submission or stop;
-- grade method selection, correctness, notation, conditions, and time.
+- grade against `grading_criteria` when the blueprint states them.
 
-Post-mortem turns failures into typed observations. Separate conceptual,
-method-selection, algebra, formula, notation, speed, and careless causes. It
-updates the normal plan but cannot overwrite or erase the original exam evidence.
+`end-session` reports a post-mortem: each ticket's outcome (attempted,
+correct, independent or hinted) and an aggregate score. Separate conceptual,
+method-selection, algebra, formula, notation, speed, and careless causes for
+ordinary study-mode mistakes too. Post-mortem updates the normal plan but
+cannot overwrite or erase the original exam evidence.
+
+## Authoring: freeze-assessment and mint-assessments
+
+Both take a `FrozenAssessment`-shaped spec: `assessment_id`, `target_id`,
+`capability_id`, `prompt`, `rubric`, `expected_evidence`, `source_refs`,
+`difficulty`, `question_version`, `rubric_version`, and an optional
+`purpose` (`practice`, `retest`, `held_out`, or `mock`; defaults to
+`practice`). `freeze-assessment` takes one spec as the whole file.
+
+`mint-assessments` takes a batch:
+
+~~~json
+{
+  "purpose": "mock",
+  "assessments": [
+    {"assessment_id": "...", "target_id": "...", "capability_id": "...",
+     "prompt": "...", "rubric": {}, "expected_evidence": [],
+     "source_refs": [], "difficulty": 0.4,
+     "question_version": 1, "rubric_version": 1}
+  ]
+}
+~~~
+
+The top-level `purpose` is the default for entries that omit their own.
+Each entry runs through the same validation and pool-isolation guard as
+`freeze-assessment` (content already on the practice side cannot be
+minted as `held_out`/`mock`, and vice versa); a colliding or invalid entry
+is rejected individually, named in the response, without aborting the
+rest of the batch. Re-running the same batch is a no-op.
+
+`update-exam-blueprint` merges a JSON patch into `course.exam` (any of the
+fields above) and advances `exam.revision` automatically on real change;
+setting `revision` in the patch is rejected.
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any, Iterable, Mapping
 
 
 @dataclass(frozen=True)
@@ -35,17 +35,32 @@ class AssessmentCapability:
         return self.is_registered and (
             self.requires_evidence("retained")
             or self.requires_evidence("delayed_recall")
-            or self.review_kind == "delayed_recall"
-            or self.capability_id == "delayed_recall"
+            or self.review_kind in {"delayed_recall", "delayed_transfer"}
+            or self.capability_id in {"delayed_recall", "delayed_transfer"}
         )
 
-    def counts_as_exam_success(self) -> bool:
-        return self.is_registered and (
+    def counts_as_exam_success(self, question_model: str | None = None) -> bool:
+        if not self.is_registered:
+            return False
+        if (
             self.requires_evidence("exam")
             or self.requires_evidence("exam_problem")
             or self.review_kind == "exam_problem"
             or self.capability_id == "exam_problem"
-        )
+        ):
+            return True
+        # For a ticket_list exam, the exam itself *is* independently
+        # reproducing a memorized ticket - the same act delayed_recall/
+        # delayed_transfer already measure. Derived from the blueprint
+        # rather than a hardcoded id set, per 2.3: a written problem_set
+        # exam must not get this credit, since reciting a ticket from
+        # memory is not what it tests.
+        if question_model == "ticket_list" and self.capability_id in {
+            "delayed_recall",
+            "delayed_transfer",
+        }:
+            return True
+        return False
 
     @classmethod
     def unknown(cls, capability_id: str) -> "AssessmentCapability":
@@ -67,8 +82,21 @@ class CapabilityResolution:
 
 
 class CapabilityRegistry:
-    def __init__(self, capabilities: Mapping[str, AssessmentCapability] | None = None):
+    def __init__(
+        self,
+        capabilities: Mapping[str, AssessmentCapability] | None = None,
+        *,
+        rejected: Iterable[str] | None = None,
+    ):
         self._capabilities = dict(capabilities or {})
+        self._rejected_descriptors: tuple[str, ...] = tuple(rejected or ())
+
+    def rejected_descriptors(self) -> tuple[str, ...]:
+        """Descriptors dropped during `from_syllabus` registration - each a
+        human-readable reason, e.g. an unknown affected dimension. Callers
+        that build a registry from user-supplied data (status, validate)
+        surface these instead of letting bad capabilities vanish silently."""
+        return self._rejected_descriptors
 
     @classmethod
     def with_defaults(cls) -> "CapabilityRegistry":
@@ -85,7 +113,12 @@ class CapabilityRegistry:
             "independent_problem": ("procedural",),
             "transfer": ("procedural", "transfer"),
             "exam_problem": ("procedural", "transfer"),
-            "delayed_recall": ("recall", "transfer"),
+            # Keep in sync with reducer.TASK_DIMENSIONS - see the comment
+            # there. test_capabilities.py's
+            # test_task_dimensions_and_default_capability_registry_agree
+            # fails if this drifts from that mapping.
+            "delayed_recall": ("recall",),
+            "delayed_transfer": ("recall", "transfer"),
         }
         return cls(
             {
@@ -139,6 +172,9 @@ class CapabilityRegistry:
                     verifier_id=descriptor.get("verifier_id"),
                 )
             )
+        registry._rejected_descriptors = tuple(
+            capability_dimension_issues({"assessment_capabilities": raw})
+        )
         return registry
 
     def register(self, capability: AssessmentCapability) -> None:

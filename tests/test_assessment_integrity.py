@@ -158,6 +158,44 @@ class AssessmentIntegrityTests(unittest.TestCase):
                 )
             self.assertEqual([frozen.assessment_id], [item["assessment_id"] for item in store.read_assessments()])
 
+    def test_repeated_freeze_of_same_id_with_changed_purpose_is_rejected(self):
+        # Re-freezing assessment_id "assessment-1" as mock after it was
+        # already frozen as practice must not be a one-step way around pool
+        # isolation: same id, same content, only purpose flipped. The
+        # existing same-id/different-contract conflict check already
+        # catches this (purpose is part of the frozen contract), so this
+        # pins that it stays caught rather than accidentally special-cased.
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore(Path(tmp))
+            practiced = FrozenAssessment.from_mapping(assessment(purpose="practice"))
+            store.append_assessment(practiced)
+            with self.assertRaises((AssessmentConflict, AssessmentIntegrityError)):
+                store.append_assessment(
+                    FrozenAssessment.from_mapping(
+                        assessment(assessment_id=practiced.assessment_id, purpose="mock")
+                    )
+                )
+            self.assertEqual(
+                "practice",
+                FrozenAssessment.from_mapping(store.read_assessments()[0]).purpose,
+            )
+
+    def test_repeated_freeze_of_an_identical_pool_isolated_assessment_is_idempotent(self):
+        # The guard must recognize "the same assessment, re-applied" as
+        # idempotent, not as the assessment colliding with itself in its
+        # own pool - this is what re-running an authoring pipeline (e.g.
+        # applying the same curriculum proposal twice) depends on. Uses
+        # purpose=mock specifically, since that is the side of the guard
+        # with a non-trivial opposing-pool comparison to get wrong.
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore(Path(tmp))
+            mocked = FrozenAssessment.from_mapping(assessment(purpose="mock"))
+            first = store.append_assessment(mocked)
+            second = store.append_assessment(mocked)
+            self.assertTrue(first.appended)
+            self.assertFalse(second.appended)
+            self.assertEqual(1, len(store.read_assessments()))
+
     def test_store_rejects_assessment_outside_contract_ranges(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StudyStore(Path(tmp))
@@ -210,6 +248,19 @@ class AssessmentIntegrityTests(unittest.TestCase):
             self.assertEqual("frozen_attempt", result.canonical_event["assessment_integrity"])
             self.assertEqual(frozen.spec_hash, result.canonical_event["assessment_spec_hash"])
 
+            retry = store.append_observation(
+                proposal,
+                "session-1",
+                "2026-09-13T12:00:00+00:00",
+                60,
+                30,
+            )
+            self.assertFalse(
+                retry.appended,
+                "identical retry of an assessment-linked observation must be "
+                "idempotent, not an ObservationConflict",
+            )
+
             exposed = dict(proposal)
             exposed["observation_id"] = "exposed-obs"
             exposed["outcome"] = "solution_seen"
@@ -223,6 +274,305 @@ class AssessmentIntegrityTests(unittest.TestCase):
                 30,
             )
             self.assertEqual("explicit_exposure", exposed_result.canonical_event["assessment_integrity"])
+
+    def test_mock_assessment_rejects_attempt_outside_exam_phase(self):
+        frozen = FrozenAssessment.from_mapping(assessment(purpose="mock"))
+        event = {
+            "assessment_id": frozen.assessment_id,
+            "target_id": frozen.target_id,
+            "capability_id": frozen.capability_id,
+            "outcome": "correct",
+        }
+        with self.assertRaises(AssessmentIntegrityError):
+            assess_attempt_evidence(event, frozen, prior_events=[], session_phase="study")
+        decision = assess_attempt_evidence(event, frozen, prior_events=[], session_phase="exam")
+        self.assertTrue(decision.accepted)
+
+    def test_practice_assessment_rejects_attempt_during_exam_phase(self):
+        frozen = FrozenAssessment.from_mapping(assessment(purpose="practice"))
+        event = {
+            "assessment_id": frozen.assessment_id,
+            "target_id": frozen.target_id,
+            "capability_id": frozen.capability_id,
+            "outcome": "correct",
+        }
+        with self.assertRaises(AssessmentIntegrityError):
+            assess_attempt_evidence(event, frozen, prior_events=[], session_phase="exam")
+        decision = assess_attempt_evidence(event, frozen, prior_events=[], session_phase="study")
+        self.assertTrue(decision.accepted)
+
+    def test_purpose_defaults_to_practice_and_session_phase_defaults_to_study(self):
+        frozen = FrozenAssessment.from_mapping(assessment())
+        self.assertEqual("practice", frozen.purpose)
+        event = {
+            "assessment_id": frozen.assessment_id,
+            "target_id": frozen.target_id,
+            "capability_id": frozen.capability_id,
+            "outcome": "correct",
+        }
+        decision = assess_attempt_evidence(event, frozen, prior_events=[])
+        self.assertTrue(decision.accepted)
+
+    def test_store_rejects_recording_a_mock_attempt_outside_exam_phase(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            frozen = FrozenAssessment.from_mapping(assessment(purpose="mock"))
+            store.append_assessment(frozen)
+            proposal = {
+                "schema_version": 2,
+                "observation_id": "mock-leak",
+                "target_id": frozen.target_id,
+                "task_id": "assessment-task",
+                "capability_id": frozen.capability_id,
+                "task_type": "independent_problem",
+                "outcome": "correct",
+                "assistance": {"levels_revealed": []},
+                "error_tags": [],
+                "diagnostic_confidence": "high",
+                "source_refs": [],
+                "assessment_id": frozen.assessment_id,
+            }
+            with self.assertRaises(AssessmentIntegrityError):
+                store.append_observation(
+                    proposal,
+                    "session-1",
+                    "2026-09-13T12:00:00+00:00",
+                    60,
+                    30,
+                    session_phase="study",
+                )
+            self.assertEqual([], store.read_complete_observations())
+            result = store.append_observation(
+                proposal,
+                "session-1",
+                "2026-09-13T12:00:00+00:00",
+                60,
+                30,
+                session_phase="exam",
+            )
+            self.assertEqual("frozen_attempt", result.canonical_event["assessment_integrity"])
+
+    def test_mock_assessment_cannot_reuse_content_already_frozen_as_practice(self):
+        # Pool isolation is keyed on mere freezing, not on whether the
+        # content was ever attempted: requiring an attempt first would leave
+        # a window where a freshly-frozen-but-unattempted practice item's
+        # content could still be reused for mock.
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            practiced = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-practiced", purpose="practice")
+            )
+            store.append_assessment(practiced)
+
+            same_content_mock = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-mock-same-content", purpose="mock")
+            )
+            with self.assertRaises(AssessmentIntegrityError):
+                store.append_assessment(same_content_mock)
+
+    def test_held_out_assessment_cannot_reuse_content_already_frozen_as_practice(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            practiced = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-practiced-2", purpose="practice")
+            )
+            store.append_assessment(practiced)
+
+            same_content_held_out = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-held-out-same-content", purpose="held_out")
+            )
+            with self.assertRaises(AssessmentIntegrityError):
+                store.append_assessment(same_content_held_out)
+
+    def test_practice_assessment_cannot_reuse_content_already_frozen_as_mock(self):
+        # Symmetric direction: content already committed to the exam pool
+        # (held_out/mock) must not be reusable for ordinary practice either
+        # - that would expose held-out/mock material through the back door,
+        # regardless of freeze order.
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            mocked = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-mock-first", purpose="mock")
+            )
+            store.append_assessment(mocked)
+
+            same_content_practice = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-practice-after-mock", purpose="practice")
+            )
+            with self.assertRaises(AssessmentIntegrityError):
+                store.append_assessment(same_content_practice)
+
+    def test_retest_assessment_cannot_reuse_content_already_frozen_as_held_out(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            held_out = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-held-out-first", purpose="held_out")
+            )
+            store.append_assessment(held_out)
+
+            same_content_retest = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-retest-after-held-out", purpose="retest")
+            )
+            with self.assertRaises(AssessmentIntegrityError):
+                store.append_assessment(same_content_retest)
+
+    def test_mock_assessment_may_be_frozen_when_content_is_not_in_the_training_pool(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            fresh_mock = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-mock-fresh", purpose="mock")
+            )
+            result = store.append_assessment(fresh_mock)
+            self.assertTrue(result.appended)
+
+    def test_mock_cannot_reuse_content_differing_only_by_question_version(self):
+        # question_version/rubric_version must not be a loophole: the same
+        # prompt/rubric under a bumped version number is still the same
+        # question content for pool-isolation purposes (spec_hash still
+        # differs, since version numbers stay part of the frozen contract).
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            practiced = FrozenAssessment.from_mapping(
+                assessment(
+                    assessment_id="assessment-practiced-v1", purpose="practice", question_version=1
+                )
+            )
+            store.append_assessment(practiced)
+
+            same_prompt_new_version_mock = FrozenAssessment.from_mapping(
+                assessment(
+                    assessment_id="assessment-mock-v2", purpose="mock", question_version=2
+                )
+            )
+            with self.assertRaises(AssessmentIntegrityError):
+                store.append_assessment(same_prompt_new_version_mock)
+
+    def test_mock_cannot_reuse_content_differing_only_by_trailing_newline(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            practiced = FrozenAssessment.from_mapping(
+                assessment(assessment_id="assessment-practiced-plain", purpose="practice")
+            )
+            store.append_assessment(practiced)
+
+            trailing_newline_mock = FrozenAssessment.from_mapping(
+                assessment(
+                    assessment_id="assessment-mock-trailing-newline",
+                    purpose="mock",
+                    prompt="Solve 2x = 4.\n",
+                )
+            )
+            with self.assertRaises(AssessmentIntegrityError):
+                store.append_assessment(trailing_newline_mock)
+
+    def test_question_hash_ignores_assessment_id_purpose_difficulty_and_version_numbers(self):
+        base = FrozenAssessment.from_mapping(assessment())
+        same_content_different_id = FrozenAssessment.from_mapping(
+            assessment(assessment_id="assessment-2")
+        )
+        same_content_different_purpose = FrozenAssessment.from_mapping(
+            assessment(purpose="retest")
+        )
+        same_content_different_difficulty = FrozenAssessment.from_mapping(
+            assessment(difficulty=0.9)
+        )
+        same_content_different_versions = FrozenAssessment.from_mapping(
+            assessment(question_version=7, rubric_version=3)
+        )
+        different_prompt = FrozenAssessment.from_mapping(
+            assessment(prompt="Solve 3x = 9.")
+        )
+        self.assertEqual(base.question_hash, same_content_different_id.question_hash)
+        self.assertEqual(base.question_hash, same_content_different_purpose.question_hash)
+        self.assertEqual(base.question_hash, same_content_different_difficulty.question_hash)
+        self.assertEqual(base.question_hash, same_content_different_versions.question_hash)
+        self.assertNotEqual(base.question_hash, different_prompt.question_hash)
+        self.assertNotEqual(base.spec_hash, same_content_different_id.spec_hash)
+        self.assertNotEqual(base.spec_hash, same_content_different_versions.spec_hash)
+
+    def test_question_hash_ignores_rubric_expected_evidence_and_source_refs(self):
+        # The learner is only ever shown the prompt; rubric/expected_evidence
+        # /source_refs are grading and provenance bookkeeping. Hashing them
+        # would let a cosmetic edit to any of the three re-launder
+        # already-practiced content into the exam pool without changing
+        # anything the learner actually sees.
+        base = FrozenAssessment.from_mapping(assessment())
+        different_rubric = FrozenAssessment.from_mapping(
+            assessment(rubric={"correct": 1, "shows_steps": 1, "extra_note": "clarified"})
+        )
+        different_expected_evidence = FrozenAssessment.from_mapping(
+            assessment(expected_evidence=["independent_work", "shows_algebra"])
+        )
+        different_source_refs = FrozenAssessment.from_mapping(
+            assessment(
+                source_refs=[
+                    {
+                        "source_id": "teacher:week-2",
+                        "authority": "teacher_material",
+                        "locator": "page 9",
+                    }
+                ]
+            )
+        )
+        self.assertEqual(base.question_hash, different_rubric.question_hash)
+        self.assertEqual(base.question_hash, different_expected_evidence.question_hash)
+        self.assertEqual(base.question_hash, different_source_refs.question_hash)
+        self.assertNotEqual(base.spec_hash, different_rubric.spec_hash)
+        self.assertNotEqual(base.spec_hash, different_expected_evidence.spec_hash)
+        self.assertNotEqual(base.spec_hash, different_source_refs.spec_hash)
+
+    def test_question_hash_normalizes_prompt_whitespace(self):
+        base = FrozenAssessment.from_mapping(assessment())
+        padded_and_trailing_newline = FrozenAssessment.from_mapping(
+            assessment(prompt="  Solve   2x = 4.\n")
+        )
+        internal_whitespace_run = FrozenAssessment.from_mapping(
+            assessment(prompt="Solve 2x\t=  4.")
+        )
+        self.assertEqual(base.question_hash, padded_and_trailing_newline.question_hash)
+        self.assertEqual(base.question_hash, internal_whitespace_run.question_hash)
+
+    def test_recorded_event_is_self_describing_with_assessment_purpose(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            store = StudyStore.for_exam_prep(Path(tmp))
+            frozen = FrozenAssessment.from_mapping(assessment(purpose="retest"))
+            store.append_assessment(frozen)
+            proposal = {
+                "schema_version": 2,
+                "observation_id": "self-describing-1",
+                "target_id": frozen.target_id,
+                "task_id": "assessment-task",
+                "capability_id": frozen.capability_id,
+                "task_type": "independent_problem",
+                "outcome": "correct",
+                "assistance": {"levels_revealed": []},
+                "error_tags": [],
+                "diagnostic_confidence": "high",
+                "source_refs": [],
+                "assessment_id": frozen.assessment_id,
+            }
+            result = store.append_observation(
+                proposal, "session-1", "2026-09-13T12:00:00+00:00", 60, 30, session_phase="study"
+            )
+            self.assertEqual("retest", result.canonical_event["assessment_purpose"])
+            self.assertEqual(frozen.spec_hash, result.canonical_event["assessment_spec_hash"])
+
+    def test_held_out_assessment_has_no_phase_restriction(self):
+        # held_out is a reserved/candidate pool, not an in-progress mock -
+        # its protection is the content-hash pool-isolation check, not a
+        # phase gate, so it may be attempted in either phase.
+        frozen = FrozenAssessment.from_mapping(assessment(purpose="held_out"))
+        event = {
+            "assessment_id": frozen.assessment_id,
+            "target_id": frozen.target_id,
+            "capability_id": frozen.capability_id,
+            "outcome": "correct",
+        }
+        for phase in ("study", "exam"):
+            decision = assess_attempt_evidence(
+                event, frozen, prior_events=[], session_phase=phase
+            )
+            self.assertTrue(decision.accepted)
 
     def test_new_v2_non_assessment_event_is_not_legacy_unfrozen(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -10,6 +10,7 @@
     "last_complete_observation_id": {"type": ["string", "null"]},
     "course_hash": {"type": ["string", "null"]},
     "syllabus_hash": {"type": ["string", "null"]},
+    "exam_revision": {"type": ["integer", "null"]},
     "derived_hashes": {
       "type": "object",
       "additionalProperties": {"type": "string", "minLength": 1}

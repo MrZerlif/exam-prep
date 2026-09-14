@@ -6,7 +6,26 @@
     "schema_version": {"type": "integer", "enum": [1, 2]},
     "course_id": {"type": "string"},
     "title": {"type": "string"},
-    "exam": {"type": "object"},
+    "exam": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "date": {"type": ["string", "null"]},
+        "timezone": {"type": ["string", "null"]},
+        "format": {"type": ["string", "null"]},
+        "delivery": {"type": "string", "enum": ["written", "oral", "mixed"]},
+        "question_model": {"type": "string", "enum": ["ticket_list", "problem_set", "mixed", "open"]},
+        "question_count": {"type": ["integer", "null"], "minimum": 0},
+        "time_limit_minutes": {"type": ["integer", "null"], "minimum": 0},
+        "per_question_minutes": {"type": ["number", "null"], "minimum": 0},
+        "points": {"type": ["number", "null"], "minimum": 0},
+        "expected_total_points": {"type": ["number", "null"], "minimum": 0},
+        "follow_up_questions": {"type": "boolean"},
+        "verbatim_definitions": {"type": "boolean"},
+        "grading_criteria": {"type": ["array", "null"], "items": {"type": "string"}},
+        "revision": {"type": "integer", "minimum": 1}
+      }
+    },
     "time_budget": {"type": "object"},
     "source_policy": {"type": "object"},
     "scheduler": {"type": "object"}

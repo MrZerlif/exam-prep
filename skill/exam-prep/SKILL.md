@@ -22,13 +22,13 @@ Run `status` first. A new workspace returns `uninitialized` without creating `.e
 For “continue studying”:
 
 1. Read compact `status`: course, syllabus, session, due reviews, mistakes, and pending action.
-2. If no course exists, collect materials and initialize. Do not ask the learner to reconstruct history from memory.
+2. If no course exists, collect materials, `load-syllabus`, and `start`. Do not ask the learner to reconstruct history from memory.
 3. Ask for available time when unknown. Use `next --minutes N` or `roadmap`, select a budget-fitting activity, and state the exam-value tradeoff briefly.
 4. Continue the pending action before inventing a lecture.
 
 ## attempt-first integrity
 
-Use short cycles: intuition, worked example, faded scaffold, guided problem, independent problem, transfer, exam problem, delayed recall. Make the learner produce an answer, explanation, formula reading, or method choice before evaluating. Preserve the last valid step, identify the first invalid transformation, classify the error, and ask for repair.
+Select the practice track from `course.exam.question_model`: `ticket_list` uses ticket-recitation stages; `problem_set`, `mixed`, `open`, or an unset question_model use the intuition-to-transfer ladder. Track stages live in `references/pedagogy.md` - do not hardcode one ladder for every exam format. Every track is attempt-first regardless of which one applies: make the learner produce an answer, explanation, formula reading, memorized reproduction, or method choice before evaluating. Preserve the last valid step, identify the first invalid transformation, classify the error, and ask for repair.
 
 Use H0-H5 assistance from `references/pedagogy.md`. Never disclose a premature answer or reveal a full solution merely because the learner says “I understand” or asks once. Record solution exposure separately; it does not raise independent mastery. The Python engine cannot prevent conversational leakage. After H5, require a structurally different attempt. In exam mode, give no unsolicited hints and minimal feedback until submission or stop.
 
@@ -43,7 +43,11 @@ python scripts/exam_prep.py next --minutes 25
 python scripts/exam_prep.py record-observation proposal.json
 ~~~
 
-Use `review-due`, `mistakes`, `roadmap`, `exam`, `verify`, and `end-session` as appropriate. Keep mastery, review status, and prerequisite availability distinct. Avoid XP theater, flashcard-only plans, perfection gates, and long lectures.
+Use `review-due`, `mistakes`, `roadmap`, `exam`, `verify`, `rebuild`, and `end-session` as appropriate; `migrate --from-math-study` is a one-time legacy import. Keep mastery, review status, and prerequisite availability distinct. Avoid XP theater, flashcard-only plans, perfection gates, and long lectures.
+
+## Authoring exam material
+
+Freeze exam material with `freeze-assessment` (one) or `mint-assessments` (a batch; package format in `references/exam-optimizer.md`) before a mock; each entry is `purpose`-tagged and pool-isolated. Adjust `course.exam` with `update-exam-blueprint`, never by hand.
 
 ## Read references only when needed
 

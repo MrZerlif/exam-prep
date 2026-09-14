@@ -32,6 +32,9 @@
     "assessment_id": {"type": ["string", "null"]},
     "assessment_spec_id": {"type": ["string", "null"]},
     "assessment_spec_hash": {"type": ["string", "null"]},
+    "assessment_purpose": {"type": ["string", "null"], "enum": ["practice", "retest", "held_out", "mock", null]},
+    "exam_revision": {"type": ["integer", "null"], "minimum": 1},
+    "exam_hash": {"type": ["string", "null"], "minLength": 1},
     "assessment": {
       "type": ["object", "null"],
       "additionalProperties": false,

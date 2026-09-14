@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from .capabilities import capability_dimension_issues
 from .schema_validation import (
@@ -25,6 +25,56 @@ from .target_normalization import normalize_event, normalize_syllabus
 from .assessment import FrozenAssessment
 from .provenance import source_ref_from_mapping
 from .scheduler import _exam_time
+
+
+def blueprint_revision_diagnostics(
+    course: dict[str, Any], events: Iterable[dict[str, Any]]
+) -> dict[str, Any] | None:
+    """Compare the course's current exam blueprint against what each v2
+    observation event was tagged with when recorded (see
+    StudyStore.append_observation). Evidence is never discarded or
+    reinterpreted when the blueprint changes mid-prep - this only makes the
+    mismatch visible instead of silent, per invariant 3.
+
+    Keys on exam_hash (a content hash of the whole exam sub-object), not
+    only the manually-maintained exam_revision integer (1.4): revision is a
+    human label an author can forget to bump, and a forgotten bump must not
+    silently defeat this diagnostic - a hash comparison can't be forgotten.
+    An event is flagged as stale if either its recorded exam_revision or its
+    recorded exam_hash disagrees with the current one; either signal alone
+    is enough (an old event may only have the pre-1.4 exam_revision tag).
+    Returns None when nothing is flagged (including no events tagged at
+    all: legacy/v1 evidence, or a course with no explicit exam.revision)."""
+
+    exam = course.get("exam") or {}
+    current_revision = exam.get("revision")
+    if current_revision is None:
+        return None
+    current_hash = StudyStore.hash_document(exam)
+    stale_counts: dict[tuple[int | None, str | None], int] = {}
+    for event in events:
+        recorded_revision = event.get("exam_revision")
+        recorded_hash = event.get("exam_hash")
+        if recorded_revision is None and recorded_hash is None:
+            continue
+        revision_stale = recorded_revision is not None and recorded_revision != current_revision
+        hash_stale = recorded_hash is not None and recorded_hash != current_hash
+        if not (revision_stale or hash_stale):
+            continue
+        key = (recorded_revision, recorded_hash)
+        stale_counts[key] = stale_counts.get(key, 0) + 1
+    if not stale_counts:
+        return None
+    return {
+        "current_exam_revision": current_revision,
+        "current_exam_hash": current_hash,
+        "stale_revisions": [
+            {"exam_revision": revision, "exam_hash": exam_hash, "observation_count": count}
+            for (revision, exam_hash), count in sorted(
+                stale_counts.items(), key=lambda item: (item[0][0] is None, item[0][0] or 0, item[0][1] or "")
+            )
+        ],
+    }
 
 
 def _check(name: str, fn: Callable[[], tuple[str, str] | None], path: str | None = None) -> dict[str, Any]:
@@ -247,6 +297,25 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
 
     add("observation_concept_ids_known", check_observation_concept_refs)
     add("observation_target_ids_known", check_observation_concept_refs)
+
+    def check_blueprint_revision():
+        if course_issue:
+            return "warning", "skipped: course.json could not be parsed"
+        diagnostic = blueprint_revision_diagnostics(course, events)
+        if diagnostic is None:
+            return None
+        stale = ", ".join(
+            f"{item['observation_count']} at revision {item['exam_revision']}"
+            for item in diagnostic["stale_revisions"]
+        )
+        return (
+            "warning",
+            f"evidence recorded under a prior exam blueprint revision ({stale}); "
+            f"current exam.revision is {diagnostic['current_exam_revision']} - readiness "
+            "still includes this evidence",
+        )
+
+    add("blueprint_revision_consistency", check_blueprint_revision)
 
     # --- assessments and source evidence -----------------------------------
     assessments: list[dict[str, Any]] = []

@@ -16,7 +16,7 @@ ROOT = Path(__file__).parents[1]
 SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "mathematics-regression-syllabus.json"
 
 
-def proposal(observation_id, outcome="incorrect", errors=None):
+def proposal(observation_id, outcome="incorrect", errors=None, levels_revealed=None):
     return {
         "schema_version": 1,
         "observation_id": observation_id,
@@ -25,8 +25,8 @@ def proposal(observation_id, outcome="incorrect", errors=None):
         "task_type": "independent_problem",
         "outcome": outcome,
         "assistance": {
-            "requested": False,
-            "levels_revealed": [],
+            "requested": bool(levels_revealed),
+            "levels_revealed": levels_revealed or [],
             "scaffold_types": [],
             "partial_transformation_shown": False,
             "full_solution_viewed": False,
@@ -75,6 +75,83 @@ class SessionLifecycleTests(unittest.TestCase):
         first = self.cli("start")
         second = self.cli("start")
         self.assertEqual(first["session"]["session_id"], second["session"]["session_id"])
+
+    def test_end_session_mid_task_preserves_a_specific_resume_point(self):
+        self.cli("init")
+        self.cli("load-syllabus", str(SYLLABUS))
+        self.cli("start")
+        self.record(proposal("obs-mid-1", outcome="incorrect", errors=["proof_structure_error"]))
+        self.cli("end-session")
+
+        status = self.cli("status")
+        resume = status["resume_point"]
+        self.assertIsNotNone(resume)
+        self.assertEqual("chain_rule", resume["target_id"])
+        self.assertEqual("Chain rule", resume["target_title"])
+        self.assertEqual("obs-mid-1", resume["task_id"])
+        self.assertEqual("incorrect", resume["last_attempt_outcome"])
+        self.assertEqual(["proof_structure_error"], resume["last_attempt_error_tags"])
+        self.assertIn("proof structure is incomplete", resume["last_attempt_error_summaries"])
+
+    def test_resume_point_survives_a_later_session_after_end_session(self):
+        self.cli("init")
+        self.cli("load-syllabus", str(SYLLABUS))
+        self.cli("start")
+        self.record(proposal("obs-mid-2", outcome="incorrect", errors=["proof_structure_error"]))
+        self.cli("end-session")
+
+        # An arbitrary amount of time later, the learner opens the skill
+        # again; the break state must not have been wiped by the session
+        # boundary in between.
+        self.cli("start")
+        status = self.cli("status")
+        resume = status["resume_point"]
+        self.assertIsNotNone(resume)
+        self.assertEqual("chain_rule", resume["target_id"])
+        self.assertEqual("obs-mid-2", resume["task_id"])
+
+    def test_resume_point_is_absent_before_anything_is_attempted(self):
+        self.cli("init")
+        self.cli("load-syllabus", str(SYLLABUS))
+        self.cli("start")
+        status = self.cli("status")
+        self.assertIsNone(status["resume_point"])
+
+    def test_completed_task_has_no_resume_point_after_end_session(self):
+        # 8.1a: a task finished cleanly (independent correct) before the
+        # session ended must not be offered back up as "continue here" -
+        # only a genuinely interrupted task should be.
+        self.cli("init")
+        self.cli("load-syllabus", str(SYLLABUS))
+        self.cli("start")
+        result = self.record(proposal("obs-done-1", outcome="correct"))
+        self.assertTrue(result["session"]["current_task_done"])
+        self.assertEqual(
+            "choose the next budget-fitting activity", result["session"]["pending_action"]
+        )
+        self.cli("end-session")
+
+        status = self.cli("status")
+        self.assertIsNone(status["resume_point"])
+
+    def test_hinted_correct_answer_still_has_a_resume_point(self):
+        # A "correct" outcome alone is not enough to count as done - it must
+        # have been independent. A hinted success still leaves the task open
+        # (the learner has not yet demonstrated it unaided), so it must
+        # still be resumable after a break.
+        self.cli("init")
+        self.cli("load-syllabus", str(SYLLABUS))
+        self.cli("start")
+        result = self.record(
+            proposal("obs-hinted-1", outcome="correct", levels_revealed=["H1"])
+        )
+        self.assertFalse(result["session"]["current_task_done"])
+        self.cli("end-session")
+
+        status = self.cli("status")
+        resume = status["resume_point"]
+        self.assertIsNotNone(resume)
+        self.assertEqual("obs-hinted-1", resume["task_id"])
 
     def test_recurring_mistake_sessions_seen_counts_distinct_sessions(self):
         self.cli("init")

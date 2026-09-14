@@ -4,7 +4,7 @@
   "preferences": {
     "interaction_preferences": ["interactive"],
     "explanation_preferences": ["concise", "use_analogies_when_helpful"],
-    "preferred_practice_modes": ["problem_solving"],
+    "preferred_practice_modes": [],
     "explanation_length": "concise",
     "solution_policy": "delay_full_solution"
   },
