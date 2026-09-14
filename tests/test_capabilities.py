@@ -364,6 +364,14 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(20, state["evidence"]["delayed_recall_successes"])
         self.assertGreater(state["mastery"]["recall"], 0.8)
         self.assertEqual(20, state["evidence_maturity"]["retained"]["count"])
+        # Task 3 verification finding: the assertions above check
+        # evidence.transfer_successes and mastery.transfer, but
+        # evidence_maturity.transferred is a third, independent pathway
+        # (evidence_maturity.py's own _event_facets call into
+        # demonstrates_transfer()) that scheduler.py's evidence_factor
+        # reads from. Nothing previously confirmed it also stayed at zero -
+        # it does, but that was unverified, not by design left untested.
+        self.assertEqual(0, state["evidence_maturity"]["transferred"]["count"])
 
     def test_delayed_transfer_capability_grants_transfer_mastery(self):
         # The transfer credit delayed_recall used to grant by default is
@@ -498,6 +506,41 @@ class CapabilityRegistryTests(unittest.TestCase):
             with self.subTest(course=course):
                 result = reduce_learning_state(course, syllabus, [event], {})
                 self.assertEqual(0, result["targets"]["ticket-6"]["evidence"]["exam_successes"])
+
+    def test_delayed_transfer_also_counts_as_exam_success_for_ticket_list(self):
+        # Task 3 verification finding: counts_as_exam_success's code path
+        # covers both delayed_recall and delayed_transfer
+        # (capabilities.py: `self.capability_id in {"delayed_recall",
+        # "delayed_transfer"}`), but only delayed_recall's side had a test.
+        # It works for delayed_transfer too - confirmed empirically before
+        # writing this - but the claim "independent reproduction of a
+        # ticket counts as exam success" covers both capabilities, and only
+        # half of that was actually proven.
+        syllabus = {
+            "schema_version": 2,
+            "learning_targets": [
+                {"target_id": "ticket-7", "prerequisites": [], "capability_ids": ["delayed_transfer"]}
+            ],
+        }
+        event = {
+            "schema_version": 2,
+            "observation_id": "dt-exam-success",
+            "target_id": "ticket-7",
+            "task_id": "delayed-task",
+            "capability_id": "delayed_transfer",
+            "task_type": "delayed_transfer",
+            "outcome": "correct",
+            "assistance": {"levels_revealed": []},
+        }
+        ticket_list_result = reduce_learning_state(
+            {"exam": {"question_model": "ticket_list"}}, syllabus, [event], {}
+        )
+        self.assertEqual(1, ticket_list_result["targets"]["ticket-7"]["evidence"]["exam_successes"])
+
+        for course in ({}, {"exam": {"question_model": "problem_set"}}):
+            with self.subTest(course=course):
+                result = reduce_learning_state(course, syllabus, [event], {})
+                self.assertEqual(0, result["targets"]["ticket-7"]["evidence"]["exam_successes"])
 
 
 if __name__ == "__main__":
