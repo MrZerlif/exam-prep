@@ -16,6 +16,37 @@ class AssessmentCapability:
     verifier_id: str | None = None
     is_registered: bool = True
 
+    def supports_dimension(self, dimension: str) -> bool:
+        return self.is_registered and dimension in self.affected_dimensions
+
+    def requires_evidence(self, evidence: str) -> bool:
+        return self.is_registered and evidence in self.evidence_requirements
+
+    def demonstrates_transfer(self) -> bool:
+        return self.is_registered and (
+            self.supports_dimension("transfer")
+            or self.requires_evidence("transfer")
+            or self.requires_evidence("transferred")
+            or self.review_kind in {"transfer", "exam_problem"}
+            or self.capability_id in {"transfer", "exam_problem"}
+        )
+
+    def demonstrates_retention(self) -> bool:
+        return self.is_registered and (
+            self.requires_evidence("retained")
+            or self.requires_evidence("delayed_recall")
+            or self.review_kind == "delayed_recall"
+            or self.capability_id == "delayed_recall"
+        )
+
+    def counts_as_exam_success(self) -> bool:
+        return self.is_registered and (
+            self.requires_evidence("exam")
+            or self.requires_evidence("exam_problem")
+            or self.review_kind == "exam_problem"
+            or self.capability_id == "exam_problem"
+        )
+
     @classmethod
     def unknown(cls, capability_id: str) -> "AssessmentCapability":
         return cls(
@@ -43,6 +74,7 @@ class CapabilityRegistry:
     def with_defaults(cls) -> "CapabilityRegistry":
         dimensions = {
             "definition_recall": ("conceptual", "recall"),
+            "calculation": ("procedural",),
             "formula_reading": ("recall",),
             "recognition": ("conceptual", "recall"),
             "explanation": ("conceptual",),
@@ -63,6 +95,7 @@ class CapabilityRegistry:
                     response_type="structured_observation",
                     review_kind=task_type,
                     evidence_requirements=("independent",),
+                    verifier_id="math.numerical" if task_type == "calculation" else None,
                 )
                 for task_type, affected_dimensions in dimensions.items()
             }

@@ -20,7 +20,7 @@ from exam_prep_lib.storage import StudyStore  # noqa: E402
 
 ROOT = Path(__file__).parents[1]
 SCRIPT = ROOT / "skill" / "exam-prep" / "scripts" / "exam_prep.py"
-SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "example-syllabus.json"
+SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "mathematics-regression-syllabus.json"
 
 
 class ValidateCorruptCanonicalTests(unittest.TestCase):

@@ -15,7 +15,7 @@ from exam_prep_lib.storage import ObservationConflict, StudyStore  # noqa: E402
 
 
 ROOT = Path(__file__).parents[1]
-SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "example-syllabus.json"
+SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "mathematics-regression-syllabus.json"
 
 
 def proposal(observation_id, outcome="correct", task_type="independent_problem", errors=None):

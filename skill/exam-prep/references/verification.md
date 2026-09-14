@@ -1,4 +1,4 @@
-# Mathematical verification protocol
+# Mathematics-specific verification protocol
 
 The verifier is a second-pass guard against tutor arithmetic mistakes. It is
 not a substitute for checking assumptions or explaining a proof.

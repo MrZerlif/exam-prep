@@ -5,7 +5,9 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any, Iterable
 
-from .reducer import average_known_mastery
+from .capabilities import AssessmentCapability, CapabilityRegistry
+from .evidence_maturity import FACETS
+from .reducer import DIMENSIONS, average_known_mastery
 from .target_normalization import normalize_event, normalize_syllabus
 
 # Minimum interval floor so a review is never scheduled instantly/negatively
@@ -80,6 +82,16 @@ def _review_kind(task_type: str) -> str:
     }.get(task_type, "targeted_problem")
 
 
+def _event_review_kind(
+    event: dict[str, Any], capability_registry: CapabilityRegistry
+) -> str:
+    schema_version = event.get("schema_version", 1)
+    capability_id = event.get("capability_id")
+    if schema_version == 2 and capability_id is not None:
+        return capability_registry.resolve(str(capability_id)).capability.review_kind
+    return _review_kind(event.get("task_type", ""))
+
+
 def _review_status(due_at: datetime, now: datetime, interval_hours: float) -> str:
     if due_at > now:
         return "not_due"
@@ -96,6 +108,7 @@ def build_review_queue(
     syllabus: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     normalized_syllabus = normalize_syllabus(syllabus or {})
+    capability_registry = CapabilityRegistry.from_syllabus(syllabus or {})
     grouped: dict[str, list[dict[str, Any]]] = {}
     for raw_event in events:
         event = normalize_event(raw_event, normalized_syllabus)
@@ -111,13 +124,14 @@ def build_review_queue(
         last = concept_events[-1]
         outcome = last.get("outcome")
         band = _event_band(last)
+        review_kind = _event_review_kind(last, capability_registry)
         if outcome == "solution_seen" or band == "solution_seen":
             base_interval = 2
         elif outcome == "incorrect":
             base_interval = 4
         elif outcome == "partial":
             base_interval = 8
-        elif outcome == "correct" and last.get("task_type") == "delayed_recall":
+        elif outcome == "correct" and review_kind == "delayed_recall":
             base_interval = 48
         elif outcome == "correct" and band == "independent":
             base_interval = 24
@@ -157,7 +171,7 @@ def build_review_queue(
             "interval_hours": round(interval, 4),
             "lapses": lapses,
             "last_outcome": outcome,
-            "review_kind": _review_kind(last.get("task_type", "")),
+            "review_kind": review_kind,
             "review_status": _review_status(due_at, now, interval),
             "reason": ", ".join(reason_parts),
         }
@@ -178,6 +192,102 @@ def build_review_queue(
     return {"schema_version": 1, "derived_from_revision": 0, "items": items}
 
 
+def _target_capabilities(
+    metadata: dict[str, Any], syllabus: dict[str, Any]
+) -> list[AssessmentCapability]:
+    raw_ids = metadata.get("capability_ids", [])
+    if isinstance(raw_ids, str):
+        raw_ids = [raw_ids]
+    if not isinstance(raw_ids, (list, tuple)):
+        raw_ids = []
+    registry = CapabilityRegistry.from_syllabus(syllabus)
+    return [
+        registry.resolve(capability_id).capability
+        for capability_id in raw_ids
+        if registry.resolve(capability_id).capability.is_registered
+    ]
+
+
+def _required_mastery_dimensions(
+    metadata: dict[str, Any], syllabus: dict[str, Any]
+) -> tuple[str, ...] | None:
+    dimensions = {
+        dimension
+        for capability in _target_capabilities(metadata, syllabus)
+        for dimension in capability.affected_dimensions
+        if dimension in DIMENSIONS
+    }
+    if not dimensions:
+        return None
+    return tuple(dimension for dimension in DIMENSIONS if dimension in dimensions)
+
+
+def _capability_evidence_facets(
+    metadata: dict[str, Any], syllabus: dict[str, Any]
+) -> set[str]:
+    capabilities = _target_capabilities(metadata, syllabus)
+    facets = {"demonstrated"}
+    for capability in capabilities:
+        if capability.demonstrates_retention():
+            facets.add("retained")
+        if capability.demonstrates_transfer():
+            facets.add("transferred")
+    return facets
+
+
+def _evidence_confidence(
+    state: dict[str, Any], required_facets: set[str]
+) -> tuple[dict[str, float], float]:
+    maturity = state.get("evidence_maturity", {})
+    confidence = {
+        facet: min(
+            1.0,
+            max(0.0, float((maturity.get(facet) or {}).get("count", 0))) / 2.0,
+        )
+        for facet in FACETS
+    }
+    relevant = [confidence[facet] for facet in required_facets]
+    factor = 0.85 + 0.15 * (sum(relevant) / len(relevant) if relevant else 0.0)
+    return confidence, factor
+
+
+def _exam_value(metadata: dict[str, Any]) -> float:
+    return (
+        float(metadata.get("importance", 0.5))
+        * float(metadata.get("frequency", 0.5))
+        * max(1.0, float(metadata.get("expected_points", 1.0)))
+    )
+
+
+def _prerequisite_unlock_value(
+    concept_id: str,
+    targets: dict[str, dict[str, Any]],
+    concepts: dict[str, Any],
+) -> float:
+    downstream_value = 0.0
+    for target_id, metadata in targets.items():
+        if concept_id not in metadata.get("prerequisites", []):
+            continue
+        downstream_gap = max(0.0, 1.0 - _average_mastery(concepts.get(target_id, {})))
+        downstream_value += _exam_value(metadata) * downstream_gap
+    return 1.0 + min(0.5, downstream_value / 20.0)
+
+
+def _mastery_gap(
+    state: dict[str, Any], required_dimensions: tuple[str, ...] | None
+) -> float:
+    if required_dimensions is None:
+        return max(0.0, 1.0 - _average_mastery(state))
+    values = [
+        state.get("mastery", {}).get(dimension)
+        for dimension in required_dimensions
+        if state.get("mastery", {}).get(dimension) is not None
+    ]
+    if not values:
+        return max(0.0, 1.0 - _average_mastery(state))
+    return max(0.0, sum(1.0 - float(value) for value in values) / len(values))
+
+
 def compute_priority(
     concept_id: str,
     syllabus: dict[str, Any],
@@ -187,23 +297,27 @@ def compute_priority(
     now: datetime,
     budget_minutes: int,
 ) -> dict[str, Any]:
-    metadata = normalize_syllabus(syllabus).targets.get(concept_id, {})
+    normalized_syllabus = normalize_syllabus(syllabus)
+    targets = normalized_syllabus.targets
+    metadata = targets.get(concept_id, {})
     state = concepts.get(concept_id, {})
-    average = _average_mastery(state)
-    gap = max(0.0, 1.0 - average)
+    required_dimensions = _required_mastery_dimensions(metadata, syllabus)
+    gap = _mastery_gap(state, required_dimensions)
     exam = course.get("exam", {})
     exam_time = _parse_time(exam.get("date"), now + timedelta(days=7))
     days_left = max(0.0, (exam_time - now).total_seconds() / 86400)
     urgency = 1.0 + max(0.0, (7.0 - days_left) / 7.0)
-    exam_value = (
-        float(metadata.get("importance", 0.5))
-        * float(metadata.get("frequency", 0.5))
-        * max(1.0, float(metadata.get("expected_points", 1.0)))
-    )
+    exam_value = _exam_value(metadata)
     prerequisites = metadata.get("prerequisites", [])
     prerequisite_values = [_average_mastery(concepts.get(item, {})) for item in prerequisites]
     prerequisite_readiness = (
         1.0 if not prerequisite_values else 0.5 + 0.5 * (sum(prerequisite_values) / len(prerequisite_values))
+    )
+    prerequisite_unlock_value = _prerequisite_unlock_value(
+        concept_id, targets, concepts
+    )
+    evidence_confidence, evidence_factor = _evidence_confidence(
+        state, _capability_evidence_facets(metadata, syllabus)
     )
     estimated = max(1.0, float(metadata.get("estimated_learning_minutes", 30)))
     time_fit = 1.0 if estimated <= budget_minutes else max(0.1, budget_minutes / estimated)
@@ -211,17 +325,40 @@ def compute_priority(
     due = bool(review and review.get("due_at") and _parse_time(review["due_at"], now) <= now)
     due_multiplier = 1.25 if due else 1.0
     improvement = max(0.1, gap * time_fit)
-    raw_score = exam_value * gap * urgency * prerequisite_readiness * improvement / estimated
+    raw_score = (
+        exam_value
+        * gap
+        * urgency
+        * prerequisite_readiness
+        * prerequisite_unlock_value
+        * evidence_factor
+        * improvement
+        / estimated
+    )
     score = round(raw_score * due_multiplier, 6)
+    required_text = (
+        "all evidence-backed dimensions"
+        if required_dimensions is None
+        else "required dimensions " + "/".join(required_dimensions)
+    )
     prereq_text = "no prerequisites" if not prerequisites else f"prerequisite readiness {prerequisite_readiness:.2f}"
+    due_text = ", due review 1.25x" if due else ""
     reason = (
-        f"exam value {exam_value:.2f}, mastery gap {gap:.2f}, "
-        f"{prereq_text}, time fit {time_fit:.2f}"
+        f"exam value {exam_value:.2f}, mastery gap {gap:.2f} ({required_text}), "
+        f"{prereq_text}, unlock value {prerequisite_unlock_value:.2f}, "
+        f"evidence factor {evidence_factor:.2f}, time fit {time_fit:.2f}{due_text}"
     )
     exam_revision = int(exam.get("revision", course.get("exam_revision", 1)))
     return {
         "concept_id": concept_id,
         "score": score,
+        "mastery_gap": round(gap, 6),
+        "required_mastery_dimensions": (
+            list(required_dimensions) if required_dimensions is not None else []
+        ),
+        "prerequisite_unlock_value": round(prerequisite_unlock_value, 6),
+        "evidence_confidence": evidence_confidence,
+        "evidence_factor": round(evidence_factor, 6),
         "reason": reason,
         "computed_for": {
             "computed_at": now.isoformat(),

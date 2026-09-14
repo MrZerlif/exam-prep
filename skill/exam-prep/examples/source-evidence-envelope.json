@@ -12,15 +12,15 @@
       "retrieval_id": "notebooklm-retrieval-example-1",
       "confidence": 0.92,
       "source_ref": {
-        "source_id": "teacher:lecture-03",
+        "source_id": "teacher:module-1",
         "authority": "teacher_material",
         "provider": "notebooklm",
         "version": "course-pack-2026",
         "location": {
-          "page": 4,
-          "heading": "Limits"
+          "page": 2,
+          "heading": "Core definition"
         },
-        "locator": "page 4"
+        "locator": "page 2"
       }
     }
   ],

@@ -92,6 +92,53 @@ class SchedulerTests(unittest.TestCase):
             [event("correct", task_type="delayed_recall")], {}, COURSE, NOW
         )
         self.assertGreaterEqual(queue["items"]["chain_rule"]["interval_hours"], 24)
+        self.assertEqual(
+            "delayed_recall", queue["items"]["chain_rule"]["review_kind"]
+        )
+
+    def test_v2_capability_review_kind_overrides_generic_task_type(self):
+        syllabus = {
+            "schema_version": 2,
+            "learning_targets": [
+                {
+                    "target_id": "argument",
+                    "prerequisites": [],
+                    "capability_ids": ["oral_argument"],
+                }
+            ],
+            "assessment_capabilities": {
+                "oral_argument": {
+                    "affected_dimensions": ["conceptual"],
+                    "review_kind": "oral_answer",
+                }
+            },
+        }
+        v2_event = {
+            **event("correct", task_type="open_activity"),
+            "schema_version": 2,
+            "target_id": "argument",
+            "capability_id": "oral_argument",
+            "task_type": "open_activity",
+        }
+        queue = build_review_queue([v2_event], {}, COURSE, NOW, syllabus)
+        self.assertEqual("oral_answer", queue["items"]["argument"]["review_kind"])
+
+    def test_unknown_v2_capability_uses_safe_unmapped_review_kind(self):
+        syllabus = {
+            "schema_version": 2,
+            "learning_targets": [{"target_id": "argument", "prerequisites": []}],
+        }
+        v2_event = {
+            **event("correct", task_type="transfer"),
+            "schema_version": 2,
+            "target_id": "argument",
+            "capability_id": "provider:future-orals",
+            "task_type": "transfer",
+        }
+        queue = build_review_queue([v2_event], {}, COURSE, NOW, syllabus)
+        self.assertEqual(
+            "unmapped_assessment", queue["items"]["argument"]["review_kind"]
+        )
 
     def test_priority_changes_with_budget_context(self):
         concepts = {
