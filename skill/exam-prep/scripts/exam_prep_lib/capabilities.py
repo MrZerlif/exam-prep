@@ -121,12 +121,16 @@ class CapabilityRegistry:
         for key, descriptor in entries:
             if not key or not isinstance(descriptor, Mapping):
                 continue
+            raw_dimensions = descriptor.get("affected_dimensions", ())
+            if not isinstance(raw_dimensions, (list, tuple)) or any(
+                str(dimension) not in MASTERY_DIMENSIONS
+                for dimension in raw_dimensions
+            ):
+                continue
             registry.register(
                 AssessmentCapability(
                     capability_id=str(descriptor.get("capability_id") or key),
-                    affected_dimensions=tuple(
-                        str(value) for value in descriptor.get("affected_dimensions", ())
-                    ),
+                    affected_dimensions=tuple(str(value) for value in raw_dimensions),
                     response_type=str(descriptor.get("response_type", "structured_observation")),
                     review_kind=str(descriptor.get("review_kind", "custom_assessment")),
                     evidence_requirements=tuple(
@@ -156,3 +160,42 @@ class CapabilityRegistry:
     def ids(self) -> tuple[str, ...]:
         return tuple(sorted(self._capabilities))
 
+MASTERY_DIMENSIONS = (
+    "conceptual",
+    "procedural",
+    "recall",
+    "transfer",
+    "speed",
+)
+
+
+def capability_dimension_issues(document: Mapping[str, Any]) -> list[str]:
+    raw = document.get("assessment_capabilities", document.get("capabilities", {}))
+    if isinstance(raw, Mapping):
+        descriptors = raw.items()
+    elif isinstance(raw, list):
+        descriptors = (
+            (item.get("capability_id") or item.get("id"), item)
+            for item in raw
+            if isinstance(item, Mapping)
+        )
+    else:
+        return []
+    issues: list[str] = []
+    for key, descriptor in descriptors:
+        if not isinstance(descriptor, Mapping):
+            continue
+        capability_id = str(descriptor.get("capability_id") or descriptor.get("id") or key)
+        raw_dimensions = descriptor.get("affected_dimensions", ())
+        if not isinstance(raw_dimensions, (list, tuple)):
+            issues.append(
+                f"capability '{capability_id}' affected_dimensions must be an array"
+            )
+            continue
+        for dimension in raw_dimensions:
+            value = str(dimension)
+            if value not in MASTERY_DIMENSIONS:
+                issues.append(
+                    f"capability '{capability_id}' has unknown affected dimension '{value}'"
+                )
+    return issues

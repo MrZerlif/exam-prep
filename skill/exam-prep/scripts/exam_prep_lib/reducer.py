@@ -5,11 +5,12 @@ from __future__ import annotations
 from collections import defaultdict
 from typing import Any
 
-from .capabilities import CapabilityRegistry
+from .capabilities import CapabilityRegistry, MASTERY_DIMENSIONS
+from .defaults import DEFAULT_RECURRING_MISTAKE_POLICY
 from .evidence_maturity import add_event_to_maturity, empty_evidence_maturity
 from .target_normalization import normalize_event, normalize_syllabus
 
-DIMENSIONS = ("conceptual", "procedural", "recall", "transfer", "speed")
+DIMENSIONS = MASTERY_DIMENSIONS
 # Every dimension except speed always starts at a known 0.0 (every scored task
 # updates at least one of conceptual/procedural/recall/transfer). speed is the
 # odd one out: only a minority of task types touch it, and only when the CLI
@@ -52,18 +53,6 @@ MISTAKE_SUMMARIES = {
     "domain_condition_error": "missed a domain or validity condition",
     "proof_structure_error": "proof structure is incomplete",
 }
-# Configurable policy defaults for recurring-mistake classification and
-# resolution. A single occurrence is just an occurrence, not yet a pattern;
-# "recurring" requires it to show up again, either repeatedly in one session
-# or across separate sessions. Resolution requires a real clean streak so a
-# single lucky guess cannot erase the history immediately.
-DEFAULT_RECURRING_MISTAKE_POLICY = {
-    "min_count": 3,
-    "min_sessions": 2,
-    "resolve_after_clean_successes": 3,
-}
-
-
 def derive_assistance_band(assistance: dict[str, Any]) -> str:
     levels = set(assistance.get("levels_revealed", []))
     if assistance.get("full_solution_viewed") or "H5" in levels:
@@ -266,6 +255,8 @@ def reduce_learning_state(
         ):
             alpha = 0.22 * ASSISTANCE_WEIGHTS[assistance_band]
             for dimension in capability.affected_dimensions:
+                if dimension not in DIMENSIONS:
+                    continue
                 state["mastery"][dimension] = _update(
                     state["mastery"][dimension], signal, alpha
                 )

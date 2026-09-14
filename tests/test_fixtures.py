@@ -1,10 +1,12 @@
 import json
 import unittest
+import sys
 from pathlib import Path
 
 
 ROOT = Path(__file__).parents[1]
 SKILL_ROOT = ROOT / "skill" / "exam-prep"
+sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
 
 class FixtureTests(unittest.TestCase):
@@ -33,6 +35,26 @@ class FixtureTests(unittest.TestCase):
         self.assertTrue(any(item.get("prerequisites") for item in syllabus["learning_targets"]))
         self.assertTrue(all(item.get("source_refs") for item in syllabus["learning_targets"]))
 
+    def test_course_template_matches_runtime_policies(self):
+        from exam_prep_lib.defaults import default_course
+
+        template = json.loads(
+            (SKILL_ROOT / "templates" / "course.json").read_text(encoding="utf-8")
+        )
+        runtime = default_course()
+        self.assertEqual(template["scheduler"], runtime["scheduler"])
+        self.assertEqual(template["source_policy"], runtime["source_policy"])
+
+    def test_config_recurring_session_threshold_matches_runtime(self):
+        from exam_prep_lib.defaults import DEFAULT_RECURRING_MISTAKE_POLICY
+
+        config = json.loads(
+            (SKILL_ROOT / "config" / "config.template.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            DEFAULT_RECURRING_MISTAKE_POLICY["min_sessions"],
+            config["scheduler"]["recurring_mistake_sessions"],
+        )
     def test_templates_contain_no_runtime_observations(self):
         for path in (SKILL_ROOT / "templates").glob("*.json"):
             data = json.loads(path.read_text(encoding="utf-8"))

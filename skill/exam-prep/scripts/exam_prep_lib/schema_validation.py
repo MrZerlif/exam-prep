@@ -56,12 +56,38 @@ def _matches_type(value: Any, expected: str) -> bool:
     return True
 
 
-def validate_document(document: Any, schema: dict[str, Any], path: str = "$") -> None:
+def _resolve_local_ref(root_schema: dict[str, Any], reference: str) -> dict[str, Any]:
+    if not reference.startswith("#/"):
+        raise SchemaError("$", f"unsupported schema reference: {reference}")
+    current: Any = root_schema
+    for token in reference[2:].split("/"):
+        token = token.replace("~1", "/").replace("~0", "~")
+        if not isinstance(current, dict) or token not in current:
+            raise SchemaError("$", f"unresolved schema reference: {reference}")
+        current = current[token]
+    if not isinstance(current, dict):
+        raise SchemaError("$", f"schema reference is not an object: {reference}")
+    return current
+
+
+def validate_document(
+    document: Any,
+    schema: dict[str, Any],
+    path: str = "$",
+    *,
+    root_schema: dict[str, Any] | None = None,
+) -> None:
+    if root_schema is None:
+        root_schema = schema
+    if "$ref" in schema:
+        resolved = _resolve_local_ref(root_schema, schema["$ref"])
+        validate_document(document, resolved, path, root_schema=root_schema)
+        return
     if "anyOf" in schema:
         failures: list[str] = []
         for option in schema["anyOf"]:
             try:
-                validate_document(document, option, path)
+                validate_document(document, option, path, root_schema=root_schema)
                 break
             except SchemaError as exc:
                 failures.append(str(exc))
@@ -97,15 +123,15 @@ def validate_document(document: Any, schema: dict[str, Any], path: str = "$") ->
         for key, value in document.items():
             child_path = _path(path, key)
             if key in properties:
-                validate_document(value, properties[key], child_path)
+                validate_document(value, properties[key], child_path, root_schema=root_schema)
             elif additional is False:
                 raise SchemaError(child_path, "additional property is not allowed")
             elif isinstance(additional, dict):
-                validate_document(value, additional, child_path)
+                validate_document(value, additional, child_path, root_schema=root_schema)
 
     if isinstance(document, list) and isinstance(schema.get("items"), dict):
         for index, value in enumerate(document):
-            validate_document(value, schema["items"], _path(path, index))
+            validate_document(value, schema["items"], _path(path, index), root_schema=root_schema)
 
 
 def load_schema(name: str) -> dict[str, Any]:

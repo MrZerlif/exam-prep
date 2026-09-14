@@ -84,6 +84,29 @@ class StudyStore:
         self.current_path = self.state_path / "current.json"
         self._log_diagnostics = {"partial_final_line": False, "sessions_log_partial_final_line": False}
 
+    def initialization_state(self) -> tuple[str, list[str]]:
+        """Classify canonical state without creating or overwriting files."""
+        required = ("course.json", "syllabus.json")
+        missing = [
+            name
+            for name in required
+            if not (self.state_path / name).exists()
+        ]
+        if not missing:
+            return "initialized", []
+
+        meaningful_logs = (
+            self.observations_path,
+            self.assessments_path,
+            self.source_evidence_path,
+            self.sessions_log_path,
+        )
+        has_events = any(path.exists() and path.stat().st_size > 0 for path in meaningful_logs)
+        if len(missing) == len(required) and not has_events:
+            return "uninitialized", missing
+        return "incomplete", missing
+
+
     def initialize(self) -> None:
         for path in (self.root, self.state_path, self.revisions_path, self.recovery_path):
             path.mkdir(parents=True, exist_ok=True)

@@ -105,8 +105,6 @@ def resolve_workspace(
         "EXAM_PREP_WORKSPACE",
         "MATH_STUDY_WORKSPACE",
         "EXAM_PREP_PROJECT_ROOT",
-        "PROJECT_ROOT",
-        "WORKSPACE_ROOT",
     ):
         value = env.get(name)
         if value:

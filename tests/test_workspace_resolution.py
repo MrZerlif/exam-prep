@@ -36,6 +36,19 @@ class WorkspaceResolutionTests(unittest.TestCase):
             )
             self.assertEqual(env_root.resolve(), resolved)
 
+    def test_generic_host_variables_do_not_redirect_workspace(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            resolved = resolve_workspace(
+                None,
+                environment={
+                    "PROJECT_ROOT": str(root / "foreign-project"),
+                    "WORKSPACE_ROOT": str(root / "foreign-workspace"),
+                },
+                git_root=root / "git",
+                cwd=root / "cwd",
+            )
+            self.assertEqual((root / "git").resolve(), resolved)
     def test_git_root_precedes_cwd(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

@@ -9,10 +9,11 @@ raises for data problems it can describe.
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
 
+from .capabilities import capability_dimension_issues
 from .schema_validation import (
     load_schema,
     validate_document,
@@ -23,6 +24,7 @@ from .storage import StudyStore
 from .target_normalization import normalize_event, normalize_syllabus
 from .assessment import FrozenAssessment
 from .provenance import source_ref_from_mapping
+from .scheduler import _exam_time
 
 
 def _check(name: str, fn: Callable[[], tuple[str, str] | None], path: str | None = None) -> dict[str, Any]:
@@ -57,7 +59,7 @@ def _safe_read_canonical_json(path: Path) -> tuple[dict[str, Any], str | None]:
     Never raises: this is exactly the file that might be corrupt, and
     `validate` must still produce a report when it is."""
     if not path.exists():
-        return {}, None  # legitimately absent pre-init; not itself an error
+        return {}, "missing_file"
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:
@@ -85,8 +87,26 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
     syllabus_path = store.state_path / "syllabus.json"
     course, course_issue = _safe_read_canonical_json(course_path)
     syllabus, syllabus_issue = _safe_read_canonical_json(syllabus_path)
+    if (
+        course_issue == "missing_file"
+        and syllabus_issue == "missing_file"
+        and store.initialization_state()[0] == "uninitialized"
+    ):
+        return {
+            "status": "issues_found",
+            "valid": False,
+            "checks": [{
+                "name": "workspace_initialized",
+                "status": "error",
+                "detail": "course.json and syllabus.json are missing; run init",
+            }],
+            "error_count": 1,
+            "warning_count": 0,
+        }
 
     def check_course_readable():
+        if course_issue == "missing_file":
+            return "error", "missing_file: restore course.json to repair the incomplete workspace"
         if course_issue:
             return "error", course_issue
         return None
@@ -94,6 +114,8 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
     add("course_json_readable", check_course_readable, path=str(course_path))
 
     def check_syllabus_readable():
+        if syllabus_issue == "missing_file":
+            return "error", "missing_file: restore syllabus.json to repair the incomplete workspace"
         if syllabus_issue:
             return "error", syllabus_issue
         return None
@@ -120,11 +142,29 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
 
     add("syllabus_schema", check_syllabus_schema, path=str(syllabus_path))
 
+    def check_capability_dimensions():
+        issues = capability_dimension_issues(syllabus)
+        if issues:
+            return "error", "; ".join(issues)
+        return None
+
+    add("capability_dimensions", check_capability_dimensions)
+    def check_exam_datetime():
+        if course_issue:
+            return "warning", "skipped: course.json could not be parsed"
+        _exam_time(course, datetime.now(timezone.utc))
+        return None
+
+    add("exam_datetime", check_exam_datetime)
+
     def check_schema_versions():
         bad = [
             name
-            for name, doc in (("course", course), ("syllabus", syllabus))
-            if doc.get("schema_version") not in (1, 2)
+            for name, doc, issue in (
+                ("course", course, course_issue),
+                ("syllabus", syllabus, syllabus_issue),
+            )
+            if issue is None and doc.get("schema_version") not in (1, 2)
         ]
         if bad:
             return "error", f"unexpected schema_version in: {', '.join(bad)}"
@@ -411,13 +451,12 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         except FileNotFoundError:
             return None
         items = (recovered.review_queue or {}).get("items", {})
-        exam_raw = course.get("exam", {}).get("date")
-        exam_at = None
-        if exam_raw:
-            try:
-                exam_at = _parse_iso(exam_raw)
-            except ValueError:
-                pass
+        validation_now = datetime.now(timezone.utc)
+        try:
+            exam_at = _exam_time(course, validation_now)
+        except (TypeError, ValueError):
+            # The named exam_datetime check reports the actionable error.
+            exam_at = None
         bad: list[str] = []
         for concept_id, item in items.items():
             due_raw = item.get("due_at")
@@ -430,7 +469,7 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
                 continue
             if due_at and last_at and due_at < last_at:
                 bad.append(f"{concept_id} (due_at before last_review_at)")
-            if due_at and exam_at and exam_at.tzinfo and due_at.tzinfo and exam_at > datetime.now(exam_at.tzinfo) and due_at > exam_at:
+            if due_at and exam_at and exam_at.tzinfo and due_at.tzinfo and exam_at > validation_now and due_at > exam_at:
                 bad.append(f"{concept_id} (due_at scheduled after the exam)")
         if bad:
             return "error", f"review_queue timestamp problems: {', '.join(bad)}"

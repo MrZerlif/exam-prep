@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -48,6 +49,18 @@ class ProvenanceAndMaturityTests(unittest.TestCase):
         self.assertEqual({"page": 1}, notebooklm.location)
         self.assertEqual("", notebooklm.locator)
 
+    def test_source_policy_order_matches_authority_rank(self):
+        root = Path(__file__).resolve().parents[1]
+        course = json.loads(
+            (root / "skill" / "exam-prep" / "templates" / "course.json").read_text(encoding="utf-8")
+        )
+        priority = course["source_policy"]["priority_order"]
+        self.assertLess(priority.index("teacher_material"), priority.index("official_exam_list"))
+        from exam_prep_lib.provenance import AUTHORITY_RANKS
+        self.assertGreater(
+            AUTHORITY_RANKS["teacher_material"],
+            AUTHORITY_RANKS["official_exam_list"],
+        )
     def test_transfer_can_be_demonstrated_without_retention(self):
         maturity = derive_evidence_maturity(
             [

@@ -1,3 +1,4 @@
+import re
 from pathlib import Path
 import unittest
 
@@ -11,6 +12,18 @@ class SkillContractTests(unittest.TestCase):
         text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         self.assertTrue(text.startswith("---\nname: exam-prep\n"))
         self.assertLess(len(text.splitlines()), 220)
+        required_phrases = (
+            "status", "initialized", "validate-curriculum", "apply-curriculum",
+            "record-observation", "observations.jsonl", "attempt-first", "full solution",
+            "references/pedagogy.md", "references/exam-optimizer.md",
+            "references/verification.md", "references/source-of-truth.md",
+            "references/notebooklm-mcp.md",
+        )
+        for phrase in required_phrases:
+            self.assertIn(phrase, text)
+        word_count = len(re.findall(r"\S+", text))
+        self.assertGreater(word_count, 0)
+        self.assertLessEqual(word_count, 700)
 
     def test_skill_mentions_engine_owned_evidence_boundary(self):
         text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")

@@ -8,7 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
-from .capabilities import CapabilityRegistry
+from .capabilities import CapabilityRegistry, capability_dimension_issues
+from .defaults import default_course, default_learner, default_session
 from .provenance import SourceRef, normalize_source_refs
 from .reducer import reduce_learning_state
 from .scheduler import build_review_queue
@@ -137,61 +138,15 @@ def _read_runtime_json(store: StudyStore, name: str, default: dict[str, Any]) ->
 
 
 def _default_course() -> dict[str, Any]:
-    return {
-        "schema_version": 2,
-        "course_id": "exam-prep-course",
-        "title": "Exam preparation",
-        "exam": {
-            "date": None,
-            "timezone": "UTC",
-            "format": "mixed",
-            "expected_total_points": 100,
-            "revision": 1,
-        },
-        "time_budget": {"default_minutes": 25, "available_minutes_by_day": {}},
-        "source_policy": {
-            "priority_order": [
-                "teacher_material",
-                "official_exam_list",
-                "lecture_notes",
-                "problem_sets",
-                "general_reference",
-            ],
-            "conflicts": "flag_for_user",
-        },
-        "scheduler": {
-            "mode": "exam_cram",
-            "max_review_interval_hours": 72,
-            "review_warmup_limit": 3,
-            "recurring_mistake_policy": {
-                "min_count": 3,
-                "min_sessions": 2,
-                "resolve_after_clean_successes": 3,
-            },
-        },
-    }
+    return default_course()
 
 
 def _default_learner() -> dict[str, Any]:
-    return {
-        "schema_version": 1,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
-        "preferences": {},
-        "stable_patterns": [],
-    }
+    return default_learner(datetime.now(timezone.utc).isoformat())
 
 
 def _default_session() -> dict[str, Any]:
-    return {
-        "schema_version": 2,
-        "session_id": "",
-        "phase": "idle",
-        "pending_action": "load a syllabus and start a session",
-        "current_target_id": None,
-        "current_task": None,
-        "time_budget_minutes": 25,
-    }
-
+    return default_session()
 
 def _target_list(proposal: Mapping[str, Any]) -> list[dict[str, Any]]:
     raw = proposal.get("learning_targets", proposal.get("targets", []))
@@ -332,6 +287,7 @@ def validate_curriculum_proposal(
             coverage_gaps.append(f"target {target_id!r} has no source refs")
 
     descriptors = _capability_descriptors(proposal)
+    issues.extend(capability_dimension_issues(proposal))
     raw_descriptors = proposal.get("assessment_capabilities", proposal.get("capabilities", []))
     if isinstance(raw_descriptors, list) and any(
         not isinstance(item, Mapping) for item in raw_descriptors

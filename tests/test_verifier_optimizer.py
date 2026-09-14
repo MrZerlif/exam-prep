@@ -62,6 +62,8 @@ class VerifierAndOptimizerTests(unittest.TestCase):
                 ),
                 encoding="utf-8",
             )
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, main(["--workspace", tmp, "init"]))
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 code = main(["--workspace", tmp, "verify", str(request_path)])
@@ -101,7 +103,7 @@ class VerifierAndOptimizerTests(unittest.TestCase):
         self.assertEqual("derivatives", ranked[0]["target_id"])
         self.assertTrue(ranked[0]["coverage_gap"])
         self.assertEqual("limits", ranked[1]["target_id"])
-        self.assertEqual(5, ranked[1]["source_authority_rank"])
+        self.assertEqual(6, ranked[1]["source_authority_rank"])
 
     def test_optimizer_uses_capability_required_mastery_dimensions(self):
         syllabus = {

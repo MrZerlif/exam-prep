@@ -233,6 +233,21 @@ class CurriculumTests(unittest.TestCase):
         ]
         validate_curriculum_proposal(proposal)
 
+    def test_curriculum_rejects_unknown_mastery_dimension(self):
+        proposal = valid_proposal()
+        proposal["assessment_capabilities"] = [{
+            "capability_id": "custom",
+            "affected_dimensions": ["knowledge"],
+            "response_type": "free_text",
+            "review_kind": "custom",
+        }]
+
+        with self.assertRaises(CurriculumValidationError) as raised:
+            validate_curriculum_proposal(proposal)
+
+        self.assertTrue(
+            any("unknown affected dimension" in issue for issue in raised.exception.issues)
+        )
     def test_exam_question_mapping_is_error_but_coverage_gaps_are_diagnostics(self):
         proposal = valid_proposal()
         proposal["exam_questions"][0]["target_ids"] = ["missing"]

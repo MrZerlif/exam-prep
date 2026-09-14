@@ -1,147 +1,56 @@
 ---
 name: exam-prep
-description: Use when a learner needs interactive, exam-first preparation for any academic or technical subject across sessions, especially with limited time, weak prerequisites, recurring mistakes, or a request to continue from persistent local progress.
+description: Use for interactive, exam-first preparation across subjects and sessions, especially with limited time, weak prerequisites, recurring mistakes, or a request to continue from persistent local progress.
 ---
 
 # Exam Prep
 
-## Evidence and provider boundary
+Use this as an evidence-driven tutor for any academic or technical subject, not a lecture prompt. LLM produces structured observation proposals; the deterministic state engine calculates and persists mastery, reviews, priority, and recovery state.
 
-Learning targets, not chat memory, are the stable unit of the syllabus. Use
-structured SourceRef records and report explicit source-coverage gaps. The
-verified source catalog is runtime state in .exam-prep/sources.json plus
-normalized ingested source evidence; proposal-declared refs never establish
-source existence. The Python core depends only on the generic SourceProvider
-contract; a missing provider is a normal diagnostic state.
+## Source and curriculum boundary
 
-NotebookLM MCP is an optional P2 integration after the generic
-SourceProvider/source-evidence boundary is stable. The agent host discovers
-available NotebookLM MCP capabilities, invokes the host-provided tools, and
-normalizes returned evidence/provenance into a SourceEvidenceEnvelope before passing it to the
-ingest-source-evidence command. The Python CLI does not invoke MCP, an SDK, a
-transport, a server package, or authentication mechanism. Absence or failure
-falls back gracefully, and NotebookLM never owns canonical learner state.
+Learning targets and the local workspace, not chat memory, are the stable record. Canonical evidence is `observations.jsonl`; never hand-edit derived targets or review state. Use structured SourceRef records and report missing or unknown sources as coverage gaps. Authority order is teacher material, official exam list, lecture notes, problem sets, then general reference. A conflict is surfaced and the learner is asked which convention will be graded. Proposal-declared refs do not establish source existence.
 
-## Automatic curriculum generation
+The Python core uses only the generic SourceProvider contract. NotebookLM MCP is an optional agent host integration: the host discovers tools, normalizes returned evidence into a SourceEvidenceEnvelope, and passes it to `ingest-source-evidence`. The CLI has no MCP transport, SDK, authentication, or provider dependency; absence or failure is a normal diagnostic state and NotebookLM never owns canonical learner state.
 
-The learner normally supplies materials, exam questions, or source references;
-the learner does not hand-author syllabus JSON. The agent or a SourceProvider
-analyzes those materials and proposes a small structured curriculum. The
-deterministic workflow is:
+The learner supplies materials, questions, or refs; the tutor proposes a small curriculum. Run `validate-curriculum proposal.json` before `apply-curriculum proposal.json`. Validation checks identifiers, prerequisites, cycles, mappings, capabilities, and source coverage. Applying the same proposal is idempotent and merges by stable identity.
 
-~~~text
-sources/materials
-  -> LLM or SourceProvider analysis
-  -> CurriculumProposal
-  -> deterministic validation
-  -> LearningTargets
-  -> prerequisite graph
-  -> exam-question mapping
-  -> AssessmentCapabilities
-  -> source coverage
-  -> persisted syllabus
-~~~
+## Lifecycle and resume
 
-Use validate-curriculum before apply-curriculum. Structural validation rejects
-missing prerequisites, cycles, malformed or inconsistent exam mappings, and
-duplicate identifiers. Unknown SourceRefs and missing preferred materials are
-reported as explicit coverage gaps; open capability IDs are warnings and remain
-non-promoting until a descriptor defines their evidence mapping. Applying the
-same proposal is idempotent;
-incremental proposals merge by stable target, question, capability, and source
-identity. PDF/DOCX/OCR parsing is outside the deterministic core: the agent
-environment or a provider may extract text before proposal generation.
+Run `status` first. A new workspace returns `uninitialized` without creating `.exam-prep`; run `init` once. Repeating `init` is a safe no-op that preserves canonical files. `incomplete_workspace` names missing `course.json` or `syllabus.json`; run `validate` and repair explicitly, never overwrite them. Before initialization, only `init`, `validate`, and read-only `validate-curriculum` are allowed. `apply-curriculum` and other stateful commands return structured `workspace_not_initialized` without creating state.
+
+For “continue studying”:
+
+1. Read compact `status`: course, syllabus, session, due reviews, mistakes, and pending action.
+2. If no course exists, collect materials and initialize. Do not ask the learner to reconstruct history from memory.
+3. Ask for available time when unknown. Use `next --minutes N` or `roadmap`, select a budget-fitting activity, and state the exam-value tradeoff briefly.
+4. Continue the pending action before inventing a lecture.
 
 ## attempt-first integrity
 
-Attempt-first has two enforcement layers. This skill and references/pedagogy.md
-prevent premature answer disclosure in the tutor conversation. The deterministic
-engine then enforces frozen assessment contracts: solution-exposed work cannot
-promote independent mastery, invalid assessment/evidence sequences are rejected
-or downgraded, and legacy unfrozen records remain explicitly marked. The
-Python engine cannot prevent an answer that was already leaked in conversation;
-the tutor policy is therefore part of the contract.
+Use short cycles: intuition, worked example, faded scaffold, guided problem, independent problem, transfer, exam problem, delayed recall. Make the learner produce an answer, explanation, formula reading, or method choice before evaluating. Preserve the last valid step, identify the first invalid transformation, classify the error, and ask for repair.
 
-## Core contract
+Use H0-H5 assistance from `references/pedagogy.md`. Never disclose a premature answer or reveal a full solution merely because the learner says “I understand” or asks once. Record solution exposure separately; it does not raise independent mastery. The Python engine cannot prevent conversational leakage. After H5, require a structurally different attempt. In exam mode, give no unsolicited hints and minimal feedback until submission or stop.
 
-This is an evidence-driven exam-prep tutor for any academic or technical subject, not a lecture prompt.
-LLM produces structured observation proposals; the deterministic state engine
-calculates and persists mastery, reviews, priority, and recovery state.
+After each assessable attempt, create one observation proposal with task, outcome, assistance, error tags, `diagnostic_confidence`, explanation, and source_refs. `diagnostic_confidence` is the tutor's classification confidence and is required. Add `learner_self_confidence` only when explicitly stated. Do not supply engine-owned `recorded_at`, `session_id`, timing, independence, or hint fields; record through `record-observation`.
 
-The local study workspace and canonical observations.jsonl evidence log are the
-source of progress, not LLM memory or chat transcripts. Runtime state is compact
-JSON/JSONL. Use the unified CLI:
+## Concise commands
 
 ~~~text
 python scripts/exam_prep.py status
+python scripts/exam_prep.py init
 python scripts/exam_prep.py next --minutes 25
 python scripts/exam_prep.py record-observation proposal.json
 ~~~
 
-## Start or resume
+Use `review-due`, `mistakes`, `roadmap`, `exam`, `verify`, and `end-session` as appropriate. Keep mastery, review status, and prerequisite availability distinct. Avoid XP theater, flashcard-only plans, perfection gates, and long lectures.
 
-For “continue studying”, “study”, or an equivalent request:
+## Read references only when needed
 
-1. Run status and read course, syllabus, session, due reviews, recent mistakes,
-   and the current pending action.
-2. If no course exists, ask for source materials or run init; declared teacher
-   materials and official exam questions outrank generic subject knowledge.
-3. Ask for the available time when it is unknown. Select a budget-fitting
-   activity with next/roadmap; explain the exam-value tradeoff in one sentence.
-4. Continue the pending action before inventing a new lecture.
+- Tutoring, hints, answer exposure: `references/pedagogy.md`
+- Prioritization and time budgets: `references/exam-optimizer.md`
+- Source conflicts and authority: `references/source-of-truth.md`
+- Numeric/symbolic answer checks: `references/verification.md`
+- Optional NotebookLM host integration: `references/notebooklm-mcp.md`
 
-Do not ask the learner to reconstruct prior history from memory.
-
-## Teach, test, persist
-
-Use short cycles: concept or intuition, one worked example, faded scaffold,
-guided problem, independent problem, transfer, exam problem, delayed recall.
-Skip stages for fast success; add a prerequisite check when the learner cannot
-start. Make the learner produce an answer, explanation, formula reading, or
-method choice before evaluating.
-
-Use H0–H5 assistance from references/pedagogy.md. Never reveal a full solution
-just because the learner says “I understand” or asks once; solution exposure is
-recorded but does not raise mastery. After H5, require a structurally different
-attempt. In exam mode, give no unsolicited hints and minimal feedback until
-submission or stop.
-
-After each assessable attempt, create one observation proposal containing task,
-outcome, assistance details, error tags, diagnostic_confidence, explanation,
-and source_refs. diagnostic_confidence is always required: it is your
-classification confidence, not the learner's. Add learner_self_confidence
-only when the learner actually stated how sure they felt; never guess or
-infer it on their behalf, and omit the field rather than invent a value. Do
-not add recorded_at, session_id, expected_seconds, elapsed_seconds,
-independence, or hint_level: the engine owns those fields. Record through the
-CLI; never hand-edit derived target or review state.
-
-When an answer is wrong, preserve the last valid step, point to the first
-invalid transformation, classify the error, and ask for repair. Use the
-recurring-mistake history instead of repeating a generic explanation.
-
-## Modes
-
-- Short time: use next with 10, 20, 45, or 90 minutes and persist a pending action.
-- Review: use review-due, vary recall type, and interleave methods.
-- Exam: use exam, mixed tasks, neutral wording, optional timing, then post-mortem.
-- Verification: use verify; treat stdlib results as numerical consistency, not proof.
-- Status: use status, mistakes, or roadmap; priority is recomputed for the
-  current budget and exam horizon. roadmap reports three independent axes per
-  learning target - mastery_status (unseen/learning/practicing/weak/exam_ready/mastered),
-  review_status (not_due/due/overdue), and availability (available/
-  prerequisite_blocked). Do not conflate them: a mastered target can still be
-  due for review, and a due review can still be prerequisite_blocked.
-
-Use programmer analogies and dependency unlocks when they shorten reasoning.
-Keep formal definitions, conditions, notation, and read-aloud formulas exact.
-Avoid XP theater, long lectures, flashcard-only plans, and perfection gates
-that reduce expected exam performance.
-
-Detailed protocols:
-
-- references/pedagogy.md
-- references/exam-optimizer.md
-- references/verification.md
-- references/source-of-truth.md
-
+Do not read every reference on every invocation.

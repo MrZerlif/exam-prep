@@ -140,6 +140,13 @@ class SchedulerTests(unittest.TestCase):
             "unmapped_assessment", queue["items"]["argument"]["review_kind"]
         )
 
+    def test_priority_uses_configured_exam_timezone_for_naive_dates(self):
+        course = dict(COURSE)
+        course["exam"] = {"date": "2026-09-20T09:00:00", "timezone": "+03:00"}
+        result = compute_priority(
+            "chain_rule", SYLLABUS, {"chain_rule": concept({})}, {}, course, NOW, 25
+        )
+        self.assertIn("score", result)
     def test_priority_changes_with_budget_context(self):
         concepts = {
             "chain_rule": concept(

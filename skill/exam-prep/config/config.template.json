@@ -10,7 +10,7 @@
     "mode": "exam_cram",
     "max_review_interval_hours": 72,
     "review_warmup_limit": 3,
-    "recurring_mistake_sessions": 3
+    "recurring_mistake_sessions": 2
   },
   "verification": {
     "finite_difference_tolerance": 0.0001,

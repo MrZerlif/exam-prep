@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from .provenance import normalize_source_refs
+from .defaults import default_course, default_learner, default_session
 from .reducer import reduce_learning_state
 from .scheduler import build_review_queue
 from .storage import StudyStore
@@ -269,70 +270,40 @@ def migrate_legacy_workspace(legacy_workspace: str | Path) -> MigrationResult:
     course["schema_version"] = 2
     course.setdefault("course_id", "migrated-math-study")
     course.setdefault("title", "Migrated exam preparation")
-    course.setdefault(
-        "exam",
-        {
-            "date": None,
-            "timezone": "UTC",
-            "format": "mixed",
-            "expected_total_points": 100,
-            "revision": 1,
-        },
-    )
-    course.setdefault("time_budget", {"default_minutes": 25, "available_minutes_by_day": {}})
-    course.setdefault(
-        "source_policy",
-        {
-            "priority_order": [
-                "teacher_material",
-                "official_exam_list",
-                "lecture_notes",
-                "problem_sets",
-                "general_reference",
-            ],
-            "conflicts": "flag_for_user",
-        },
-    )
-    course.setdefault(
-        "scheduler",
-        {
-            "mode": "exam_cram",
-            "max_review_interval_hours": 72,
-            "review_warmup_limit": 3,
-            "recurring_mistake_policy": {
-                "min_count": 3,
-                "min_sessions": 2,
-                "resolve_after_clean_successes": 3,
-            },
-        },
-    )
+    runtime_course = default_course()
+    course.setdefault("exam", runtime_course["exam"])
+    course.setdefault("time_budget", runtime_course["time_budget"])
+    course.setdefault("source_policy", runtime_course["source_policy"])
+    course.setdefault("scheduler", runtime_course["scheduler"])
     learner = dict(_read_json(source / "learner.json", {}))
-    learner.setdefault("schema_version", 1)
+    learner_defaults = default_learner(datetime.now(timezone.utc).isoformat())
+    learner.setdefault("schema_version", learner_defaults["schema_version"])
     if not isinstance(learner.get("updated_at"), str):
-        learner["updated_at"] = datetime.now(timezone.utc).isoformat()
-    preferences = dict(learner.get("preferences", {}))
+        learner["updated_at"] = learner_defaults["updated_at"]
+    preferences = dict(learner.get("preferences", learner_defaults["preferences"]))
     if "learning_style" in preferences:
         preferences["legacy_learning_style"] = preferences.pop("learning_style")
     learner["preferences"] = preferences
-    learner.setdefault("stable_patterns", [])
+    learner.setdefault("stable_patterns", learner_defaults["stable_patterns"])
     session = dict(_read_json(source / "session.json", {}))
+    session_defaults = default_session()
     old_current_concept = session.pop("current_concept", None)
     if session.get("current_target_id") is None and old_current_concept is not None:
         session["current_target_id"] = id_map.get(
             str(old_current_concept), f"legacy:math-study:{old_current_concept}"
         )
         session["legacy_current_concept"] = str(old_current_concept)
-    session.setdefault("schema_version", 2)
+    session.setdefault("schema_version", session_defaults["schema_version"])
     if not isinstance(session.get("session_id"), str):
         session["session_id"] = ""
     if session.get("phase") not in {"idle", "study", "exam"}:
-        session["phase"] = "idle"
+        session["phase"] = session_defaults["phase"]
     if not isinstance(session.get("pending_action"), str):
-        session["pending_action"] = "resume with start"
-    session.setdefault("current_target_id", None)
-    session.setdefault("current_task", None)
+        session["pending_action"] = session_defaults["pending_action"]
+    session.setdefault("current_target_id", session_defaults["current_target_id"])
+    session.setdefault("current_task", session_defaults["current_task"])
     if not isinstance(session.get("time_budget_minutes"), int) or session["time_budget_minutes"] < 0:
-        session["time_budget_minutes"] = 25
+        session["time_budget_minutes"] = session_defaults["time_budget_minutes"]
     source_revision_metadata = _legacy_revision_metadata(source)
 
     staging_root = Path(tempfile.mkdtemp(prefix=".exam-prep-migration-", dir=workspace))

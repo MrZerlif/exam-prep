@@ -7,11 +7,46 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-pre
 from exam_prep_lib.capabilities import (  # noqa: E402
     AssessmentCapability,
     CapabilityRegistry,
+    MASTERY_DIMENSIONS,
+    capability_dimension_issues,
 )
 from exam_prep_lib.reducer import reduce_learning_state  # noqa: E402
 
 
 class CapabilityRegistryTests(unittest.TestCase):
+    def test_unknown_registered_dimension_is_reported(self):
+        syllabus = {
+            "assessment_capabilities": {
+                "custom": {"affected_dimensions": ["knowledge"]}
+            }
+        }
+        self.assertEqual(
+            ["capability 'custom' has unknown affected dimension 'knowledge'"],
+            capability_dimension_issues(syllabus),
+        )
+
+    def test_scalar_affected_dimensions_is_rejected(self):
+        syllabus = {
+            "assessment_capabilities": {
+                "custom": {"affected_dimensions": "conceptual"}
+            }
+        }
+        issues = capability_dimension_issues(syllabus)
+        self.assertTrue(any("must be an array" in issue for issue in issues))
+
+    def test_open_capability_without_descriptor_remains_allowed(self):
+        syllabus = {
+            "learning_targets": [
+                {"target_id": "t1", "capability_ids": ["proof:short"]}
+            ]
+        }
+        self.assertEqual([], capability_dimension_issues(syllabus))
+
+    def test_mastery_dimensions_are_the_canonical_runtime_keys(self):
+        self.assertEqual(
+            ("conceptual", "procedural", "recall", "transfer", "speed"),
+            MASTERY_DIMENSIONS,
+        )
     def test_unknown_capability_is_recordable_but_non_promoting(self):
         registry = CapabilityRegistry.with_defaults()
         resolution = registry.resolve("provider:new_capability")
@@ -51,6 +86,38 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(0.0, state["mastery"]["transfer"])
         self.assertEqual(["provider:unknown"], result["unmapped_capability_events"])
 
+
+    def test_invalid_descriptor_is_non_promoting_like_an_unknown_capability(self):
+        syllabus = {
+            "schema_version": 2,
+            "learning_targets": [
+                {
+                    "target_id": "limits",
+                    "prerequisites": [],
+                    "capability_ids": ["broken:custom"],
+                }
+            ],
+            "assessment_capabilities": {
+                "broken:custom": {"affected_dimensions": ["knowledge"]}
+            },
+        }
+        event = {
+            "schema_version": 2,
+            "observation_id": "obs-invalid-descriptor",
+            "target_id": "limits",
+            "task_id": "limits-task",
+            "capability_id": "broken:custom",
+            "task_type": "open_activity",
+            "outcome": "correct",
+            "assistance": {"levels_revealed": []},
+        }
+
+        result = reduce_learning_state({}, syllabus, [event], {})
+
+        state = result["targets"]["limits"]
+        self.assertEqual(0, state["evidence"]["independent_successes"])
+        self.assertEqual(0, state["evidence_maturity"]["demonstrated"]["count"])
+        self.assertEqual("unseen", state["mastery_status"])
     def test_custom_transfer_capability_drives_counters_maturity_and_status(self):
         syllabus = {
             "schema_version": 2,

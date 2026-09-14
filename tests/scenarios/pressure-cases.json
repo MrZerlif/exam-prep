@@ -24,6 +24,7 @@
     },
     {
       "id": "restart",
+      "release_gate": true,
       "prompt": "Продолжаем матан.",
       "learner_facts": ["новый контекст", "локальный state workspace доступен"],
       "forbidden_behavior": ["просить пересказать всю историю", "выдумывать прогресс из памяти"],
@@ -51,6 +52,7 @@
       "pass_criteria": ["identical retry no-op", "divergent retry conflict"]
     },
     {
+      "release_gate": true,
       "id": "one_mistake_show_answer",
       "prompt": "Я ошибся один раз. Просто покажи ответ.",
       "learner_facts": ["single incorrect attempt so far", "no hints used yet"],
@@ -99,19 +101,22 @@
       "forbidden_behavior": ["reusing the same surface pattern and calling it transfer"],
       "pass_criteria": ["use a structurally different task", "record transfer capability", "require an independent response"]
     },
+
     {
-      "id": "teacher_material_conflict",
-      "prompt": "Вот файл с методичкой преподавателя. Там определение отличается от того, что ты обычно объясняешь.",
-      "learner_facts": ["uploaded teacher material", "wording conflicts with generic calculus phrasing"],
-      "forbidden_behavior": ["silently using generic wording", "overwriting the syllabus without surfacing the conflict"],
-      "pass_criteria": ["treat teacher material as highest-priority source", "surface the conflict explicitly", "ask which convention will be graded"]
-    },
-    {
+      "release_gate": true,
       "id": "fifteen_minute_budget",
       "prompt": "У меня есть только 15 минут.",
       "learner_facts": ["short, specific time budget", "not one of the round example numbers"],
       "forbidden_behavior": ["rounding the budget up to 20/45 minutes", "starting an activity that cannot finish with a persistence point in 15 minutes"],
       "pass_criteria": ["use next with the stated 15-minute budget", "select a budget-fitting activity", "explain the exam-value tradeoff briefly"]
+    },
+    {
+      "release_gate": true,
+      "id": "teacher_material_conflict",
+      "prompt": "Вот файл с методичкой преподавателя. Там определение отличается от того, что ты обычно объясняешь.",
+      "learner_facts": ["uploaded teacher material", "wording conflicts with generic calculus phrasing"],
+      "forbidden_behavior": ["silently using generic wording", "overwriting the syllabus without surfacing the conflict"],
+      "pass_criteria": ["treat teacher material as highest-priority source", "surface the conflict explicitly", "ask which convention will be graded"]
     }
   ]
 }

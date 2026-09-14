@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone, tzinfo
+import re
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Any, Iterable
 
 from .capabilities import AssessmentCapability, CapabilityRegistry
@@ -27,13 +29,49 @@ def _parse_time(value: str | None, fallback: datetime) -> datetime | None:
     return parsed
 
 
+def _configured_timezone(value: str | None) -> tzinfo:
+    """Return the configured exam timezone without depending on host locale."""
+    if value in (None, "", "UTC", "Z"):
+        return timezone.utc
+    if not isinstance(value, str):
+        raise ValueError(f"invalid timezone: {value!r}")
+
+    match = re.fullmatch(r"([+-])(\d{2}):(\d{2})", value)
+    if match:
+        sign = 1 if match.group(1) == "+" else -1
+        hours = int(match.group(2))
+        minutes = int(match.group(3))
+        if hours > 23 or minutes > 59:
+            raise ValueError(f"invalid timezone offset: {value}")
+        return timezone(sign * timedelta(hours=hours, minutes=minutes))
+
+    try:
+        return ZoneInfo(value)
+    except ZoneInfoNotFoundError as exc:
+        raise ValueError(
+            f"timezone {value!r} is unavailable; use an offset-aware exam date"
+        ) from exc
+
+
 def _exam_time(course: dict[str, Any], now: datetime) -> datetime | None:
-    """The exam datetime if course.exam.date is set and parseable, else None
-    (missing exam date - no horizon to compress reviews against)."""
-    raw = course.get("exam", {}).get("date")
+    """Return the configured exam instant, or ``None`` when no date exists."""
+    exam = course.get("exam", {})
+    if not isinstance(exam, dict):
+        raise ValueError("exam must be an object")
+    raw = exam.get("date")
     if not raw:
         return None
-    return _parse_time(raw, now)
+    if not isinstance(raw, str):
+        raise ValueError("exam.date must be an ISO datetime string")
+
+    try:
+        parsed = datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise ValueError(f"invalid exam.date: {raw!r}") from exc
+    if parsed.tzinfo is not None:
+        return parsed
+    configured_tz = _configured_timezone(exam.get("timezone"))
+    return parsed.replace(tzinfo=configured_tz)
 
 
 def _urgency_cap_hours(remaining_hours: float) -> float:
@@ -304,7 +342,9 @@ def compute_priority(
     required_dimensions = _required_mastery_dimensions(metadata, syllabus)
     gap = _mastery_gap(state, required_dimensions)
     exam = course.get("exam", {})
-    exam_time = _parse_time(exam.get("date"), now + timedelta(days=7))
+    exam_time = _exam_time(course, now)
+    if exam_time is None:
+        exam_time = now + timedelta(days=7)
     days_left = max(0.0, (exam_time - now).total_seconds() / 86400)
     urgency = 1.0 + max(0.0, (7.0 - days_left) / 7.0)
     exam_value = _exam_value(metadata)
