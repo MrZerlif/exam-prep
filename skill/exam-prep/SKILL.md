@@ -34,27 +34,13 @@ Use H0-H5 assistance from `references/pedagogy.md`. Never disclose a premature a
 
 After each assessable attempt, create one observation proposal with task, outcome, assistance, error tags, `diagnostic_confidence`, explanation, and source_refs. `diagnostic_confidence` is the tutor's classification confidence and is required. Add `learner_self_confidence` only when explicitly stated. Do not supply engine-owned `recorded_at`, `session_id`, timing, independence, or hint fields; record through `record-observation`.
 
-## Concise commands
-
-~~~text
-python scripts/exam_prep.py status
-python scripts/exam_prep.py init
-python scripts/exam_prep.py next --minutes 25
-python scripts/exam_prep.py record-observation proposal.json
-~~~
-
-Use `review-due`, `mistakes`, `roadmap`, `exam`, `verify`, `rebuild`, and `end-session` as appropriate; `migrate --from-math-study` is a one-time legacy import. Keep mastery, review status, and prerequisite availability distinct. Avoid XP theater, flashcard-only plans, perfection gates, and long lectures.
-
-## Authoring exam material
-
-Freeze exam material with `freeze-assessment` (one) or `mint-assessments` (a batch; package format in `references/exam-optimizer.md`) before a mock; each entry is `purpose`-tagged and pool-isolated. Adjust `course.exam` with `update-exam-blueprint`, never by hand.
-
 ## Read references only when needed
 
+- Every command, when to call it, package formats: `references/commands.md`
 - Tutoring, hints, answer exposure: `references/pedagogy.md`
 - Prioritization and time budgets: `references/exam-optimizer.md`
 - Source conflicts and authority: `references/source-of-truth.md`
 - Numeric/symbolic answer checks: `references/verification.md`
 - Optional NotebookLM host integration: `references/notebooklm-mcp.md`
 
-Do not read every reference on every invocation.
+Do not read every reference on every invocation. Keep mastery, review status, and prerequisite availability distinct. Avoid XP theater, flashcard-only plans, perfection gates, and long lectures.
