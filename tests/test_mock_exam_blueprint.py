@@ -28,7 +28,7 @@ SYLLABUS = {
 }
 
 
-def spec(assessment_id, prompt):
+def spec(assessment_id, prompt, purpose="mock"):
     return {
         "assessment_id": assessment_id,
         "target_id": "tickets-course",
@@ -42,7 +42,7 @@ def spec(assessment_id, prompt):
         "difficulty": 0.4,
         "question_version": 1,
         "rubric_version": 1,
-        "purpose": "mock",
+        "purpose": purpose,
     }
 
 
@@ -220,6 +220,33 @@ class MockExamBlueprintTests(unittest.TestCase):
         self.assertEqual(20, len(ids))
         self.assertEqual({f"ticket-{i}" for i in range(1, 21)}, set(ids))
         self.assertNotEqual(sorted(ids), ids)
+
+    def test_held_out_assessments_are_excluded_from_the_mock_draw(self):
+        # Task 3 verification finding: exam filters strictly on
+        # purpose == "mock" (`item.get("purpose") == "mock"`), so held_out
+        # material - reserved, not yet in active use - should never be
+        # drawn into an actual mock. Confirmed correct empirically before
+        # writing this; no test previously checked it, so a future change
+        # to that filter (e.g. loosening it to include held_out) could
+        # regress silently.
+        syllabus_path = self.write("syllabus.json", SYLLABUS)
+        self.cli("init")
+        self.cli("load-syllabus", str(syllabus_path))
+        batch = {
+            "assessments": [
+                spec("mock-1", "Mock ticket one."),
+                spec("mock-2", "Mock ticket two."),
+                spec("held-1", "Held-out ticket one.", purpose="held_out"),
+                spec("held-2", "Held-out ticket two.", purpose="held_out"),
+            ]
+        }
+        batch_path = self.write("batch.json", batch)
+        self.cli("mint-assessments", str(batch_path))
+        self.set_exam_blueprint(question_count=4)
+
+        result = self.cli("exam")
+        ids = {t["assessment_id"] for t in result["tickets"]}
+        self.assertEqual({"mock-1", "mock-2"}, ids)
 
 
 if __name__ == "__main__":

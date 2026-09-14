@@ -114,6 +114,37 @@ class AssessmentMintingTests(unittest.TestCase):
         self.assertIn("question_hash", rejection["error"])
         self.assertIn("practice", rejection["error"])
 
+    def test_pool_isolation_catches_a_conflict_within_a_single_batch(self):
+        # Task 3 verification finding: the existing pool-isolation test
+        # above only exercises a conflict *across* two separate
+        # mint-assessments calls. Whether the guard also catches two
+        # colliding entries within the *same* call - where the second
+        # entry's check must see the first entry's just-appended record -
+        # was unverified. It works (append_assessment re-reads the store
+        # fresh on every entry, including ones written earlier in this same
+        # loop), but nothing proved it. Checks both directions in one call.
+        self.cli("init")
+        result = self.mint(
+            {
+                "assessments": [
+                    spec("intra-practice", "Same content, one batch call.", purpose="practice"),
+                    spec("intra-mock-collision", "Same content, one batch call.", purpose="mock"),
+                    spec("intra-mock-first", "Reverse-order same content.", purpose="mock"),
+                    spec("intra-practice-collision", "Reverse-order same content.", purpose="practice"),
+                ]
+            }
+        )
+        self.assertEqual(2, result["minted_count"])
+        self.assertEqual(
+            {"intra-practice", "intra-mock-first"},
+            {item["assessment_id"] for item in result["minted"]},
+        )
+        self.assertEqual(2, result["rejected_count"])
+        self.assertEqual(
+            {"intra-mock-collision", "intra-practice-collision"},
+            {item["assessment_id"] for item in result["rejected"]},
+        )
+
     def test_rejected_entry_names_a_schema_problem_too(self):
         self.cli("init")
         broken = spec("ticket-7", "State the definition of a limit.")
