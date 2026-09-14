@@ -18,6 +18,29 @@ heavily scaffolded; H5 or full_solution_viewed solution_seen. Do not accept
 independence or hint_level as input fields. A solution view is exposure, not
 mastery.
 
+## Tracks by question_model
+
+Select the track from `course.exam.question_model` (typed in
+`course.schema.json`). Every track is attempt-first - what differs between
+them is the order and shape of stages, not whether production precedes
+evaluation.
+
+### ticket_list
+
+~~~text
+ticket → brief answer structure → model answer → comprehension check
+       → unprompted reproduction from memory
+       → follow-up questions (if exam.follow_up_questions)
+       → delayed recall
+~~~
+
+The exam itself *is* independent, unprompted reproduction of the ticket -
+do not force a practice-problem stage onto a syllabus that has no problems
+in it. A follow-up-questions stage only applies when the blueprint declares
+`exam.follow_up_questions`.
+
+### problem_set, mixed, open, or unset question_model
+
 For a new concept, start at the smallest useful stage:
 
 ~~~text

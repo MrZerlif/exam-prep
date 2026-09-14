@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import random
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -12,8 +13,8 @@ from uuid import uuid4
 
 from exam_prep_lib.capabilities import CapabilityRegistry, capability_dimension_issues
 from exam_prep_lib.defaults import default_course, default_learner, default_session, default_syllabus
-from exam_prep_lib.diagnostics import run_validation
-from exam_prep_lib.reducer import reduce_learning_state
+from exam_prep_lib.diagnostics import blueprint_revision_diagnostics, run_validation
+from exam_prep_lib.reducer import MISTAKE_SUMMARIES, derive_assistance_band, reduce_learning_state
 from exam_prep_lib.migration import migrate_legacy_workspace
 from exam_prep_lib.curriculum import (
     CurriculumValidationError,
@@ -115,6 +116,63 @@ def _public_activity(syllabus: dict, selected: dict) -> dict:
     if target_id is not None:
         result["target_id"] = target_id
     return result
+
+
+def _attempt_is_done(proposal: dict) -> bool:
+    """An attempt closes out its task when it succeeded without help - the
+    same 'independent' band the reducer uses to count independent_successes.
+    Anything else (hinted, partial, incorrect, solution seen) still needs a
+    clean independent pass, so the task stays open to resume."""
+
+    if proposal.get("outcome") != "correct":
+        return False
+    assistance = proposal.get("assistance") or {}
+    return derive_assistance_band(assistance) == "independent"
+
+
+def _pending_action_for_attempt(target_id: str, proposal: dict, *, done: bool) -> str:
+    """A short, specific resumption cue for the just-recorded attempt -
+    what `status` (via `_resume_point`) surfaces after a break instead of a
+    generic reminder to pick something to do. Once the task is done there is
+    nothing left to resume on it, so this reverts to the same prompt used
+    before anything was attempted."""
+
+    if done:
+        return "choose the next budget-fitting activity"
+    outcome = proposal.get("outcome")
+    if outcome == "correct":
+        return f"continue {target_id} with an independent check"
+    tags = proposal.get("error_tags") or []
+    summaries = ", ".join(MISTAKE_SUMMARIES.get(tag, tag) for tag in tags)
+    detail = f" ({summaries})" if summaries else ""
+    return f"resume {target_id}: last attempt was {outcome}{detail}"
+
+
+def _resume_point(syllabus: dict, derived: dict, session: dict) -> dict | None:
+    """Structured break-state pointer for `status`: where the learner
+    stopped and what the last attempt there was, so a host can answer
+    'where was I?' with a specific place instead of a general summary. Null
+    once the last attempt on current_task finished it cleanly (see
+    _attempt_is_done) - a completed task is not a place to resume, and
+    without this check a finished session would still be offered up as
+    unfinished business after end-session no longer clears the pointer."""
+
+    target_id = session.get("current_target_id")
+    if not target_id or session.get("current_task_done"):
+        return None
+    metadata = normalize_syllabus(syllabus).targets.get(target_id, {})
+    state = _derived_items(derived).get(target_id, {})
+    tags = session.get("last_attempt_error_tags") or []
+    return {
+        "target_id": target_id,
+        "target_title": metadata.get("title"),
+        "task_id": session.get("current_task"),
+        "last_attempt_outcome": session.get("last_attempt_outcome"),
+        "last_attempt_error_tags": list(tags),
+        "last_attempt_error_summaries": [MISTAKE_SUMMARIES.get(tag, tag) for tag in tags],
+        "mastery_status": state.get("mastery_status"),
+        "pending_action": session.get("pending_action"),
+    }
 
 
 def _store(workspace: str | None) -> StudyStore:
@@ -225,18 +283,21 @@ def _activate_session(session: dict) -> tuple[dict, bool]:
     """Start a fresh session when there is no active one. A session is
     active only while phase is 'study' or 'exam'; end-session always sets
     phase back to 'idle', so the *next* start always gets a new session_id
-    instead of resuming the closed one."""
+    instead of resuming the closed one. The break-state pointer
+    (current_target_id/current_task/last_attempt_*/pending_action) is left
+    untouched across this transition so a session ended mid-task has a
+    specific place to resume, not a blank slate - it is only replaced once
+    the learner actually attempts something new."""
     if session.get("phase") not in ("study", "exam"):
         activated = dict(session)
         activated.update(
             {
                 "session_id": _new_session_id(),
                 "phase": "study",
-                "pending_action": "choose the next budget-fitting activity",
-                "current_target_id": None,
-                "current_task": None,
             }
         )
+        if activated.get("current_target_id") is None:
+            activated["pending_action"] = "choose the next budget-fitting activity"
         return activated, True
     return session, False
 
@@ -302,6 +363,10 @@ def _parser() -> argparse.ArgumentParser:
     apply_curriculum.add_argument("path")
     freeze = sub.add_parser("freeze-assessment")
     freeze.add_argument("path")
+    mint = sub.add_parser("mint-assessments")
+    mint.add_argument("path")
+    update_exam = sub.add_parser("update-exam-blueprint")
+    update_exam.add_argument("path")
     return parser
 
 
@@ -403,6 +468,97 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
 
+    if args.command == "mint-assessments":
+        # Separate from apply-curriculum by design (3.3): curriculum content
+        # (targets/syllabus) and assessment artifacts have different
+        # lifecycles, and exam_questions as currently typed (Phase 5, out of
+        # scope here) carries no prompt/rubric/difficulty - not enough to
+        # construct a FrozenAssessment. This takes its own batch of full
+        # assessment specs instead of reading exam_questions.
+        batch = json.loads(Path(args.path).read_text(encoding="utf-8"))
+        if not isinstance(batch, dict):
+            raise SchemaError("$", "assessment batch must be an object")
+        default_purpose = batch.get("purpose", "practice")
+        raw_assessments = batch.get("assessments")
+        if not isinstance(raw_assessments, list) or not raw_assessments:
+            raise SchemaError("$.assessments", "assessments must be a non-empty array")
+        minted: list[dict[str, Any]] = []
+        already_existed: list[dict[str, Any]] = []
+        rejected: list[dict[str, Any]] = []
+        for index, raw_entry in enumerate(raw_assessments):
+            if not isinstance(raw_entry, dict):
+                rejected.append(
+                    {"index": index, "assessment_id": None, "error": "assessment entry must be an object"}
+                )
+                continue
+            entry = dict(raw_entry)
+            entry.setdefault("purpose", default_purpose)
+            assessment_id = entry.get("assessment_id")
+            try:
+                frozen = FrozenAssessment.from_mapping(entry)
+                # append_assessment is the existing gate: JSON-schema
+                # validation and assert_pool_isolation both run inside it -
+                # this loop does not reimplement either, per "check before
+                # adding" (invariant 6).
+                append_result = store.append_assessment(frozen)
+            except ValueError as exc:
+                rejected.append(
+                    {"index": index, "assessment_id": assessment_id, "error": str(exc)}
+                )
+                continue
+            record = {
+                "assessment_id": append_result.assessment_id,
+                "spec_hash": frozen.spec_hash,
+                "purpose": frozen.purpose,
+            }
+            (minted if append_result.appended else already_existed).append(record)
+        return _result(
+            {
+                "status": "assessments_minted",
+                "minted": minted,
+                "already_existed": already_existed,
+                "rejected": rejected,
+                "minted_count": len(minted),
+                "already_existed_count": len(already_existed),
+                "rejected_count": len(rejected),
+            }
+        )
+
+    if args.command == "update-exam-blueprint":
+        patch = json.loads(Path(args.path).read_text(encoding="utf-8"))
+        if not isinstance(patch, dict):
+            raise SchemaError("$", "exam blueprint patch must be an object")
+        if "revision" in patch:
+            # revision is engine-owned (1.4): a human forgetting to bump it
+            # is exactly the failure mode this command exists to remove, so
+            # letting a patch set it directly would reopen that hole.
+            raise SchemaError(
+                "$.revision",
+                "revision is engine-owned and advances automatically; do not set it directly",
+            )
+        course, syllabus, learner, session, _concepts, _reviews = load_state(store)
+        current_exam = dict(course.get("exam") or {})
+        updated_exam = {**current_exam, **patch}
+        validate_document(updated_exam, load_schema("course.schema.json")["properties"]["exam"])
+        changed = StudyStore.hash_document(updated_exam) != StudyStore.hash_document(current_exam)
+        if changed:
+            updated_exam["revision"] = int(current_exam.get("revision", 1)) + 1
+        course = dict(course)
+        course["exam"] = updated_exam
+        _write_json(store.state_path / "course.json", course)
+        if changed:
+            # Commits a fresh revision so the new course_hash/exam_revision
+            # land in the manifest immediately (1.4's "reflected in the
+            # revision manifest"), not only on the next unrelated command.
+            _persist_learning(store, course, syllabus, learner, session)
+        return _result(
+            {
+                "status": "exam_blueprint_updated",
+                "changed": changed,
+                "course": course,
+            }
+        )
+
     if args.command == "init":
         initialization_state, missing_files = _initialization_state(store)
         if initialization_state == "initialized":
@@ -493,6 +649,13 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 "review_queue": reviews,
                 "log_diagnostics": store.read_log_diagnostics(),
+                "capability_diagnostics": list(
+                    CapabilityRegistry.from_syllabus(syllabus).rejected_descriptors()
+                ),
+                "blueprint_diagnostics": blueprint_revision_diagnostics(
+                    course, store.read_complete_observations()
+                ),
+                "resume_point": _resume_point(syllabus, concepts, session),
             }
         )
 
@@ -518,14 +681,21 @@ def main(argv: list[str] | None = None) -> int:
             _now(),
             None,
             None,
+            session_phase=session["phase"],
+            exam_revision=int(course.get("exam", {}).get("revision", 1)),
+            exam_hash=StudyStore.hash_document(course.get("exam") or {}),
         )
         session = dict(session)
         target_id = proposal.get("target_id", proposal.get("concept_id"))
+        done = _attempt_is_done(proposal)
         session.update(
             {
                 "current_target_id": target_id,
                 "current_task": proposal["task_id"],
-                "pending_action": f"continue {target_id} with an independent check",
+                "current_task_done": done,
+                "last_attempt_outcome": proposal.get("outcome"),
+                "last_attempt_error_tags": list(proposal.get("error_tags") or []),
+                "pending_action": _pending_action_for_attempt(target_id, proposal, done=done),
             }
         )
         concepts, reviews, manifest = _persist_learning(
@@ -583,20 +753,82 @@ def main(argv: list[str] | None = None) -> int:
         return _result({"roadmap": roadmap})
 
     if args.command == "exam":
+        # 3.2: the mock is assembled from purpose="mock" assessments (see
+        # mint-assessments, 3.3) sized and timed by the exam blueprint, not
+        # a mixed grab-bag of practice tasks. Falls back to a plain budgeted
+        # session (empty tickets) when no mock pool has been minted yet -
+        # the pre-3.2 behavior, unchanged, rather than an error.
+        exam_blueprint = course.get("exam") or {}
+        # session_id-seeded sample, not a sorted-and-truncated prefix (9.2):
+        # a prefix means every mock on this blueprint draws the same
+        # question_count items in the same order forever, which is a
+        # retest of familiar tickets, not a held-out exam - and anything
+        # past the cutoff is never drawn at all. random.Random(str) hashes
+        # the seed via sha512 (CPython, unaffected by PYTHONHASHSEED), so
+        # this is reproducible across processes: the same session_id always
+        # samples the same tickets in the same order, a different
+        # session_id (almost certainly) samples differently.
         session, _changed = _activate_session(session)
+        mock_pool = sorted(
+            (
+                FrozenAssessment.from_mapping(item)
+                for item in store.read_assessments()
+                if item.get("purpose") == "mock"
+            ),
+            key=lambda item: item.assessment_id,
+        )
+        question_count = exam_blueprint.get("question_count")
+        pool_size = len(mock_pool) if question_count is None else min(int(question_count), len(mock_pool))
+        if mock_pool:
+            mock_pool = random.Random(session["session_id"]).sample(mock_pool, pool_size)
+
+        tickets: list[dict[str, Any]] = []
+        budget_minutes = args.minutes
+        if mock_pool:
+            per_question_minutes = exam_blueprint.get("per_question_minutes")
+            time_limit_minutes = exam_blueprint.get("time_limit_minutes")
+            if per_question_minutes:
+                allotted = float(per_question_minutes)
+            elif time_limit_minutes:
+                allotted = float(time_limit_minutes) / len(mock_pool)
+            else:
+                allotted = float(args.minutes) / len(mock_pool)
+            tickets = [
+                {
+                    "assessment_id": item.assessment_id,
+                    "target_id": item.target_id,
+                    "capability_id": item.capability_id,
+                    "prompt": item.prompt,
+                    "spec_hash": item.spec_hash,
+                    "time_limit_minutes": round(allotted, 4),
+                }
+                for item in mock_pool
+            ]
+            budget_minutes = (
+                int(time_limit_minutes)
+                if time_limit_minutes
+                else int(round(allotted * len(mock_pool)))
+            )
+
         session = dict(session)
         session.update(
             {
                 "phase": "exam",
-                "time_budget_minutes": args.minutes,
-                "pending_action": "submit or stop the mixed mock exam for post-mortem",
+                "time_budget_minutes": budget_minutes,
+                "pending_action": "submit or stop the mock exam for post-mortem",
+                "mock_assessment_ids": [ticket["assessment_id"] for ticket in tickets],
             }
         )
         _persist_learning(store, course, syllabus, learner, session)
         return _result(
             {
                 "mode": "exam",
-                "budget_minutes": args.minutes,
+                "budget_minutes": budget_minutes,
+                "delivery": exam_blueprint.get("delivery"),
+                "question_model": exam_blueprint.get("question_model"),
+                "follow_up_questions": bool(exam_blueprint.get("follow_up_questions", False)),
+                "grading_criteria": exam_blueprint.get("grading_criteria"),
+                "tickets": tickets,
                 "no_unsolicited_hints": True,
                 "minimal_feedback_until_submission": True,
                 "session_id": session.get("session_id"),
@@ -696,16 +928,55 @@ def main(argv: list[str] | None = None) -> int:
                 ),
                 "next_action": session.get("pending_action"),
             }
+            mock_assessment_ids = session.get("mock_assessment_ids") or []
+            if session.get("phase") == "exam" and mock_assessment_ids:
+                # 3.2's post-mortem: a per-question breakdown of the mock
+                # just submitted, not the same aggregate study summary a
+                # regular session gets.
+                questions = []
+                for assessment_id in mock_assessment_ids:
+                    matching = [
+                        event for event in session_events
+                        if event.get("assessment_id") == assessment_id
+                    ]
+                    last = matching[-1] if matching else None
+                    questions.append(
+                        {
+                            "assessment_id": assessment_id,
+                            "target_id": last.get("target_id") if last else None,
+                            "attempted": last is not None,
+                            "outcome": last.get("outcome") if last else None,
+                            "assistance_band": (
+                                derive_assistance_band(last.get("assistance") or {})
+                                if last is not None
+                                else None
+                            ),
+                        }
+                    )
+                correct_independent = sum(
+                    1
+                    for question in questions
+                    if question["outcome"] == "correct"
+                    and question["assistance_band"] == "independent"
+                )
+                summary["post_mortem"] = {
+                    "total_questions": len(mock_assessment_ids),
+                    "attempted": sum(1 for question in questions if question["attempted"]),
+                    "correct_independent": correct_independent,
+                    "score": (
+                        round(correct_independent / len(mock_assessment_ids), 4)
+                        if mock_assessment_ids
+                        else None
+                    ),
+                    "questions": questions,
+                }
             store.append_session_summary(summary)
         session = dict(session)
-        session.update(
-            {
-                "phase": "idle",
-                "pending_action": "resume with start",
-                "current_target_id": None,
-                "current_task": None,
-            }
-        )
+        # Deliberately leave current_target_id/current_task/last_attempt_*/
+        # pending_action untouched: they are the break-state pointer status
+        # uses to report a specific resume point after the session closes,
+        # not just this session's aggregate summary.
+        session.update({"phase": "idle"})
         concepts, reviews, _manifest = _persist_learning(store, course, syllabus, learner, session)
         return _result({"status": "session_ended", "session": session, "summary": summary})
 

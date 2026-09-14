@@ -5,6 +5,10 @@
   "pending_action": "load a syllabus and start a session",
   "current_target_id": null,
   "current_task": null,
-  "time_budget_minutes": 25
+  "time_budget_minutes": 25,
+  "last_attempt_outcome": null,
+  "last_attempt_error_tags": [],
+  "current_task_done": false,
+  "mock_assessment_ids": []
 }
 

@@ -141,6 +141,50 @@ class PressureRunnerTests(unittest.TestCase):
         self.assertFalse(summary["release_ready"])
         self.assertIn("worse than baseline", " ".join(summary["failures"]))
 
+    def test_ticket_list_case_is_registered_and_forbids_forced_practice_problems(self):
+        # 2.1's acceptance criterion: a ticket_list-blueprint scenario case
+        # exists in the manifest and its forbidden_behavior names forcing a
+        # practice-problem stage. This pins the case is well-formed and
+        # wired into the existing pressure-case machinery (load_case,
+        # build_prompt_packet); it is not a substitute for an actual scored
+        # transcript run, which requires a live model conversation and an
+        # independent evaluator - see evaluate_transcripts.py's own
+        # docstring on why self-scoring is deliberately excluded.
+        case = load_case("ticket_list_exam_no_forced_problems")
+        self.assertNotIn(case["id"], self.RELEASE_CASE_IDS)
+        self.assertTrue(
+            any(
+                "practice-problem" in behavior or "problem ladder" in behavior
+                for behavior in case["forbidden_behavior"]
+            )
+        )
+        packet = build_prompt_packet(
+            case=case, variant="skill", repetition=1, skill_text="SKILL CONTENT"
+        )
+        self.assertIn("forbidden_behavior", packet["rubric"])
+        self.assertEqual(case["forbidden_behavior"], packet["rubric"]["forbidden_behavior"])
+
+    def test_release_case_ids_still_exactly_four_after_adding_a_case(self):
+        # Guards the manifest invariant evaluate_transcripts.py hard-asserts
+        # on (_release_case_ids raises unless there are exactly four) - a
+        # new non-release case like ticket_list_exam_no_forced_problems must
+        # not accidentally flip release_gate.
+        self.assertEqual(4, len(self.RELEASE_CASE_IDS))
+        self.assertNotIn("ticket_list_exam_no_forced_problems", self.RELEASE_CASE_IDS)
+
+    def test_default_export_still_excludes_the_new_non_release_case(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "eval.jsonl"
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = run_scenarios(["--emit-eval-set", str(path)])
+            records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual(0, code)
+        self.assertNotIn(
+            "ticket_list_exam_no_forced_problems",
+            {item["case_id"] for item in records},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

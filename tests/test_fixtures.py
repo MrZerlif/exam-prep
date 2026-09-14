@@ -66,6 +66,18 @@ class FixtureTests(unittest.TestCase):
         for term in ("install", "init", "syllabus", "status", "review", "mock exam", "state", "recovery"):
             self.assertIn(term, readme)
 
+    def test_default_learner_has_no_practice_mode_bias(self):
+        # 2.4: preferred_practice_modes defaulted to ["problem_solving"],
+        # steering every fresh learner toward practical/problem-solving
+        # pedagogy regardless of blueprint (e.g. a ticket_list exam has no
+        # "problems" at all). Nothing in the runtime reads this field today
+        # (grep confirms it), so there is no blueprint to derive it from yet
+        # - it stays empty until something does.
+        from exam_prep_lib.defaults import default_learner
+
+        learner = default_learner("2026-01-01T00:00:00+00:00")
+        self.assertEqual([], learner["preferences"]["preferred_practice_modes"])
+
     def test_default_course_template_is_subject_neutral(self):
         course = json.loads(
             (SKILL_ROOT / "templates" / "course.json").read_text(encoding="utf-8")

@@ -8,7 +8,12 @@ from pathlib import Path
 
 sys.path.insert(0, "skill/exam-prep/scripts")
 
-from exam_prep_lib.storage import ObservationConflict, StudyStore  # noqa: E402
+from exam_prep_lib.assessment import FrozenAssessment  # noqa: E402
+from exam_prep_lib.storage import (  # noqa: E402
+    ENGINE_OWNED_OBSERVATION_FIELDS,
+    ObservationConflict,
+    StudyStore,
+)
 
 
 def proposal(observation_id="obs-1", outcome="correct"):
@@ -163,6 +168,78 @@ class StorageRecoveryTests(unittest.TestCase):
             StudyStore._hash_file(canonical),
             fingerprints["source_manifest_hash"],
         )
+
+    def test_every_engine_written_observation_field_is_in_engine_owned_fields(self):
+        # Meta-test: every key append_observation adds to or overwrites on
+        # the canonical event, beyond what the caller's proposal already
+        # had, must be listed in ENGINE_OWNED_OBSERVATION_FIELDS - otherwise
+        # a retry of that exact observation_id looks like a payload
+        # conflict instead of a no-op (the assessment_purpose bug 1.3 found
+        # and fixed). Exercises the three branches that write different
+        # field sets: plain v1, plain v2 (assessment_integrity=
+        # "not_assessment"), and assessment-linked v2 (spec_hash/purpose/
+        # integrity/exam_revision).
+        v1_proposal = proposal("engine-fields-v1")
+        v1_result = self.store.append_observation(
+            v1_proposal, "session-1", self.now, 90, 22
+        )
+        added = set(v1_result.canonical_event) - set(v1_proposal)
+        self.assertTrue(
+            added <= ENGINE_OWNED_OBSERVATION_FIELDS,
+            f"plain v1 event added untracked fields: {added - ENGINE_OWNED_OBSERVATION_FIELDS}",
+        )
+
+        v2_proposal = {
+            "schema_version": 2,
+            "observation_id": "engine-fields-v2",
+            "target_id": "chain_rule",
+            "task_id": "task-1",
+            "capability_id": "independent_problem",
+            "task_type": "independent_problem",
+            "outcome": "correct",
+            "assistance": {"levels_revealed": []},
+            "error_tags": [],
+            "diagnostic_confidence": "high",
+            "source_refs": [],
+        }
+        v2_result = self.store.append_observation(
+            v2_proposal, "session-1", self.now, 90, 22, exam_revision=1
+        )
+        added = set(v2_result.canonical_event) - set(v2_proposal)
+        self.assertTrue(
+            added <= ENGINE_OWNED_OBSERVATION_FIELDS,
+            f"plain v2 event added untracked fields: {added - ENGINE_OWNED_OBSERVATION_FIELDS}",
+        )
+
+        frozen = FrozenAssessment.from_mapping(
+            {
+                "assessment_id": "engine-fields-assessment",
+                "target_id": "chain_rule",
+                "capability_id": "independent_problem",
+                "prompt": "Solve 2x = 4.",
+                "rubric": {"correct": 1},
+                "expected_evidence": ["independent_work"],
+                "source_refs": [
+                    {"source_id": "teacher:w1", "authority": "teacher_material", "locator": "p1"}
+                ],
+                "difficulty": 0.4,
+                "question_version": 1,
+                "rubric_version": 1,
+            }
+        )
+        self.store.append_assessment(frozen)
+        assessment_proposal = {**v2_proposal, "observation_id": "engine-fields-assessment-linked", "assessment_id": frozen.assessment_id}
+        assessment_result = self.store.append_observation(
+            assessment_proposal, "session-1", self.now, 90, 22, exam_revision=3
+        )
+        added = set(assessment_result.canonical_event) - set(assessment_proposal)
+        self.assertTrue(
+            added <= ENGINE_OWNED_OBSERVATION_FIELDS,
+            f"assessment-linked v2 event added untracked fields: {added - ENGINE_OWNED_OBSERVATION_FIELDS}",
+        )
+        # Confirms the assertion above is not vacuous - some fields really
+        # were added and really are covered, not an empty-set false pass.
+        self.assertTrue(added)
 
 
 if __name__ == "__main__":

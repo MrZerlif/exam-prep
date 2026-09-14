@@ -5,6 +5,7 @@ import unittest
 
 sys.path.insert(0, "skill/exam-prep/scripts")
 
+from exam_prep_lib.defaults import default_course  # noqa: E402
 from exam_prep_lib.schema_validation import (  # noqa: E402
     SchemaError,
     load_schema,
@@ -122,6 +123,31 @@ class SchemaValidationTests(unittest.TestCase):
         }
         with self.assertRaisesRegex(SchemaError, "conceptual"):
             validate_state_bundle(bundle)
+
+
+class CourseExamBlueprintSchemaTests(unittest.TestCase):
+    def test_default_course_with_format_mixed_is_accepted_unchanged(self):
+        validate_document(default_course(), load_schema("course.schema.json"))
+
+    def test_unknown_question_model_is_rejected(self):
+        course = default_course()
+        course["exam"]["question_model"] = "trivia_night"
+        with self.assertRaisesRegex(SchemaError, "question_model"):
+            validate_document(course, load_schema("course.schema.json"))
+
+    def test_unknown_delivery_is_rejected(self):
+        course = default_course()
+        course["exam"]["delivery"] = "telepathic"
+        with self.assertRaisesRegex(SchemaError, "delivery"):
+            validate_document(course, load_schema("course.schema.json"))
+
+    def test_known_question_model_and_delivery_are_accepted(self):
+        course = default_course()
+        course["exam"]["question_model"] = "ticket_list"
+        course["exam"]["delivery"] = "oral"
+        course["exam"]["follow_up_questions"] = True
+        course["exam"]["verbatim_definitions"] = True
+        validate_document(course, load_schema("course.schema.json"))
 
 
 if __name__ == "__main__":

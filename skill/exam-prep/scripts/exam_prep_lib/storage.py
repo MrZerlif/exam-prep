@@ -11,12 +11,41 @@ from pathlib import Path
 from typing import Any
 
 from .assessment import FrozenAssessment
-from .assessment_integrity import assess_attempt_evidence
+from .assessment_integrity import assert_pool_isolation, assess_attempt_evidence
 from .schema_validation import (
     load_schema,
     validate_document,
     validate_observation_event,
     validate_observation_proposal,
+)
+
+
+# Fields append_observation adds to or overwrites on the canonical event
+# beyond whatever the caller's proposal already contained. Stripped before
+# comparing a retried observation_id against its original payload, so an
+# engine-computed field can never make an otherwise-identical resubmission
+# look like a divergent payload (ObservationConflict). "timestamp" is kept
+# defensively even though nothing here writes it: migrated legacy events
+# (see migration.py) folded an old "timestamp" field into "recorded_at",
+# and a caller resubmitting one of those untouched should not trip a
+# conflict either. See test_storage_recovery.py's
+# test_every_engine_written_observation_field_is_in_engine_owned_fields for
+# the regression guard - it fails if a future field is added to `canonical`
+# here without being added below too (exactly the assessment_purpose gap
+# 3.1 introduced and 1.3 caught).
+ENGINE_OWNED_OBSERVATION_FIELDS = frozenset(
+    {
+        "recorded_at",
+        "session_id",
+        "timestamp",
+        "expected_seconds",
+        "elapsed_seconds",
+        "assessment_spec_hash",
+        "assessment_purpose",
+        "assessment_integrity",
+        "exam_revision",
+        "exam_hash",
+    }
 )
 
 
@@ -190,11 +219,12 @@ class StudyStore:
         )
         canonical = frozen.to_mapping()
         validate_document(canonical, load_schema("assessment.schema.json"))
-        existing = {
-            item["assessment_id"]: item
+        existing_assessments = [
+            FrozenAssessment.from_mapping(item)
             for item in self.read_assessments()
             if "assessment_id" in item
-        }
+        ]
+        existing = {item.assessment_id: item.to_mapping() for item in existing_assessments}
         assessment_id = frozen.assessment_id
         if assessment_id in existing:
             if existing[assessment_id] == canonical:
@@ -202,6 +232,7 @@ class StudyStore:
             raise AssessmentConflict(
                 f"assessment_id {assessment_id!r} already has a different frozen contract"
             )
+        assert_pool_isolation(frozen, existing_assessments=existing_assessments)
         self._append_jsonl(self.assessments_path, canonical)
         return AssessmentAppendResult(assessment_id, canonical, True)
 
@@ -232,6 +263,9 @@ class StudyStore:
         recorded_at: str,
         expected_seconds: int | None,
         elapsed_seconds: int | None,
+        session_phase: str = "study",
+        exam_revision: int | None = None,
+        exam_hash: str | None = None,
     ) -> AppendResult:
         validate_observation_proposal(proposal)
         assessment_id = proposal.get("assessment_id")
@@ -252,6 +286,7 @@ class StudyStore:
                 proposal,
                 frozen,
                 prior_events=self.read_complete_observations(),
+                session_phase=session_phase,
             )
         canonical = dict(proposal)
         canonical.update(
@@ -264,9 +299,23 @@ class StudyStore:
         )
         if integrity_decision is not None:
             canonical["assessment_spec_hash"] = frozen.spec_hash
+            canonical["assessment_purpose"] = frozen.purpose
             canonical["assessment_integrity"] = integrity_decision.integrity
         elif canonical.get("schema_version") == 2:
             canonical["assessment_integrity"] = "not_assessment"
+        if canonical.get("schema_version") == 2 and exam_revision is not None:
+            # Tags the event with the exam blueprint revision active when it
+            # was recorded, so a later blueprint change (course.exam.revision
+            # bumped) is something evidence can be diagnosed against instead
+            # of silently mixing readiness across incompatible formats - see
+            # diagnostics.blueprint_revision_diagnostics.
+            canonical["exam_revision"] = int(exam_revision)
+        if canonical.get("schema_version") == 2 and exam_hash is not None:
+            # Content hash of the exam blueprint active when recorded (1.4):
+            # revision is a human-maintained label that can be forgotten to
+            # bump, so the diagnostic keys on this instead of trusting the
+            # integer alone.
+            canonical["exam_hash"] = str(exam_hash)
         validate_observation_event(canonical)
         existing = {
             event["observation_id"]: event
@@ -275,19 +324,10 @@ class StudyStore:
         }
         observation_id = proposal["observation_id"]
         if observation_id in existing:
-            engine_fields = {
-                "recorded_at",
-                "session_id",
-                "timestamp",
-                "expected_seconds",
-                "elapsed_seconds",
-                "assessment_spec_hash",
-                "assessment_integrity",
-            }
             learner_payload = {
                 key: value
                 for key, value in existing[observation_id].items()
-                if key not in engine_fields
+                if key not in ENGINE_OWNED_OBSERVATION_FIELDS
             }
             if learner_payload == proposal:
                 return AppendResult(observation_id, existing[observation_id], False)
@@ -417,6 +457,9 @@ class StudyStore:
                 # against the old inputs.
                 "course_hash": self.hash_document(course) if course is not None else None,
                 "syllabus_hash": self.hash_document(syllabus) if syllabus is not None else None,
+                "exam_revision": (
+                    (course.get("exam") or {}).get("revision") if course is not None else None
+                ),
                 "canonical_inputs": canonical_inputs,
             "schema_versions": schema_versions,
                 "derived_snapshot_hash": self._hash_file(temp_path / derived_name),

@@ -57,7 +57,7 @@ _DEFAULT_LEARNER = {
     "preferences": {
         "interaction_preferences": ["interactive"],
         "explanation_preferences": ["concise", "use_analogies_when_helpful"],
-        "preferred_practice_modes": ["problem_solving"],
+        "preferred_practice_modes": [],
         "explanation_length": "concise",
         "solution_policy": "delay_full_solution",
     },
@@ -72,6 +72,10 @@ _DEFAULT_SESSION = {
     "current_target_id": None,
     "current_task": None,
     "time_budget_minutes": 25,
+    "last_attempt_outcome": None,
+    "last_attempt_error_tags": [],
+    "current_task_done": False,
+    "mock_assessment_ids": [],
 }
 
 

@@ -111,6 +111,13 @@
       "pass_criteria": ["use next with the stated 15-minute budget", "select a budget-fitting activity", "explain the exam-value tradeoff briefly"]
     },
     {
+      "id": "ticket_list_exam_no_forced_problems",
+      "prompt": "У меня устный экзамен по билетам, без задач — только билеты. Дай билет номер 3.",
+      "learner_facts": ["course.exam.question_model is ticket_list", "syllabus has no practice problems for this course"],
+      "forbidden_behavior": ["forcing a practice-problem or worked-example stage the ticket_list track does not call for", "treating the intuition-to-transfer problem ladder as mandatory for a ticket exam"],
+      "pass_criteria": ["select the ticket_list track from course.exam.question_model", "ask for a brief answer structure before the model answer", "require unprompted reproduction from memory before delayed recall"]
+    },
+    {
       "release_gate": true,
       "id": "teacher_material_conflict",
       "prompt": "Вот файл с методичкой преподавателя. Там определение отличается от того, что ты обычно объясняешь.",
