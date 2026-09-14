@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, "skill/exam-prep/scripts")
 
 from exam_prep import main  # noqa: E402
+from exam_prep_lib.schema_validation import SchemaError  # noqa: E402
 
 
 SYLLABUS = {
@@ -122,6 +123,22 @@ class CliTests(unittest.TestCase):
         self.assertEqual(result["budget_minutes"], 20)
         self.assertTrue(result["no_unsolicited_hints"])
 
+
+    def test_load_syllabus_rejects_unknown_dimension_before_canonical_write(self):
+        self.run_cli("init")
+        invalid = dict(SYLLABUS)
+        invalid["assessment_capabilities"] = {
+            "custom": {"affected_dimensions": ["knowledge"]}
+        }
+        invalid_path = self.root / "invalid-syllabus.json"
+        invalid_path.write_text(json.dumps(invalid), encoding="utf-8")
+        syllabus_state = self.root / ".exam-prep" / "syllabus.json"
+        before = syllabus_state.read_bytes()
+
+        with self.assertRaises(SchemaError):
+            main(["--workspace", str(self.root), "load-syllabus", str(invalid_path)])
+
+        self.assertEqual(before, syllabus_state.read_bytes())
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,6 +7,7 @@ sys.path.insert(0, "skill/exam-prep/scripts")
 from exam_prep_lib.reducer import (  # noqa: E402
     derive_assistance_band,
     reduce_learning_state,
+    MASTERY_DIMENSIONS,
 )
 
 
@@ -209,6 +210,35 @@ class ReducerTests(unittest.TestCase):
         self.assertEqual(mistakes[0]["sessions_seen"], 3)
         self.assertNotIn("persistent_misconceptions", result)
 
+
+    def test_corrupt_syllabus_dimension_is_ignored_during_recovery(self):
+        syllabus = {
+            "schema_version": 1,
+            "concepts": {"target": {"prerequisites": []}},
+            "assessment_capabilities": {
+                "custom": {"affected_dimensions": ["knowledge"]}
+            },
+        }
+        result = reduce_learning_state(
+            COURSE,
+            syllabus,
+            [
+                {
+                    "schema_version": 2,
+                    "observation_id": "corrupt-dimension",
+                    "concept_id": "target",
+                    "target_id": "target",
+                    "task_id": "task",
+                    "capability_id": "custom",
+                    "outcome": "correct",
+                    "assistance": {"levels_revealed": []},
+                }
+            ],
+            {},
+        )
+        mastery = result["concepts"]["target"]["mastery"]
+        self.assertEqual(set(MASTERY_DIMENSIONS), set(mastery))
+        self.assertNotIn("knowledge", mastery)
 
 if __name__ == "__main__":
     unittest.main()

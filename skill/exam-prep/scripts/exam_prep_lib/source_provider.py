@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping, Protocol
 
 from .provenance import SourceRef, source_ref_from_mapping
+from .schema_validation import SchemaError, load_schema, validate_document
 from .workspace import runtime_paths
 
 
@@ -222,6 +223,27 @@ def build_runtime_source_catalog(store: Any) -> dict[str, SourceRef]:
     )
 
 
+
+def _normalize_string_list(value: Any, field: str, diagnostics: list[str]) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        diagnostics.append(f"malformed {field}: expected an array")
+        return []
+    return [str(item) for item in value]
+
+
+def _normalize_unit_number(value: Any, field: str, diagnostics: list[str]) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        diagnostics.append(f"malformed {field}: expected a number")
+        return None
+    numeric = float(value)
+    if not 0.0 <= numeric <= 1.0:
+        diagnostics.append(f"malformed {field}: expected value in [0, 1]")
+        return None
+    return numeric
 def normalize_source_evidence(value: Mapping[str, Any]) -> SourceEvidenceEnvelope:
     if not isinstance(value, Mapping):
         return SourceEvidenceEnvelope(
@@ -270,21 +292,27 @@ def normalize_source_evidence(value: Mapping[str, Any]) -> SourceEvidenceEnvelop
                 source_ref=ref,
                 excerpt=item.get("excerpt"),
                 evidence_id=item.get("evidence_id"),
-                relevance=item.get("relevance"),
+                relevance=_normalize_unit_number(item.get("relevance"), "relevance", diagnostics),
                 retrieval_id=item.get("retrieval_id", value.get("retrieval_id")),
-                confidence=item.get("confidence"),
+                confidence=_normalize_unit_number(item.get("confidence"), "confidence", diagnostics),
             )
         )
-    return SourceEvidenceEnvelope(
+    envelope = SourceEvidenceEnvelope(
         provider_id,
         status,
         evidence,
         diagnostics,
         envelope_id=str(value["envelope_id"]) if value.get("envelope_id") is not None else None,
         retrieved_at=str(value["retrieved_at"]) if value.get("retrieved_at") is not None else None,
-        capabilities_used=[str(item) for item in value.get("capabilities_used", [])],
+        capabilities_used=_normalize_string_list(value.get("capabilities_used"), "capabilities_used", diagnostics),
         retrieval_id=str(value["retrieval_id"]) if value.get("retrieval_id") is not None else None,
     )
+    try:
+        validate_document(envelope.to_mapping(), load_schema("source-evidence.schema.json"))
+    except SchemaError as exc:
+        envelope.status = "failed"
+        envelope.diagnostics.append(f"invalid normalized source evidence envelope: {exc}")
+    return envelope
 
 
 def _target_items(syllabus: Mapping[str, Any]) -> Iterable[tuple[str, Mapping[str, Any]]]:

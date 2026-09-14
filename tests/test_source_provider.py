@@ -9,6 +9,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-pre
 from exam_prep_lib.source_provider import (  # noqa: E402
     LocalSourceProvider,
     ProviderStatus,
+    build_verified_source_catalog,
     compute_source_coverage,
     normalize_source_evidence,
 )
@@ -140,6 +141,63 @@ class SourceProviderTests(unittest.TestCase):
         self.assertEqual({"page": 3, "heading": "Limits"}, ref["location"])
         self.assertEqual("citation-1", mapping["evidence"][0]["retrieval_id"])
 
+    def test_null_capabilities_used_becomes_empty_array(self):
+        envelope = normalize_source_evidence({
+            "provider_id": "missing",
+            "status": "unavailable",
+            "evidence": [],
+            "diagnostics": [],
+            "capabilities_used": None,
+        })
+        self.assertEqual([], envelope.capabilities_used)
+
+    def test_scalar_capabilities_used_becomes_diagnostic(self):
+        envelope = normalize_source_evidence({
+            "provider_id": "provider",
+            "status": "failed",
+            "evidence": [],
+            "capabilities_used": "search",
+        })
+        self.assertEqual([], envelope.capabilities_used)
+        self.assertTrue(any("capabilities_used" in item for item in envelope.diagnostics))
+
+    def test_non_object_envelope_is_graceful_failure(self):
+        envelope = normalize_source_evidence(["not", "an", "object"])
+        self.assertEqual("failed", envelope.status)
+        self.assertEqual([], envelope.evidence)
+
+    def test_invalid_unit_numbers_become_diagnostics(self):
+        for field, value in (
+            ("relevance", True),
+            ("relevance", "0.5"),
+            ("confidence", -0.1),
+            ("confidence", 1.1),
+        ):
+            with self.subTest(field=field, value=value):
+                envelope = normalize_source_evidence({
+                    "provider_id": "provider",
+                    "status": "ok",
+                    "evidence": [{
+                        "source_ref": {"source_id": "s1"},
+                        field: value,
+                    }],
+                })
+                self.assertIsNone(getattr(envelope.evidence[0], field))
+                self.assertTrue(any(field in item for item in envelope.diagnostics))
+    def test_teacher_material_outranks_official_list_regardless_of_order(self):
+        official = {
+            "source_id": "same",
+            "authority": "official_exam_list",
+        }
+        teacher = {
+            "source_id": "same",
+            "authority": "teacher_material",
+        }
+
+        for values in ([official, teacher], [teacher, official]):
+            with self.subTest(values=values):
+                catalog = build_verified_source_catalog(values)
+                self.assertEqual("teacher_material", catalog["same"].authority)
     def test_coverage_gaps_are_explicit_and_unknown_refs_are_reported(self):
         gaps = compute_source_coverage(
             {

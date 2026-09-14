@@ -2,19 +2,33 @@
 
 This package provides a self-contained, deterministic exam-preparation engine
 for any academic or technical subject.
-Run python scripts/exam_prep.py init once, then use status, next,
-record-observation, validate-curriculum, and apply-curriculum.
+Run `python scripts/exam_prep.py status` first. A new workspace reports
+`uninitialized` without creating `.exam-prep`; run `init` once, then use
+`status`, `next`, `record-observation`, `validate-curriculum`, and
+`apply-curriculum`. Repeating `init` is a safe no-op that preserves canonical
+files. If status reports `incomplete_workspace`, run `validate` and repair the
+missing canonical input explicitly; initialization never overwrites it.
 
 Runtime state always lives in .exam-prep/, including the trusted source
 manifest at .exam-prep/sources.json. The legacy math-study/state/ layout
 is not auto-migrated; run the explicit migration command when needed. Legacy
 CLI/env/event aliases remain compatibility shims while old workspaces are
-being migrated.
+being migrated. Workspace discovery accepts only `EXAM_PREP_WORKSPACE`, legacy
+`MATH_STUDY_WORKSPACE`, and `EXAM_PREP_PROJECT_ROOT`; generic host variables
+`PROJECT_ROOT` and `WORKSPACE_ROOT` are ignored. `config/config.template.json`
+is illustrative documentation only; the runtime does not load it automatically.
 
 NotebookLM MCP is an optional P2 agent-host integration. When present, the host
 normalizes its returned evidence into a SourceEvidenceEnvelope and passes that
 data to the CLI. The Python core has no NotebookLM transport or SDK dependency.
 
+Deterministic engine tests (`python tests/scenarios/run_scenarios.py --deterministic`)
+check runtime behavior and persistence only. Fresh-context behavioral evaluation is a
+separate host-level/manual step: export prompts with
+`python tests/scenarios/run_scenarios.py --emit-eval-set ...`, run each packet in the
+chosen host, then submit explicit independent scores to
+`tests/scenarios/evaluate_transcripts.py`. Passing deterministic tests alone does not
+claim behavioral compliance.
 The primary package examples are subject-neutral. The separate
 examples/mathematics-regression-syllabus.json is retained only for
 mathematics-specific regression coverage.

@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any, Mapping
 
 from .source_provider import SourceEvidenceEnvelope, normalize_source_evidence
+from .schema_validation import SchemaError, load_schema, validate_document
 from .storage import StudyStore
 
 
@@ -43,6 +44,15 @@ def ingest_source_evidence(
     envelope = (
         value if isinstance(value, SourceEvidenceEnvelope) else normalize_source_evidence(value)
     )
+    try:
+        validate_document(envelope.to_mapping(), load_schema("source-evidence.schema.json"))
+    except SchemaError as exc:
+        return SourceEvidenceIngestResult(
+            envelope.provider_id,
+            "failed",
+            0,
+            [*envelope.diagnostics, f"invalid normalized source evidence envelope: {exc}"],
+        )
     if envelope.status != "ok":
         return SourceEvidenceIngestResult(
             envelope.provider_id, envelope.status, 0, list(envelope.diagnostics)

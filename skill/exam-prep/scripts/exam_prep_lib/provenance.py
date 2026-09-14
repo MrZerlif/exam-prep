@@ -7,7 +7,7 @@ from typing import Any, Mapping
 
 
 AUTHORITY_RANKS = {
-    "teacher_material": 5,
+    "teacher_material": 6,
     "official_exam_list": 5,
     "course_policy": 5,
     "lecture_notes": 4,

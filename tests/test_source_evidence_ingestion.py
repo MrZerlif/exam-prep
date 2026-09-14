@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import sys
 import tempfile
@@ -6,6 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "skill" / "exam-prep" / "scripts"))
 
+from exam_prep import main  # noqa: E402
 from exam_prep_lib.source_evidence import ingest_source_evidence  # noqa: E402
 from exam_prep_lib.storage import StudyStore  # noqa: E402
 
@@ -39,6 +42,34 @@ class SourceEvidenceIngestionTests(unittest.TestCase):
             self.assertEqual("teacher:week-1", records[0]["source_ref"]["source_id"])
             self.assertEqual("local", records[0]["provider_id"])
 
+    def test_unavailable_null_capabilities_used_is_graceful_cli_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            envelope_path = root / "envelope.json"
+            envelope_path.write_text(json.dumps({
+                "provider_id": "missing",
+                "status": "unavailable",
+                "evidence": [],
+                "diagnostics": [],
+                "capabilities_used": None,
+            }), encoding="utf-8")
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                code = main(["--workspace", str(root), "init"])
+                self.assertEqual(0, code)
+                output.seek(0)
+                output.truncate(0)
+                code = main([
+                    "--workspace", str(root),
+                    "ingest-source-evidence", str(envelope_path),
+                ])
+            self.assertEqual(0, code)
+            result = json.loads(output.getvalue())
+            self.assertEqual("unavailable", result["status"])
+            self.assertEqual(0, result["appended"])
+            self.assertNotIn("Traceback", output.getvalue())
+            evidence_path = root / ".exam-prep" / "source_evidence.jsonl"
+            self.assertEqual([], evidence_path.read_text(encoding="utf-8").splitlines())
     def test_unavailable_provider_is_recorded_as_diagnostic_without_evidence(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StudyStore.for_exam_prep(Path(tmp))

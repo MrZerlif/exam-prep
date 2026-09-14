@@ -71,6 +71,20 @@ class ValidateDiagnosticsTests(unittest.TestCase):
         self.assertEqual(report["error_count"], 0)
         self.assertGreaterEqual(len(report["checks"]), 8)
 
+    def test_invalid_exam_timezone_is_named_exam_datetime_error(self):
+        self.ready()
+        course_path = self.root / ".exam-prep" / "course.json"
+        course = json.loads(course_path.read_text(encoding="utf-8"))
+        course["exam"] = {"date": "2026-09-14T10:00:00", "timezone": "+99:00"}
+        course_path.write_text(json.dumps(course), encoding="utf-8")
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = main(["--workspace", str(self.root), "validate"])
+        report = json.loads(output.getvalue())
+        names = {item["name"]: item for item in report["checks"]}
+        self.assertEqual(1, code)
+        self.assertEqual("error", names["exam_datetime"]["status"])
     def test_detects_observation_referencing_unknown_concept(self):
         self.ready()
         store = StudyStore.for_exam_prep(self.root)
@@ -108,6 +122,24 @@ class ValidateDiagnosticsTests(unittest.TestCase):
         names = {c["name"]: c for c in report["checks"]}
         self.assertEqual(names["observations_jsonl_readable"]["status"], "warning")
 
+
+    def test_detects_unknown_capability_dimension_in_existing_syllabus(self):
+        self.ready()
+        syllabus_path = self.root / ".exam-prep" / "syllabus.json"
+        syllabus = json.loads(syllabus_path.read_text(encoding="utf-8"))
+        syllabus["assessment_capabilities"] = {
+            "custom": {"affected_dimensions": ["knowledge"]}
+        }
+        syllabus_path.write_text(json.dumps(syllabus), encoding="utf-8")
+
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = main(["--workspace", str(self.root), "validate"])
+        self.assertEqual(code, 1, output.getvalue())
+        report = json.loads(output.getvalue())
+        names = {c["name"]: c for c in report["checks"]}
+        self.assertEqual(names["capability_dimensions"]["status"], "error")
+        self.assertIn("unknown affected dimension", names["capability_dimensions"]["detail"])
 
 if __name__ == "__main__":
     unittest.main()

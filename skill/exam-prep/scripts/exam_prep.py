@@ -10,7 +10,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
-from exam_prep_lib.capabilities import CapabilityRegistry
+from exam_prep_lib.capabilities import CapabilityRegistry, capability_dimension_issues
+from exam_prep_lib.defaults import default_course, default_learner, default_session, default_syllabus
 from exam_prep_lib.diagnostics import run_validation
 from exam_prep_lib.reducer import reduce_learning_state
 from exam_prep_lib.migration import migrate_legacy_workspace
@@ -35,75 +36,6 @@ from exam_prep_lib.storage import StudyStore
 from exam_prep_lib.target_normalization import normalize_syllabus
 from exam_prep_lib.verifier_registry import VerifierRegistry, verify_request
 from exam_prep_lib.workspace import discover_git_root, resolve_workspace
-
-
-DEFAULT_COURSE = {
-    "schema_version": 2,
-    "course_id": "exam-prep-course",
-    "title": "Exam preparation",
-    "exam": {
-        "date": None,
-        "timezone": "UTC",
-        "format": "mixed",
-        "expected_total_points": 100,
-        "revision": 1,
-    },
-    "time_budget": {"default_minutes": 25, "available_minutes_by_day": {}},
-    "source_policy": {
-        "priority_order": [
-            "teacher_material",
-            "official_exam_list",
-            "lecture_notes",
-            "problem_sets",
-            "general_reference",
-        ],
-        "conflicts": "flag_for_user",
-    },
-    "scheduler": {
-        "mode": "exam_cram",
-        "max_review_interval_hours": 72,
-        "review_warmup_limit": 3,
-        # A mistake is not "recurring" after a single occurrence. It becomes
-        # recurring once it repeats min_count times, or shows up in
-        # min_sessions distinct sessions, whichever comes first. It resolves
-        # after resolve_after_clean_successes independent correct attempts on
-        # the same concept without the mistake reappearing.
-        "recurring_mistake_policy": {
-            "min_count": 3,
-            "min_sessions": 2,
-            "resolve_after_clean_successes": 3,
-        },
-    },
-}
-DEFAULT_SYLLABUS = {
-    "schema_version": 2,
-    "course_id": "exam-prep-course",
-    "source_refs": [],
-    "learning_targets": [],
-    "assessment_capabilities": {},
-    "exam_questions": [],
-}
-DEFAULT_LEARNER = {
-    "schema_version": 1,
-    "updated_at": None,
-    "preferences": {
-        "interaction_preferences": ["interactive"],
-        "explanation_preferences": ["concise", "use_analogies_when_helpful"],
-        "preferred_practice_modes": ["problem_solving"],
-        "explanation_length": "concise",
-        "solution_policy": "delay_full_solution",
-    },
-    "stable_patterns": [],
-}
-DEFAULT_SESSION = {
-    "schema_version": 2,
-    "session_id": "",
-    "phase": "idle",
-    "pending_action": "load a syllabus and start a session",
-    "current_target_id": None,
-    "current_task": None,
-    "time_budget_minutes": 25,
-}
 
 
 class LegacyStateDetected(ValueError):
@@ -196,8 +128,11 @@ def _store(workspace: str | None) -> StudyStore:
             f"legacy state detected at {resolved_workspace / 'state'}; "
             "run migrate --from-math-study explicitly before using exam-prep"
         )
-    store.initialize()
     return store
+
+
+def _initialization_state(store: StudyStore) -> tuple[str, list[str]]:
+    return store.initialization_state()
 
 
 def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
@@ -214,16 +149,15 @@ def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
     log and a fresh revision is committed before returning - so a crashed
     observation is replayed exactly once, and callers never see stale data.
     """
-    course = _read_json(store.state_path / "course.json", DEFAULT_COURSE.copy())
-    syllabus = _read_json(store.state_path / "syllabus.json", DEFAULT_SYLLABUS.copy())
+    course = _read_json(store.state_path / "course.json", default_course())
+    syllabus = _read_json(store.state_path / "syllabus.json", default_syllabus())
     events = store.read_complete_observations()
     current_id = events[-1]["observation_id"] if events else None
 
     recovered = store.try_recover()
     if recovered is None:
-        learner = dict(DEFAULT_LEARNER)
-        learner["updated_at"] = _now()
-        session = dict(DEFAULT_SESSION)
+        learner = default_learner(_now())
+        session = default_session()
         needs_materialization = True
     else:
         learner = recovered.learner
@@ -377,6 +311,35 @@ def main(argv: list[str] | None = None) -> int:
         result = migrate_legacy_workspace(args.from_math_study)
         return _result(result.to_mapping())
     store = _store(args.workspace)
+    initialization_state, missing_files = _initialization_state(store)
+
+    if args.command == "status" and initialization_state == "uninitialized":
+        return _result({
+            "status": "uninitialized",
+            "initialized": False,
+            "workspace": str(store.root),
+        })
+
+    if args.command == "status" and initialization_state == "incomplete":
+        return _result({
+            "status": "incomplete_workspace",
+            "initialized": False,
+            "workspace": str(store.root),
+            "missing_files": missing_files,
+        })
+
+    if initialization_state != "initialized" and args.command not in {
+        "init",
+        "validate",
+        "validate-curriculum",
+        "status",
+    }:
+        return _result({
+            "status": "workspace_not_initialized",
+            "initialized": False,
+            "workspace": str(store.root),
+            "missing_files": missing_files,
+        })
 
     if args.command == "ingest-source-evidence":
         envelope = json.loads(Path(args.path).read_text(encoding="utf-8"))
@@ -388,9 +351,17 @@ def main(argv: list[str] | None = None) -> int:
         try:
             from exam_prep_lib.source_provider import build_runtime_source_catalog
 
+            # A fresh workspace has no trusted persisted evidence to read.
+            # Keep pre-init curriculum validation non-mutating while retaining
+            # the runtime catalog for initialized workspaces.
+            verified_source_catalog = (
+                build_runtime_source_catalog(store)
+                if initialization_state == "initialized"
+                else {}
+            )
             validated = validate_curriculum_proposal(
                 proposal,
-                verified_source_catalog=build_runtime_source_catalog(store),
+                verified_source_catalog=verified_source_catalog,
             )
         except CurriculumValidationError as exc:
             return _result({
@@ -433,12 +404,26 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.command == "init":
+        initialization_state, missing_files = _initialization_state(store)
+        if initialization_state == "initialized":
+            return _result({
+                "status": "already_initialized",
+                "initialized": True,
+                "workspace": str(store.root),
+            })
+        if initialization_state == "incomplete":
+            return _result({
+                "status": "initialization_conflict",
+                "initialized": False,
+                "workspace": str(store.root),
+                "missing_files": missing_files,
+            })
+        store.initialize()
         now = _now()
-        course = dict(DEFAULT_COURSE)
-        syllabus = dict(DEFAULT_SYLLABUS)
-        learner = dict(DEFAULT_LEARNER)
-        learner["updated_at"] = now
-        session = dict(DEFAULT_SESSION)
+        course = default_course()
+        syllabus = default_syllabus()
+        learner = default_learner(now)
+        session = default_session()
         _write_json(store.state_path / "course.json", course)
         _write_json(store.state_path / "syllabus.json", syllabus)
         # Commit an initial revision immediately so the recovery chain has a
@@ -451,6 +436,12 @@ def main(argv: list[str] | None = None) -> int:
         path = Path(args.path)
         loaded = json.loads(path.read_text(encoding="utf-8"))
         validate_document(loaded, load_schema("syllabus.schema.json"))
+        dimension_issues = capability_dimension_issues(loaded)
+        if dimension_issues:
+            raise SchemaError(
+                "$.assessment_capabilities",
+                "; ".join(dimension_issues),
+            )
         _write_json(store.state_path / "syllabus.json", loaded)
         return _result(
             {

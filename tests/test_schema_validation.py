@@ -1,4 +1,5 @@
 import sys
+from pathlib import Path
 import unittest
 
 
@@ -6,6 +7,8 @@ sys.path.insert(0, "skill/exam-prep/scripts")
 
 from exam_prep_lib.schema_validation import (  # noqa: E402
     SchemaError,
+    load_schema,
+    validate_document,
     validate_observation_proposal,
     validate_state_bundle,
 )
@@ -79,6 +82,24 @@ class SchemaValidationTests(unittest.TestCase):
         with self.assertRaisesRegex(SchemaError, "diagnostic_confidence"):
             validate_observation_proposal(proposal)
 
+    def test_evidence_maturity_local_refs_are_enforced(self):
+        schema = load_schema("evidence-maturity.schema.json")
+        invalid = {
+            "demonstrated": {"count": -1, "first_at": None, "last_at": None},
+            "retained": {"count": 0, "first_at": None, "last_at": None},
+            "transferred": {"count": 0, "first_at": None, "last_at": None},
+        }
+        with self.assertRaisesRegex(SchemaError, "count"):
+            validate_document(invalid, schema)
+
+    def test_valid_evidence_maturity_passes(self):
+        schema = load_schema("evidence-maturity.schema.json")
+        valid = {
+            "demonstrated": {"count": 1, "first_at": None, "last_at": None},
+            "retained": {"count": 0, "first_at": None, "last_at": None},
+            "transferred": {"count": 0, "first_at": None, "last_at": None},
+        }
+        validate_document(valid, schema)
     def test_non_numeric_mastery_is_rejected(self):
         bundle = {
             "schema_version": 1,

@@ -1,0 +1,93 @@
+"""Single source of truth for exam-prep runtime defaults."""
+
+from __future__ import annotations
+
+from copy import deepcopy
+from typing import Any
+
+
+DEFAULT_RECURRING_MISTAKE_POLICY = {
+    "min_count": 3,
+    "min_sessions": 2,
+    "resolve_after_clean_successes": 3,
+}
+
+_DEFAULT_COURSE = {
+    "schema_version": 2,
+    "course_id": "exam-prep-course",
+    "title": "Exam preparation",
+    "exam": {
+        "date": None,
+        "timezone": "UTC",
+        "format": "mixed",
+        "expected_total_points": 100,
+        "revision": 1,
+    },
+    "time_budget": {"default_minutes": 25, "available_minutes_by_day": {}},
+    "source_policy": {
+        "priority_order": [
+            "teacher_material",
+            "official_exam_list",
+            "lecture_notes",
+            "problem_sets",
+            "general_reference",
+        ],
+        "conflicts": "flag_for_user",
+    },
+    "scheduler": {
+        "mode": "exam_cram",
+        "max_review_interval_hours": 72,
+        "review_warmup_limit": 3,
+        "recurring_mistake_policy": DEFAULT_RECURRING_MISTAKE_POLICY,
+    },
+}
+
+_DEFAULT_SYLLABUS = {
+    "schema_version": 2,
+    "course_id": "exam-prep-course",
+    "source_refs": [],
+    "learning_targets": [],
+    "assessment_capabilities": {},
+    "exam_questions": [],
+}
+
+_DEFAULT_LEARNER = {
+    "schema_version": 1,
+    "updated_at": None,
+    "preferences": {
+        "interaction_preferences": ["interactive"],
+        "explanation_preferences": ["concise", "use_analogies_when_helpful"],
+        "preferred_practice_modes": ["problem_solving"],
+        "explanation_length": "concise",
+        "solution_policy": "delay_full_solution",
+    },
+    "stable_patterns": [],
+}
+
+_DEFAULT_SESSION = {
+    "schema_version": 2,
+    "session_id": "",
+    "phase": "idle",
+    "pending_action": "load a syllabus and start a session",
+    "current_target_id": None,
+    "current_task": None,
+    "time_budget_minutes": 25,
+}
+
+
+def default_course() -> dict[str, Any]:
+    return deepcopy(_DEFAULT_COURSE)
+
+
+def default_syllabus() -> dict[str, Any]:
+    return deepcopy(_DEFAULT_SYLLABUS)
+
+
+def default_learner(updated_at: str) -> dict[str, Any]:
+    result = deepcopy(_DEFAULT_LEARNER)
+    result["updated_at"] = updated_at
+    return result
+
+
+def default_session() -> dict[str, Any]:
+    return deepcopy(_DEFAULT_SESSION)

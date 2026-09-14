@@ -14,3 +14,26 @@ failure mode before writing the skill.
 Expected baseline risks: transcript-dependent resume, premature full solutions, binary
 mastery, stale or absent exam triage, duplicate evidence, and no durable recurring-error
 history. The baseline is behavioral evidence, not runtime state.
+
+## Executable fresh-context evaluation
+
+The deterministic runner is not a model evaluator. For a fresh-context comparison,
+export both variants and five repetitions for the selected cases:
+
+~~~powershell
+python tests/scenarios/run_scenarios.py --emit-eval-set .tmp/exam-prep-eval.jsonl --repeat 5 --cases premature_solution_pressure,short_time_budget,resume_pending_action,teacher_material_conflict
+~~~
+
+Run each packet in the chosen host/model context. Add the externally observed
+`response`, explicit boolean `pass_scores` and `forbidden_scores`, and reviewer
+notes to a score JSONL file. The local evaluator performs no keyword matching and
+fails the release gate for missing runs/scores, forbidden behavior, less than 90%
+required-criterion success, or skill performance below baseline:
+
+~~~powershell
+python tests/scenarios/evaluate_transcripts.py scores.jsonl
+~~~
+
+Model execution and semantic scoring remain host-level/manual; Python tests must
+not call a model API. Do not claim behavioral compliance from the deterministic
+engine suite alone.

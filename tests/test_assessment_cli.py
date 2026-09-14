@@ -38,6 +38,8 @@ class AssessmentCliTests(unittest.TestCase):
             }
             path = root / "assessment.json"
             path.write_text(json.dumps(assessment), encoding="utf-8")
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, main(["--workspace", str(root), "init"]))
             output = io.StringIO()
             with contextlib.redirect_stdout(output):
                 code = main(["--workspace", str(root), "freeze-assessment", str(path)])
