@@ -15,6 +15,10 @@ NotebookLM MCP is an optional P2 agent-host integration. When present, the host
 normalizes its returned evidence into a SourceEvidenceEnvelope and passes that
 data to the CLI. The Python core has no NotebookLM transport or SDK dependency.
 
+The primary package examples are subject-neutral. The separate
+examples/mathematics-regression-syllabus.json is retained only for
+mathematics-specific regression coverage.
+
 ## Implementation roadmap
 
 | Priority | Scope |

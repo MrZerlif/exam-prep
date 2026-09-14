@@ -43,18 +43,8 @@ def _event_facets(
         transfer_evidence = task_type in {"transfer", "exam_problem"}
         retention_evidence = task_type == "delayed_recall"
     else:
-        requirements = set(capability.evidence_requirements)
-        transfer_evidence = (
-            "transfer" in capability.affected_dimensions
-            or "transfer" in requirements
-            or "transferred" in requirements
-            or capability.capability_id in {"transfer", "exam_problem"}
-        )
-        retention_evidence = (
-            "retained" in requirements
-            or "delayed_recall" in requirements
-            or capability.capability_id == "delayed_recall"
-        )
+        transfer_evidence = capability.demonstrates_transfer()
+        retention_evidence = capability.demonstrates_retention()
     if retention_evidence:
         facets.add("retained")
     if transfer_evidence:

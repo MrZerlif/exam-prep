@@ -1,21 +1,21 @@
 {
-  "assessment_id": "assessment:limits-independent-1",
-  "target_id": "limits",
-  "capability_id": "independent_problem",
-  "prompt": "Evaluate the limit and justify the method you selected.",
+  "assessment_id": "assessment:core-definition-independent-1",
+  "target_id": "core-definition",
+  "capability_id": "definition_recall",
+  "prompt": "State the definition and explain when it applies.",
   "rubric": {
     "criteria": [
-      "selects a valid method",
-      "shows the key transformation",
-      "states the result with required conditions"
+      "states the defining property",
+      "names the required conditions",
+      "explains the result in the learner's own words"
     ]
   },
-  "expected_evidence": ["independent attempt", "method justification"],
+  "expected_evidence": ["independent attempt", "condition recall"],
   "source_refs": [
     {
-      "source_id": "official-exam-list:q1",
+      "source_id": "official-exam-outline:q1",
       "authority": "official_exam_list",
-      "locator": "question 1"
+      "location": {"section": "question 1"}
     }
   ],
   "difficulty": 0.45,

@@ -14,7 +14,7 @@ from exam_prep_lib.storage import StudyStore  # noqa: E402
 
 
 ROOT = Path(__file__).parents[1]
-SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "example-syllabus.json"
+SYLLABUS = ROOT / "skill" / "exam-prep" / "examples" / "mathematics-regression-syllabus.json"
 
 
 def proposal(observation_id, concept_id="chain_rule", outcome="correct"):

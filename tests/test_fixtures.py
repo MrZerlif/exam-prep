@@ -44,6 +44,15 @@ class FixtureTests(unittest.TestCase):
         for term in ("install", "init", "syllabus", "status", "review", "mock exam", "state", "recovery"):
             self.assertIn(term, readme)
 
+    def test_default_course_template_is_subject_neutral(self):
+        course = json.loads(
+            (SKILL_ROOT / "templates" / "course.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(2, course["schema_version"])
+        self.assertEqual("exam-prep", course["product_id"])
+        self.assertEqual("example-exam", course["course_id"])
+        self.assertEqual("Exam preparation", course["title"])
+
 
 if __name__ == "__main__":
     unittest.main()

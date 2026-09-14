@@ -6,11 +6,11 @@ import argparse
 import json
 import os
 import sys
-from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from exam_prep_lib.capabilities import CapabilityRegistry
 from exam_prep_lib.diagnostics import run_validation
 from exam_prep_lib.reducer import reduce_learning_state
 from exam_prep_lib.migration import migrate_legacy_workspace
@@ -33,7 +33,7 @@ from exam_prep_lib.schema_validation import (
 from exam_prep_lib.source_evidence import ingest_source_evidence
 from exam_prep_lib.storage import StudyStore
 from exam_prep_lib.target_normalization import normalize_syllabus
-from exam_prep_lib.verifier import verify_antiderivative, verify_derivative
+from exam_prep_lib.verifier_registry import VerifierRegistry, verify_request
 from exam_prep_lib.workspace import discover_git_root, resolve_workspace
 
 
@@ -614,25 +614,26 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "verify":
         request = json.loads(Path(args.path).read_text(encoding="utf-8"))
-        samples = request.get("samples", [0.5, 1.0, 1.5])
-        tolerance = float(request.get("tolerance", 1e-4))
-        if request.get("kind") == "antiderivative":
-            result = verify_antiderivative(
-                request["integrand"],
-                request["antiderivative"],
-                request.get("variable", "x"),
-                samples,
-                tolerance,
+        request.setdefault("samples", [0.5, 1.0, 1.5])
+        request.setdefault("tolerance", 1e-4)
+        raw_syllabus = request.get("syllabus")
+        if not isinstance(raw_syllabus, dict):
+            raw_syllabus = (
+                request
+                if isinstance(request.get("assessment_capabilities"), dict)
+                else {}
             )
-        else:
-            result = verify_derivative(
-                request["expression"],
-                request["derivative"],
-                request.get("variable", "x"),
-                samples,
-                tolerance,
-            )
-        return _result(asdict(result))
+        capability_registry = (
+            CapabilityRegistry.from_syllabus(raw_syllabus)
+            if raw_syllabus
+            else CapabilityRegistry.with_defaults()
+        )
+        result = verify_request(
+            request,
+            capability_registry=capability_registry,
+            verifier_registry=VerifierRegistry.with_defaults(),
+        )
+        return _result(result)
 
     if args.command == "rebuild":
         events = store.read_complete_observations()

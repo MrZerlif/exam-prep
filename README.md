@@ -1,7 +1,7 @@
 # Exam Prep Agent Skill
 
-Exam Prep is an interactive, exam-first subject-neutral tutor for a
-first-year student. It keeps compact persistent evidence in a local workspace,
+Exam Prep is an interactive, exam-first subject-neutral tutor for
+any learner. It keeps compact persistent evidence in a local workspace,
 lets a deterministic state engine calculate mastery/reviews/priority, and lets
 the LLM focus on teaching, debugging, and asking for independent work.
 
@@ -37,9 +37,10 @@ Normally give the tutor materials, exam questions, or source references. The
 agent or a SourceProvider analyzes them into a v2 CurriculumProposal; the
 deterministic validator produces LearningTargets, validates the prerequisite
 graph and exam mappings, reports capability warnings and source coverage gaps,
-and persists the syllabus. New users should not hand-author concepts JSON.
+and persists the syllabus. New users should not normally hand-author syllabus JSON.
 Teacher materials and official exam questions outrank generic references; source
-conflicts are surfaced.
+conflicts are surfaced. The checked-in mathematics regression syllabus is kept
+separate from the subject-neutral example syllabus.
 
 ## Everyday commands
 
@@ -53,14 +54,14 @@ python scripts/exam_prep.py validate
 python scripts/exam_prep.py end-session
 ~~~
 
-Natural language is preferred: “Что у меня самое слабое?”, “У меня 25 минут”
-and “Давай повторим пределы.” The tutor maps these requests to the CLI and
-records one structured observation after each assessable attempt.
+Natural language is preferred: “What is my weakest target?”, “I have 25
+minutes”, or “Let us review this target.” The tutor maps these requests to the
+CLI and records one structured observation after each assessable attempt.
 
 ## Exam preparation
 
 Set the exam date in `.exam-prep/course.json` after init. Use next with the real budget;
-priority is recomputed for exam horizon, due state, prerequisites, mastery gap,
+priority is recomputed for exam horizon, due state, prerequisites, capability-required mastery dimensions, evidence facets, prerequisite unlock value,
 expected points, and estimated improvement time. Use:
 
 ~~~text
@@ -79,8 +80,8 @@ Use verify with a JSON request to run safe numerical checks:
 python scripts/exam_prep.py verify request.json
 ~~~
 
-Core derivative and antiderivative checking is numerical finite-difference
-consistency evidence. Symbolic differentiation belongs only to an optional CAS
+The optional mathematics-specific derivative and antiderivative verifier uses numerical
+finite-difference consistency evidence. Symbolic differentiation belongs only to an optional CAS
 backend and is never required for the tutor.
 
 ## Repository layout

@@ -118,23 +118,34 @@ def _outcome_signal(outcome: str) -> float | None:
     return {"correct": 1.0, "partial": 0.5, "incorrect": 0.0}.get(outcome)
 
 
-def _mastery_status(state: dict[str, Any]) -> str:
+def _mastery_status(
+    state: dict[str, Any],
+    required_dimensions: tuple[str, ...] | None = None,
+    requires_transfer: bool = True,
+) -> str:
     evidence = state["evidence"]
     if not any(evidence.values()):
         return "unseen"
-    average = average_known_mastery(state["mastery"])
+    dimensions = required_dimensions or SCORED_AT_START
+    values = [
+        state["mastery"].get(dimension)
+        for dimension in dimensions
+        if state["mastery"].get(dimension) is not None
+    ]
+    average = sum(values) / len(values) if values else 0.0
+    transfer_evidence = evidence["transfer_successes"] + evidence["exam_successes"]
     if evidence["solution_views"] and not evidence["independent_successes"]:
         return "learning"
     if (
         average >= 0.85
         and evidence["independent_successes"] >= 3
-        and evidence["transfer_successes"] >= 2
+        and (not requires_transfer or evidence["transfer_successes"] >= 2)
     ):
         return "mastered"
     if (
         average >= 0.55
         and evidence["independent_successes"] >= 2
-        and evidence["transfer_successes"] + evidence["exam_successes"] >= 1
+        and (not requires_transfer or transfer_evidence >= 1)
     ):
         return "exam_ready"
     if evidence["failures"] and average < 0.45:
@@ -142,6 +153,33 @@ def _mastery_status(state: dict[str, Any]) -> str:
     if evidence["independent_successes"] or evidence["hinted_successes"]:
         return "practicing"
     return "learning"
+
+
+def _target_capability_semantics(
+    target: dict[str, Any], capability_registry: CapabilityRegistry
+) -> tuple[tuple[str, ...] | None, bool]:
+    raw_ids = target.get("capability_ids", [])
+    if isinstance(raw_ids, str):
+        raw_ids = [raw_ids]
+    if not isinstance(raw_ids, (list, tuple)):
+        raw_ids = []
+    if not raw_ids:
+        return None, True
+    dimensions: set[str] = set()
+    requires_transfer = False
+    for capability_id in raw_ids:
+        capability = capability_registry.resolve(capability_id).capability
+        if not capability.is_registered:
+            continue
+        dimensions.update(
+            dimension
+            for dimension in capability.affected_dimensions
+            if dimension in DIMENSIONS
+        )
+        requires_transfer = requires_transfer or capability.demonstrates_transfer()
+    if not dimensions:
+        return None, requires_transfer
+    return tuple(dimension for dimension in DIMENSIONS if dimension in dimensions), requires_transfer
 
 
 def reduce_learning_state(
@@ -173,6 +211,10 @@ def reduce_learning_state(
         )
         capability_resolution = capability_registry.resolve(capability_id)
         capability = capability_resolution.capability
+        legacy_task_semantics = (
+            event.get("schema_version", 1) != 2
+            or event.get("capability_id") is None
+        )
         add_event_to_maturity(state["evidence_maturity"], event, capability)
         if capability_resolution.warning and capability.capability_id not in unmapped_capability_events:
             unmapped_capability_events.append(capability.capability_id)
@@ -195,11 +237,26 @@ def reduce_learning_state(
                 state["evidence"]["independent_successes"] += 1
             elif capability.is_registered and assistance_band != "solution_seen":
                 state["evidence"]["hinted_successes"] += 1
-            if capability.is_registered and capability.capability_id == "delayed_recall":
+            retention_success = (
+                capability.capability_id == "delayed_recall"
+                if legacy_task_semantics
+                else capability.demonstrates_retention()
+            )
+            transfer_success = (
+                capability.capability_id == "transfer"
+                if legacy_task_semantics
+                else capability.demonstrates_transfer()
+            )
+            exam_success = (
+                capability.capability_id == "exam_problem"
+                if legacy_task_semantics
+                else capability.counts_as_exam_success()
+            )
+            if retention_success and assistance_band == "independent":
                 state["evidence"]["delayed_recall_successes"] += 1
-            if capability.is_registered and capability.capability_id == "transfer":
+            if transfer_success and assistance_band == "independent":
                 state["evidence"]["transfer_successes"] += 1
-            if capability.is_registered and capability.capability_id == "exam_problem":
+            if exam_success and assistance_band == "independent":
                 state["evidence"]["exam_successes"] += 1
 
         if (
@@ -278,7 +335,13 @@ def reduce_learning_state(
             )
 
     for concept_id, state in concepts.items():
-        state["mastery_status"] = _mastery_status(state)
+        target = normalized_syllabus.targets.get(concept_id, {})
+        required_dimensions, requires_transfer = _target_capability_semantics(
+            target, capability_registry
+        )
+        state["mastery_status"] = _mastery_status(
+            state, required_dimensions, requires_transfer
+        )
         state["recurring_mistakes"].sort(key=lambda item: (-item["count"], item["tag"]))
 
     for concept_id, state in concepts.items():
