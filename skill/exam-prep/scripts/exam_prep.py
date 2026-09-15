@@ -112,6 +112,51 @@ def _public_derived(syllabus: dict, derived: dict) -> dict:
     return result
 
 
+def _compact_status(result: dict) -> dict:
+    """Trim `status --compact` down to what picking the next action needs:
+    each target's availability/mastery_status/recurring_mistakes (dropping
+    confidence, evidence counters, evidence_maturity, and numeric mastery
+    dimensions - available in full via plain `status` or `roadmap`),
+    review_queue narrowed to items actually due, and diagnostics fields
+    dropped when empty rather than printed as null/[]/false. session,
+    resume_point, course, and last_session_summary are already small and
+    are passed through unchanged."""
+
+    compact = dict(result)
+    targets_key = "targets" if "targets" in result else "concepts"
+    derived = result.get(targets_key)
+    if isinstance(derived, dict) and isinstance(derived.get("targets"), dict):
+        trimmed_targets = {}
+        for target_id, state in derived["targets"].items():
+            entry = {
+                "availability": state.get("availability"),
+                "mastery_status": state.get("mastery_status"),
+            }
+            if state.get("recurring_mistakes"):
+                entry["recurring_mistakes"] = state["recurring_mistakes"]
+            trimmed_targets[target_id] = entry
+        compact[targets_key] = {**derived, "targets": trimmed_targets}
+
+    review_queue = result.get("review_queue")
+    if isinstance(review_queue, dict) and isinstance(review_queue.get("items"), dict):
+        due_items = {
+            target_id: {"review_status": item.get("review_status"), "reason": item.get("reason")}
+            for target_id, item in review_queue["items"].items()
+            if item.get("review_status") == "due"
+        }
+        compact["review_queue"] = {**review_queue, "items": due_items}
+
+    if not compact.get("capability_diagnostics"):
+        compact.pop("capability_diagnostics", None)
+    if not compact.get("blueprint_diagnostics"):
+        compact.pop("blueprint_diagnostics", None)
+    log_diagnostics = compact.get("log_diagnostics")
+    if isinstance(log_diagnostics, dict) and not any(log_diagnostics.values()):
+        compact.pop("log_diagnostics", None)
+
+    return compact
+
+
 def _public_activity(syllabus: dict, selected: dict) -> dict:
     if not _is_v2_syllabus(syllabus):
         return selected
@@ -354,7 +399,16 @@ def _parser() -> argparse.ArgumentParser:
     load = sub.add_parser("load-syllabus")
     load.add_argument("path")
     sub.add_parser("start")
-    sub.add_parser("status")
+    status_parser = sub.add_parser("status")
+    status_parser.add_argument(
+        "--compact",
+        action="store_true",
+        help=(
+            "trim each target down to availability/mastery_status/"
+            "recurring_mistakes, review_queue down to due items, and drop "
+            "empty diagnostics - full form (the default) is unchanged"
+        ),
+    )
     next_parser = sub.add_parser("next")
     next_parser.add_argument("--minutes", type=int, default=25)
     record = sub.add_parser("record-observation")
@@ -652,28 +706,27 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "status":
         session_history = store.read_session_summaries()
-        return _result(
-            {
-                "course": {
-                    "course_id": course.get("course_id"),
-                    "exam": course.get("exam"),
-                },
-                "session": session,
-                "last_session_summary": session_history[-1] if session_history else None,
-                ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
-                    syllabus, concepts
-                ),
-                "review_queue": reviews,
-                "log_diagnostics": store.read_log_diagnostics(),
-                "capability_diagnostics": list(
-                    CapabilityRegistry.from_syllabus(syllabus).rejected_descriptors()
-                ),
-                "blueprint_diagnostics": blueprint_revision_diagnostics(
-                    course, store.read_complete_observations()
-                ),
-                "resume_point": _resume_point(syllabus, concepts, session),
-            }
-        )
+        full = {
+            "course": {
+                "course_id": course.get("course_id"),
+                "exam": course.get("exam"),
+            },
+            "session": session,
+            "last_session_summary": session_history[-1] if session_history else None,
+            ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
+                syllabus, concepts
+            ),
+            "review_queue": reviews,
+            "log_diagnostics": store.read_log_diagnostics(),
+            "capability_diagnostics": list(
+                CapabilityRegistry.from_syllabus(syllabus).rejected_descriptors()
+            ),
+            "blueprint_diagnostics": blueprint_revision_diagnostics(
+                course, store.read_complete_observations()
+            ),
+            "resume_point": _resume_point(syllabus, concepts, session),
+        }
+        return _result(_compact_status(full) if args.compact else full)
 
     if args.command == "next":
         selected = select_next_activity(
