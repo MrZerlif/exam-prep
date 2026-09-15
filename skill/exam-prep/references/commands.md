@@ -53,6 +53,18 @@ refuses the write when they disagree (`AssessmentIntegrityError`) or when the
 loudly rather than recording detached evidence. A `mock` assessment also
 requires the session to be in `phase: exam`.
 
+Forgetting the link is diagnosed, not punished. An attempt recorded during
+`phase: exam` on a target this session holds an unlinked ticket for, with no
+`assessment_id`, comes back with a `diagnostics` entry
+(`exam_attempt_not_linked_to_ticket`) naming the tickets still available to
+link - reported while the next attempt can still be recorded correctly, rather
+than at end-session when the mock is over. The observation is recorded either
+way and the event stays in the canonical log; losing evidence to enforce a link
+would be worse than an unlinked attempt. `end-session` repeats the total as
+`post_mortem.unlinked_attempts`. Nothing is reported outside an exam phase, for
+a target the mock does not cover, or once every ticket for that target is
+already linked.
+
 `score` is the share of *independently* correct tickets, not of correct ones:
 a ticket answered correctly after H1/H2 hints lands in `correct` but its
 assistance band is `guided`, and only `independent` counts. Two correct

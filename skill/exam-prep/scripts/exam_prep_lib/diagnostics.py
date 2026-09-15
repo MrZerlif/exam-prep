@@ -11,7 +11,7 @@ from __future__ import annotations
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Iterable
+from typing import Any, Callable, Iterable, Mapping
 
 from .capabilities import capability_dimension_issues
 from .schema_validation import (
@@ -75,6 +75,123 @@ def blueprint_revision_diagnostics(
             )
         ],
     }
+
+
+def _mock_tickets_by_target(
+    session: Mapping[str, Any], assessments: Iterable[Mapping[str, Any]]
+) -> dict[str, list[str]]:
+    """The tickets this exam session handed out, grouped by target_id."""
+
+    handed_out = list(session.get("mock_assessment_ids") or [])
+    if not handed_out:
+        return {}
+    wanted = set(handed_out)
+    by_target: dict[str, list[str]] = {}
+    for item in assessments:
+        assessment_id = item.get("assessment_id")
+        target_id = item.get("target_id")
+        if assessment_id not in wanted or not target_id:
+            continue
+        by_target.setdefault(target_id, []).append(assessment_id)
+    for assessment_ids in by_target.values():
+        assessment_ids.sort(key=handed_out.index)
+    return by_target
+
+
+def unlinked_exam_attempt_diagnostic(
+    proposal: Mapping[str, Any],
+    session: Mapping[str, Any],
+    assessments: Iterable[Mapping[str, Any]],
+    prior_events: Iterable[Mapping[str, Any]],
+) -> dict[str, Any] | None:
+    """Flag an exam-phase observation that answers a target this session has
+    a ticket for but carries no assessment_id, so it binds to no ticket.
+
+    Only assessment_id binds an attempt to a FrozenAssessment (see
+    StudyStore.append_observation); without it the event is recorded as
+    ordinary evidence with assessment_integrity 'not_assessment' and
+    end-session's post-mortem leaves the ticket attempted: false. That is
+    correct engine behavior, but silent - and silent at the worst moment,
+    since the cost only becomes visible when the mock is already over and
+    the attempt cannot be re-linked. Per invariant 3 this makes the gap
+    speak at the point the next attempt can still be recorded correctly.
+
+    Diagnostic only: the caller records the observation either way. Losing
+    evidence to enforce a link would be worse than an unlinked attempt.
+
+    Returns None outside an exam phase, for an already-linked proposal, and
+    when every ticket for that target is already linked to an attempt - in
+    that last case there is nothing left to link and naming a ticket would
+    be advice to double-record. A tutor recording a genuine side observation
+    mid-exam on a ticket's target is flagged too; that false positive costs
+    one ignorable field, while the miss it guards against costs the
+    post-mortem."""
+
+    if proposal.get("assessment_id") is not None:
+        return None
+    if session.get("phase") != "exam":
+        return None
+    target_id = proposal.get("target_id", proposal.get("concept_id"))
+    if not target_id:
+        return None
+    candidates = _mock_tickets_by_target(session, assessments).get(target_id)
+    if not candidates:
+        return None
+    already_linked = {
+        event.get("assessment_id")
+        for event in prior_events
+        if event.get("session_id") == session.get("session_id")
+        and event.get("assessment_id")
+    }
+    unlinked = [
+        assessment_id for assessment_id in candidates if assessment_id not in already_linked
+    ]
+    if not unlinked:
+        return None
+    return {
+        "code": "exam_attempt_not_linked_to_ticket",
+        "target_id": target_id,
+        "observation_id": proposal.get("observation_id"),
+        "candidate_assessment_ids": unlinked,
+        "detail": (
+            f"recorded during an exam on target {target_id!r} with no assessment_id, "
+            f"so it is linked to no ticket and will not appear in the post-mortem; "
+            f"tickets still unlinked for this target: {', '.join(unlinked)}"
+        ),
+    }
+
+
+def unlinked_exam_attempts(
+    session: Mapping[str, Any],
+    assessments: Iterable[Mapping[str, Any]],
+    session_events: Iterable[Mapping[str, Any]],
+) -> list[dict[str, Any]]:
+    """end-session's closing summary of attempts that answered a ticket's
+    target without binding to a ticket - the same gap
+    unlinked_exam_attempt_diagnostic reports per attempt, totalled once the
+    mock is over. Secondary to that per-attempt signal: by this point the
+    mock cannot be re-answered, so this explains an empty post-mortem rather
+    than preventing one."""
+
+    targets = _mock_tickets_by_target(session, assessments)
+    if not targets:
+        return []
+    started_at = session.get("mock_started_at")
+    return [
+        {
+            "observation_id": event.get("observation_id"),
+            "target_id": event.get("target_id", event.get("concept_id")),
+            "outcome": event.get("outcome"),
+        }
+        for event in session_events
+        if not event.get("assessment_id")
+        and event.get("target_id", event.get("concept_id")) in targets
+        and not (
+            started_at
+            and event.get("recorded_at")
+            and event["recorded_at"] < started_at
+        )
+    ]
 
 
 def _check(name: str, fn: Callable[[], tuple[str, str] | None], path: str | None = None) -> dict[str, Any]:
