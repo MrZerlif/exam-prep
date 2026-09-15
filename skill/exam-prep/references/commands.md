@@ -23,11 +23,40 @@ one entry here - `SKILL.md` should not need to change.
 - `review-due` - concepts with a due or overdue review.
 - `mistakes` - recurring, unresolved error patterns.
 - `record-observation <path>` - the only way learner evidence enters the
-  system; never hand-edit `observations.jsonl` or derived state.
+  system; never hand-edit `observations.jsonl` or derived state. When the
+  attempt answers a frozen assessment, the proposal must carry
+  `assessment_id` (see below).
 - `end-session` - close the session; produces a summary, and a
   per-question post-mortem when the session was an `exam`.
 - `rebuild` - recompute derived state from the canonical observation log.
 - `verify <path>` - numeric/symbolic answer check (`references/verification.md`).
+
+### Linking an attempt to a frozen assessment
+
+`assessment_id` is what binds an observation to a `FrozenAssessment`. It is an
+optional proposal field - ordinary practice that answers no frozen assessment
+omits it - but it is the *only* key that binds. `task_id` is required on every
+proposal and never binds: it names the activity, not the assessment, and an
+`exam` ticket answered with `task_id` alone is recorded as ordinary evidence
+with `assessment_integrity: "not_assessment"`.
+
+Omitting it on a mock ticket is silent and costly. `end-session`'s post-mortem
+pairs `session.mock_assessment_ids` against events by `assessment_id`, so every
+unlinked ticket stays `attempted: false` and `score` is computed over a sample
+that never fills - the exam is graded as if nothing had been answered.
+
+When the attempt answers a ticket that `exam` handed out, copy that ticket's
+`assessment_id` into the proposal verbatim, alongside the `target_id` and
+`capability_id` the same ticket carries. The engine cross-checks all three and
+refuses the write when they disagree (`AssessmentIntegrityError`) or when the
+`assessment_id` is unknown (`AssessmentConflict`), so a mistyped link fails
+loudly rather than recording detached evidence. A `mock` assessment also
+requires the session to be in `phase: exam`.
+
+`score` is the share of *independently* correct tickets, not of correct ones:
+a ticket answered correctly after H1/H2 hints lands in `correct` but its
+assistance band is `guided`, and only `independent` counts. Two correct
+answers, one of them hinted, score 0.5.
 
 ## Curriculum
 
