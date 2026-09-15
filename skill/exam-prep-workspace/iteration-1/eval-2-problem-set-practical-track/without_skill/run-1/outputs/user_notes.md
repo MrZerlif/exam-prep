@@ -1,0 +1,4 @@
+# Notes / uncertainties
+
+- The workspace contained a hidden `.exam-prep` folder with structured files (`course.json`, `learner.json`, `syllabus.json`, `targets.json`, `session.json`, `review_queue.json`, etc.). I have no documented way to interpret this as a known progress-tracking format, so I treated it as opaque and did not use it to inform the reply — I did not open or parse the individual files. If this folder actually holds useful history about the learner's level or prior mistakes with integration by parts, that context was not incorporated.
+- The learner didn't specify their current skill level with integration by parts, so I guessed at an appropriate starting difficulty (∫x·cos(x) dx — a standard, moderate first example). If they're already comfortable with this basic case, the problem may be too easy; if they're shakier than expected, it may need more scaffolding. This should become clear once they respond with their solution.

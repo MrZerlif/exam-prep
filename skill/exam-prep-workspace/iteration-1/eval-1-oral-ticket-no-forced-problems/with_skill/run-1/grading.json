@@ -1,0 +1,137 @@
+{
+  "expectations": [
+    {
+      "text": "The tutor reads the learner's existing local state (course/syllabus) before answering, instead of inventing course/exam details from nothing.",
+      "passed": true,
+      "evidence": "Transcript steps 3-4 run `status` (after an initial Git-Bash backslash-path failure, retried successfully with forward slashes), returning real workspace state: course.exam (date 2026-09-18, delivery oral, question_model ticket_list), session state, review_queue, and per-ticket mastery for all 6 tickets. Step 6 lists the actual `.exam-prep/` state files (course.json, syllabus.json, learner.json, etc.) confirming this is persisted state, not fabricated. Step 7 reads syllabus.json to get ticket-3's real title ('Теорема Лагранжа о среднем значении') and metadata. Step 8 reads learner.json for stored preferences. The final reply's claims (ticket availability, exam format matching 'no problems') are traceable to this real data, not invented."
+    },
+    {
+      "text": "The tutor follows the ticket_list track order: asks for a brief answer structure (which theorem, hypotheses/conclusion or formula meaning, shape of the argument) as its own step, separate from and before requesting/giving the full statement or proof.",
+      "passed": true,
+      "evidence": "Final reply (outputs/final_reply.md) asks exactly three brief-structure questions before anything else: (1) one-sentence statement of what the theorem asserts, (2) hypotheses and conclusion, (3) the 1-2 sentence shape/skeleton of the proof and what construction it relies on. It explicitly defers the next stage: 'После этого перейдём к полной формулировке и доказательству целиком, а затем — к проверке на понимание' (only after this do we move to the full statement/proof, then comprehension check). This matches references/pedagogy.md's ticket_list stage order and its explicit instruction not to collapse 'give me ticket N' into 'recite it in full'."
+    },
+    {
+      "text": "The tutor does NOT introduce a practice-problem, worked-example, or 'let's solve a problem together' stage for this ticket — no problem is invented where the syllabus and exam format have none.",
+      "passed": true,
+      "evidence": "The reply contains no problem, example, or exercise. It explicitly frames the mode as ticket recitation rather than problem-solving: '...тренируемся именно в режиме «рассказать билет», а не «решить пример»' (we practice in 'recite the ticket' mode, not 'solve an example' mode)."
+    },
+    {
+      "text": "The tutor asks the learner to attempt/recite before evaluating or revealing the full theorem and proof, rather than immediately reciting the theorem itself.",
+      "passed": true,
+      "evidence": "The reply never states the theorem's content, hypotheses, conclusion, or proof. It only names the ticket's title (from syllabus.json) and then asks the learner to answer the three brief-structure questions 'по памяти, без подглядывания' (from memory, without looking it up) before anything is revealed."
+    },
+    {
+      "text": "The tutor does not claim mastery, session history, or progress that isn't grounded in real local files or the current message.",
+      "passed": true,
+      "evidence": "The only status-like claims in the reply ('доступен без незакрытых предпосылок' / available with no open prerequisites) are directly grounded in the real `status` output (ticket-3 availability: 'available', prerequisites: [] in syllabus.json). No claim of prior mastery, no fabricated session history, no invented progress; the transcript's own reasoning (step 4) explicitly notes 'nothing has been attempted yet ... there is no prior evidence to report back about ticket-3 specifically.'"
+    },
+    {
+      "text": "The reply engages with the learner's actual ticket 3 (Теорема Лагранжа о среднем значении, as defined in their own syllabus), rather than asking the learner to supply the ticket's content or substituting a generic unrelated theorem.",
+      "passed": true,
+      "evidence": "syllabus.json (step 7) defines ticket-3's title as 'Теорема Лагранжа о среднем значении', and the final reply opens with exactly that: 'Билет 3 — «Теорема Лагранжа о среднем значении»'. The tutor does not ask the learner what ticket 3 is about and does not substitute a different theorem."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {
+      "Read": 5,
+      "Bash": 3
+    },
+    "total_tool_calls": 8,
+    "total_steps": 9,
+    "errors_encountered": 1,
+    "output_chars": 1006,
+    "transcript_chars": 12332
+  },
+  "timing": {
+    "total_tokens": 86081,
+    "duration_ms": 166322,
+    "total_duration_seconds": 166.322,
+    "note": "timing.json for this eval does not break out executor_duration_seconds vs grader_duration_seconds separately; it reports only overall duration_ms/total_duration_seconds and total_tokens for the run."
+  },
+  "claims": [
+    {
+      "claim": "The exam date (2026-09-18) matches the learner's 'через 3 дня' (in 3 days) claim relative to today (2026-09-15).",
+      "type": "factual",
+      "verified": true,
+      "evidence": "2026-09-15 + 3 days = 2026-09-18, matching course.exam.date reported in the status output (transcript step 4)."
+    },
+    {
+      "claim": "ticket-3 is available (not prerequisite-blocked), unlike ticket-2 and ticket-5.",
+      "type": "factual",
+      "verified": true,
+      "evidence": "status output reports ticket-3.availability: 'available' (step 4); syllabus.json (step 7) shows ticket-3's prerequisites: [], and separately shows ticket-5 lists ticket-3 as a prerequisite, consistent with ticket-5 being prerequisite_blocked."
+    },
+    {
+      "claim": "course.exam.follow_up_questions is false, so the follow-up-questions stage of the ticket_list track does not apply this turn.",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Reported directly in the status JSON summary (step 4: 'follow_up_questions: false') and reflected in the reasoning in step 5."
+    },
+    {
+      "claim": "No observation was recorded and no CLI state-mutating command was called this turn.",
+      "type": "process",
+      "verified": true,
+      "evidence": "The tool-call list (steps 1-8) contains only Read and Bash(status/ls) calls; no `record-observation`, `next`, or other mutating command appears, consistent with the 'Decision points' section's stated rationale (nothing to grade yet)."
+    },
+    {
+      "claim": "learner.json shows stable_patterns: [] and preferences including 'concise' and 'delay_full_solution', consistent with zero prior observations.",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Step 8's reproduced JSON shows exactly these fields, and step 4's review_queue shows all 6 tickets at reason 'no prior evidence for this concept', consistent with an empty stable_patterns list."
+    },
+    {
+      "claim": "The reply's brief-structure checkpoint is 'cheaper' and reveals gaps before the learner spends effort on a full recitation.",
+      "type": "quality",
+      "verified": true,
+      "evidence": "This is a reasonable pedagogical framing consistent with pedagogy.md's stated purpose for the checkpoint (a lower-stakes step before the full attempt); it is not a factual claim about data but a defensible design rationale actually reflected in the reply's structure."
+    }
+  ],
+  "user_notes_summary": {
+    "uncertainties": [
+      "Whether treating the learner's explicit 'билет номер 3' request as sufficient resolution of the session's pending_action ('choose the next budget-fitting activity') is the intended reading, versus a stricter reading that would always consult `next`/`roadmap` first even when a target is named."
+    ],
+    "needs_review": [
+      "Whether not calling `record-observation` or otherwise mutating session state this turn is acceptable given 'continue the pending action' framing, or whether some state transition was expected even before the learner responds."
+    ],
+    "workarounds": [
+      "Initial `status` invocation used Windows backslash paths, which Git Bash/POSIX sh mangled ('scripts\\exam_prep.py' became 'scriptsexam_prep.py'), causing exit code 2. Recovered on retry by rewriting all paths with forward slashes. Counted as 1 error in metrics.json; no workspace state was touched by the failed call."
+    ]
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "The tutor does NOT introduce a practice-problem, worked-example, or 'let's solve a problem together' stage for this ticket — no problem is invented where the syllabus and exam format have none.",
+        "reason": "The learner's own message already states 'никаких задач на экзамене не будет' (no problems will be on the exam). A baseline tutor with no skill at all would very likely honor this explicit instruction by default, since it requires no read of local state or pedagogy logic to avoid inventing a problem here — it just requires not contradicting what the user said. This assertion doesn't strongly discriminate a skilled response from an unskilled one on this particular prompt."
+      },
+      {
+        "assertion": "The tutor does not claim mastery, session history, or progress that isn't grounded in real local files or the current message.",
+        "reason": "Most competent baseline assistants avoid fabricating mastery/history claims by default (general anti-hallucination behavior), especially when the user's message gives no history to hallucinate about. This assertion is closer to a generic 'don't make things up' check than a specific test of the skill's local-state-grounding behavior; expectation 1 already covers the more discriminating version of this (did it actually go read the local state at all)."
+      },
+      {
+        "assertion": "The tutor asks the learner to attempt/recite before evaluating or revealing the full theorem and proof, rather than immediately reciting the theorem itself.",
+        "reason": "This substantially overlaps with the ticket_list-track-order assertion (expectation 2) and is also a fairly common default 'Socratic tutor' instinct independent of this skill's specific pedagogy.md stage sequence — many baseline tutoring prompts already ask learners to try first before being told the answer. Consider merging this into expectation 2 or sharpening it to require the specific *brief-structure* checkpoint (not just 'ask before revealing' in general) to make it more discriminating."
+      }
+    ],
+    "overall": "All 6 expectations pass on genuine, well-grounded evidence (real local-state reads driving the specific ticket-3 content and the pedagogy.md-mandated stage sequence), so this is not a rubber-stamp pass. However, three of the six assertions (problem-avoidance, no-false-mastery-claims, attempt-before-reveal) would likely also be satisfied by a reasonably competent tutor with no access to this skill at all, given how directly the learner's own message states the exam format. The strongest, most discriminating assertions here are #1 (actually reading local course/syllabus state) and #2 (following the specific brief-structure-then-full-answer stage split from pedagogy.md) and #6 (surfacing the real ticket-3 title from syllabus.json rather than a generic theorem) — these would clearly fail for an unskilled baseline that either invents course details or jumps straight to reciting a theorem. No assertion currently checks whether the tutor honors the learner's stored preferences (learner.json: concise style, delay_full_solution) in its actual reply style/length, which was observed to hold here but goes untested."
+  },
+  "non_discriminating_assertions": [
+    {
+      "expectation": "The tutor does NOT introduce a practice-problem, worked-example, or 'let's solve a problem together' stage for this ticket — no problem is invented where the syllabus and exam format have none.",
+      "reason": "The learner's message already explicitly states no problems will be on the exam; a baseline tutor would likely avoid inventing a problem here without needing the skill."
+    },
+    {
+      "expectation": "The tutor does not claim mastery, session history, or progress that isn't grounded in real local files or the current message.",
+      "reason": "This is close to a generic anti-hallucination check that most competent baseline assistants satisfy by default, especially with no prior history in the conversation to fabricate; the more discriminating version of this is already covered by the local-state-reading assertion."
+    },
+    {
+      "expectation": "The tutor asks the learner to attempt/recite before evaluating or revealing the full theorem and proof, rather than immediately reciting the theorem itself.",
+      "reason": "Overlaps heavily with the ticket_list stage-order assertion and reflects a common generic 'ask before telling' tutoring instinct that isn't unique to this skill's specific pedagogy."
+    }
+  ]
+}

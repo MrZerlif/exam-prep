@@ -1,0 +1,45 @@
+{
+  "eval_id": 1,
+  "eval_name": "eval-1-oral-ticket-no-forced-problems",
+  "prompt": "У меня через 3 дня устный экзамен по билетам — всего 6 билетов, это теоремы и определения, никаких задач на экзамене не будет. Дай мне билет номер 3, хочу проверить, насколько я его помню.",
+  "fixture": "course.exam.question_model=ticket_list, delivery=oral, date in 3 days; syllabus has 6 recitation-only targets (no problem-solving capability at all); no session open yet.",
+  "targets": "no forced practical-problem stage on a pure ticket_list/oral exam",
+  "assertions": [
+    {
+      "id": "reads-local-state",
+      "text": "The tutor reads the learner's existing local state (course/syllabus) before answering, instead of inventing course/exam details from nothing.",
+      "expected_discriminating": true,
+      "rationale": "with_skill has a CLI protocol (status/load state) to do this; a plain baseline has no such protocol and no reason to go looking, or may not know what it's looking at even if it peeks."
+    },
+    {
+      "id": "ticket-track-brief-structure-step",
+      "text": "The tutor follows the ticket_list track order: asks for a brief answer structure (which theorem, hypotheses/conclusion or formula meaning, shape of the argument) as its own step, separate from and before requesting/giving the full statement or proof.",
+      "expected_discriminating": true,
+      "rationale": "This exact staged checkpoint is unique, explicit pedagogy in references/pedagogy.md; nothing generic would reproduce it."
+    },
+    {
+      "id": "no-forced-practice-problem",
+      "text": "The tutor does NOT introduce a practice-problem, worked-example, or 'let's solve a problem together' stage for this ticket — no problem is invented where the syllabus and exam format have none.",
+      "expected_discriminating": false,
+      "rationale": "This is the core behavior the case is named for, but a plain baseline given a 'recite a theorem' request is also unlikely to spontaneously invent a problem to solve — both configurations may pass this by default. Mark explicitly: passing here is necessary but not sufficient evidence of skill value."
+    },
+    {
+      "id": "attempt-first",
+      "text": "The tutor asks the learner to attempt/recite before evaluating or revealing the full theorem and proof, rather than immediately reciting the theorem itself.",
+      "expected_discriminating": false,
+      "rationale": "A reasonably good generalist tutor persona often does this anyway on a 'quiz me' request; likely to pass in both configurations."
+    },
+    {
+      "id": "no-fabricated-progress",
+      "text": "The tutor does not claim mastery, session history, or progress that isn't grounded in real local files or the current message.",
+      "expected_discriminating": true,
+      "rationale": "with_skill is explicitly barred from supplying engine-owned fields and from inventing history; a baseline with no state-reading habit is more likely to either fabricate plausible-sounding context or, conversely, to admit total ignorance (also acceptable, but different from grounded reading)."
+    },
+    {
+      "id": "ticket-3-is-real-content",
+      "text": "The reply engages with the learner's actual ticket 3 (Теорема Лагранжа о среднем значении, as defined in their own syllabus) rather than asking the learner to supply the ticket's content or substituting a generic unrelated theorem.",
+      "expected_discriminating": true,
+      "rationale": "Only a run that actually reads the syllabus file can know ticket 3's real title/content; a baseline with no access to that file has no way to know it and should reasonably ask for it instead."
+    }
+  ]
+}
