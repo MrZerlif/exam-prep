@@ -70,6 +70,17 @@ Use this response shape:
 4. Give at most the next permitted hint level.
 5. Record a typed error after the repair attempt.
 
+When step 1 or 2 requires judging a derivative or antiderivative attempt,
+run `verify` (`references/verification.md`) and let its finite-difference
+check settle correctness instead of working the arithmetic out by hand.
+The tutor's own arithmetic misjudging a derivative or antiderivative is
+exactly the failure mode that check exists to catch - a wrong verdict here
+does not just cost one question, it records a false error tag and coaches
+a repair for a mistake the learner did not make. `verify` covers only
+derivatives and antiderivatives; for a limit, series test, or algebraic
+identity there is no CLI check, and the tutor's own worked judgment is the
+only one available - say so rather than implying a check happened.
+
 Allowed error tags include conceptual_error, formula_recall_error, algebra_error,
 method_selection_error, notation_error, careless_error, speed_problem,
 prerequisite_gap, domain_condition_error, and proof_structure_error.
