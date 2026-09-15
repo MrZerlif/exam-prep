@@ -26,6 +26,8 @@ For “continue studying”:
 3. Ask for available time when unknown. Use `next --minutes N` or `roadmap`, select a budget-fitting activity, and state the exam-value tradeoff briefly.
 4. Continue the pending action before inventing a lecture.
 
+`status` returns course, syllabus, session, resume point (with target titles), mistakes, and diagnostics - do not re-read those files or re-call `mistakes`/`roadmap` to confirm what `status` gave you. Exception: `learner_explanation` text is never in `status`; read `observations.jsonl` for that. Call it again only when evidence changes or the plan needs recomputing - most of a turn is plain conversation, no CLI call needed.
+
 ## attempt-first integrity
 
 Select the practice track from `course.exam.question_model`: `ticket_list` uses ticket-recitation stages; `problem_set`, `mixed`, `open`, or an unset question_model use the intuition-to-transfer ladder. Track stages live in `references/pedagogy.md` - do not hardcode one ladder for every exam format. Every track is attempt-first regardless of which one applies: make the learner produce an answer, explanation, formula reading, memorized reproduction, or method choice before evaluating. Preserve the last valid step, identify the first invalid transformation, classify the error, and ask for repair.
