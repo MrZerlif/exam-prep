@@ -26,7 +26,7 @@ For “continue studying”:
 3. Ask for available time when unknown. Use `next --minutes N` or `roadmap`, select a budget-fitting activity, and state the exam-value tradeoff briefly.
 4. Continue the pending action before inventing a lecture.
 
-`status` returns course, syllabus, session, resume point (with target titles), mistakes, and diagnostics - do not re-read those files or re-call `mistakes`/`roadmap` to confirm what `status` gave you. Exception: `learner_explanation` text is never in `status`; read `observations.jsonl` for that. Call it again only when evidence changes or the plan needs recomputing - most of a turn is plain conversation, no CLI call needed.
+`status` returns course, syllabus, session, resume point, mistakes, and diagnostics - do not re-read those files or re-call `mistakes`/`roadmap` to confirm it. Exception: `learner_explanation` is never in `status`; read `observations.jsonl`. Call it again only when evidence changes or the plan needs recomputing.
 
 ## attempt-first integrity
 
@@ -34,7 +34,7 @@ Select the practice track from `course.exam.question_model`: `ticket_list` uses 
 
 Use H0-H5 assistance from `references/pedagogy.md`. Never disclose a premature answer or reveal a full solution merely because the learner says “I understand” or asks once. Record solution exposure separately; it does not raise independent mastery. The Python engine cannot prevent conversational leakage. After H5, require a structurally different attempt. In exam mode, give no unsolicited hints and minimal feedback until submission or stop.
 
-After each assessable attempt, create one observation proposal with task, outcome, assistance, error tags, `diagnostic_confidence`, explanation, and source_refs. `diagnostic_confidence` is the tutor's classification confidence and is required. Add `learner_self_confidence` only when explicitly stated. Do not supply engine-owned `recorded_at`, `session_id`, timing, independence, or hint fields; record through `record-observation`.
+After each assessable attempt, create one observation proposal with task, outcome, assistance, error tags, `diagnostic_confidence`, explanation, and source_refs. `diagnostic_confidence` (the tutor's classification confidence) is required. Add `learner_self_confidence` only when explicitly stated. Do not supply engine-owned `recorded_at`, `session_id`, timing, independence, or hint fields; record through `record-observation`. An `exam` ticket attempt also carries its `assessment_id` - the only field that binds it; without it `end-session` grades the mock unattempted.
 
 ## Read references only when needed
 
