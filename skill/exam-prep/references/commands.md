@@ -33,6 +33,32 @@ one entry here - `SKILL.md` should not need to change.
 - `ingest-source-evidence <path>` - accept a host-normalized
   SourceEvidenceEnvelope (`references/notebooklm-mcp.md`).
 
+### Source coverage: what makes a source_id "known"
+
+`validate-curriculum`/`apply-curriculum` flag `unknown source ref` against a
+catalog built only from source evidence already persisted to this workspace
+via a prior `ingest-source-evidence` call - never from the proposal being
+validated. A `source_refs` entry inside the curriculum proposal or a
+FrozenAssessment only *declares* a citation; it does not *register* one
+(`SKILL.md`'s "Proposal-declared refs do not establish source existence"
+is this same rule stated at the policy level). To clear a coverage gap,
+`ingest-source-evidence` the source first, then re-run `validate-curriculum`.
+
+### Capability IDs
+
+`assessment_capabilities`/`capabilities` entries in a syllabus are not
+drawn from a fixed enum. The engine ships 14 defaults (`definition_recall`,
+`calculation`, `formula_reading`, `recognition`, `explanation`,
+`error_detection`, `worked_example`, `faded_example`, `guided_problem`,
+`independent_problem`, `transfer`, `exam_problem`, `delayed_recall`,
+`delayed_transfer`), and a syllabus may additionally register its own
+`capability_id` with a descriptor (`affected_dimensions`, `response_type`,
+`review_kind`, `evidence_requirements`, optional `verifier_id`) - a custom
+entry is accepted once its `affected_dimensions` are all valid mastery
+dimensions (`conceptual`, `procedural`, `recall`, `transfer`, `speed`).
+There is no separate allowlist to check a `capability_id` against beyond
+this rule.
+
 ## Exam blueprint and assessments
 
 - `update-exam-blueprint <path>` - merge a JSON patch into `course.exam`
