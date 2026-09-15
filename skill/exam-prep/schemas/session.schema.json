@@ -15,7 +15,8 @@
     "last_attempt_outcome": {"type": ["string", "null"]},
     "last_attempt_error_tags": {"type": "array", "items": {"type": "string"}},
     "current_task_done": {"type": "boolean"},
-    "mock_assessment_ids": {"type": "array", "items": {"type": "string"}}
+    "mock_assessment_ids": {"type": "array", "items": {"type": "string"}},
+    "mock_started_at": {"type": ["string", "null"]}
   }
 }
 

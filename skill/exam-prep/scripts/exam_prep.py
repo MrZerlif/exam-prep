@@ -13,7 +13,12 @@ from uuid import uuid4
 
 from exam_prep_lib.capabilities import CapabilityRegistry, capability_dimension_issues
 from exam_prep_lib.defaults import default_course, default_learner, default_session, default_syllabus
-from exam_prep_lib.diagnostics import blueprint_revision_diagnostics, run_validation
+from exam_prep_lib.diagnostics import (
+    blueprint_revision_diagnostics,
+    run_validation,
+    unlinked_exam_attempt_diagnostic,
+    unlinked_exam_attempts,
+)
 from exam_prep_lib.reducer import MISTAKE_SUMMARIES, derive_assistance_band, reduce_learning_state
 from exam_prep_lib.migration import migrate_legacy_workspace
 from exam_prep_lib.curriculum import (
@@ -744,6 +749,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "record-observation":
         proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
         session, _changed = _activate_session(session)
+        # Computed before the append so "already linked" means the state this
+        # attempt arrived into. Never gates the write - see the function's
+        # docstring on why an unlinked attempt is still recorded.
+        unlinked_diagnostic = unlinked_exam_attempt_diagnostic(
+            proposal,
+            session,
+            store.read_assessments(),
+            store.read_complete_observations(),
+        )
         result = store.append_observation(
             proposal,
             session["session_id"],
@@ -770,18 +784,19 @@ def main(argv: list[str] | None = None) -> int:
         concepts, reviews, manifest = _persist_learning(
             store, course, syllabus, learner, session
         )
-        return _result(
-            {
-                "event": result.canonical_event,
-                "appended": result.appended,
-                "revision": manifest.revision,
-                "session": session,
-                ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
-                    syllabus, concepts
-                ),
-                "review_queue": reviews,
-            }
-        )
+        payload = {
+            "event": result.canonical_event,
+            "appended": result.appended,
+            "revision": manifest.revision,
+            "session": session,
+            ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
+                syllabus, concepts
+            ),
+            "review_queue": reviews,
+        }
+        if unlinked_diagnostic is not None:
+            payload["diagnostics"] = [unlinked_diagnostic]
+        return _result(payload)
 
     if args.command == "review-due":
         now = datetime.now(timezone.utc)
@@ -879,6 +894,7 @@ def main(argv: list[str] | None = None) -> int:
                 else int(round(allotted * len(mock_pool)))
             )
 
+        was_in_exam = session.get("phase") == "exam"
         session = dict(session)
         session.update(
             {
@@ -888,6 +904,13 @@ def main(argv: list[str] | None = None) -> int:
                 "mock_assessment_ids": [ticket["assessment_id"] for ticket in tickets],
             }
         )
+        # Anchors which of this session's observations belong to the mock, so
+        # end-session's unlinked summary does not report study-phase work that
+        # happened earlier in the same session. Re-running `exam` within an
+        # exam already in progress keeps the original anchor (the repeat draws
+        # the same tickets), while end-session's return to idle clears it.
+        if not was_in_exam or not session.get("mock_started_at"):
+            session["mock_started_at"] = _now()
         _persist_learning(store, course, syllabus, learner, session)
         return _result(
             {
@@ -1038,6 +1061,9 @@ def main(argv: list[str] | None = None) -> int:
                         else None
                     ),
                     "questions": questions,
+                    "unlinked_attempts": unlinked_exam_attempts(
+                        session, store.read_assessments(), session_events
+                    ),
                 }
             store.append_session_summary(summary)
         session = dict(session)
@@ -1045,7 +1071,7 @@ def main(argv: list[str] | None = None) -> int:
         # pending_action untouched: they are the break-state pointer status
         # uses to report a specific resume point after the session closes,
         # not just this session's aggregate summary.
-        session.update({"phase": "idle"})
+        session.update({"phase": "idle", "mock_started_at": None})
         concepts, reviews, _manifest = _persist_learning(store, course, syllabus, learner, session)
         return _result({"status": "session_ended", "session": session, "summary": summary})
 
