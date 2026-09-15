@@ -1,0 +1,144 @@
+{
+  "expectations": [
+    {
+      "text": "The tutor assembles a mock exam with a concrete, bounded set of questions sized to roughly the stated 30-minute budget, rather than an open-ended or arbitrarily long quiz.",
+      "passed": true,
+      "evidence": "Step 2: `python exam_prep.py --workspace <ws> exam --minutes 30` returned exactly 4 tickets drawn from the pre-minted `purpose=mock` pool (`mock:limits-basic-1`, `mock:integration-basic-1`, `mock:series-convergence-1`, `mock:derivative-rules-1`), each with `time_limit_minutes: 7.5` (4 x 7.5 = 30, matching the learner's stated budget exactly). The learner-facing message states '30 минут, 4 вопроса по 7.5 минут' and lists exactly those 4 questions, no more."
+    },
+    {
+      "text": "During the mock exam itself (before the learner's simulated answer for each question), the tutor gives no unsolicited hints and no feedback on an item before it is submitted.",
+      "passed": true,
+      "evidence": "The exam-start message presents all 4 questions with the explicit statement 'Подсказок и промежуточной обратной связи по ходу не будет' and no per-question hints. The engine flags `no_unsolicited_hints: true` / `minimal_feedback_until_submission: true` are set on the exam ticket. Step 3's 'Tutor grading of the simulated answers (before recording)' section is transcript-internal reasoning, not a message sent to the learner (only Step 2's exam-start text and Step 6's final post-mortem are labeled as learner-facing) -- no grading or hinting leaks between question presentation and answer collection. `end-session`'s `assistance_band` is 'independent' for all 4 questions, corroborating no hints were injected mid-exam."
+    },
+    {
+      "text": "The post-mortem classifies each miss by a specific error type (e.g. conceptual / method-selection / algebra / formula-recall / notation / speed / careless), not just a generic right/wrong or 'review this topic more'.",
+      "passed": true,
+      "evidence": "Q2 is explicitly tagged `method_selection_error` (recorded via record-observation and repeated in the final reply: 'тег `method_selection_error`'); Q3 is explicitly tagged `conceptual_error` ('НЕВЕРНО (новая ошибка)' with tag `conceptual_error` from the `mistakes` command output, echoed in final_reply.md). The tutor also explains *why* each tag was chosen (Q2: wrong method category chosen for a 'polynomial x exponential' integrand; Q3: right test family, wrong direction of inequality/precondition), going beyond a bare label."
+    },
+    {
+      "text": "The review references specifics of the learner's own simulated answers for this exam (not a generic template response), showing the feedback is actually grounded in what happened.",
+      "passed": true,
+      "evidence": "final_reply.md quotes back the exact simulated steps, e.g. for Q2: 'Ты опять пошёл через замену u = eх и застрял на интеграле от ln(u) du, до ответа не дошёл' (matches the simulated answer verbatim in content), and for Q3: 'Ты сравнил a_n с 1/n² и сделал вывод о сходимости через признак сравнения. Проблема в направлении неравенства...' -- this restates the learner's specific comparison choice and pinpoints the specific inequality-direction mistake, not a generic 'wrong answer, try again.'"
+    },
+    {
+      "text": "If the exam touches the integration-basic target, the review connects the result to the learner's pre-existing recurring method_selection_error on that topic rather than treating it as a first-time encounter.",
+      "passed": true,
+      "evidence": "Pre-exam `status` showed integration-basic already at 2 prior `method_selection_error` failures (not yet flagged recurring). After recording Q2, `mistakes` showed it promoted to `count: 3, recurring: true, sessions_seen: 2`. final_reply.md explicitly says: 'Это тот же провал, что и в прошлой сессии на похожем интеграле — система теперь официально пометила его как рецидивирующую ошибку (3 раза за 2 сессии, тег `method_selection_error`)', and the closing summary contrasts it with the first-time Q3 miss ('это первый зафиксированный случай... не рецидив')."
+    },
+    {
+      "text": "The exam and its outcome leave some durable, re-readable trace (e.g. recorded observations/updated session state) rather than existing only inside this one chat reply.",
+      "passed": true,
+      "evidence": "Each of the 4 simulated attempts was written via `record-observation` into `.exam-prep/observations.jsonl` (confirmed durable by directly reading the file with `tail -c 2000 .exam-prep/observations.jsonl` after the Q2 encoding crash, showing the entry had persisted independent of the tutor's chat reply). `end-session` persisted a structured `post_mortem` block (score 0.5, per-question outcomes) into the session summary, and `mistakes` reflects updated, queryable recurring-mistake counters (`integration-basic` count 3/recurring true; `series-convergence` count 1) that will outlive this conversation turn."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {
+      "Read": 5,
+      "Bash": 21,
+      "Write": 8,
+      "Edit": 1
+    },
+    "total_tool_calls": 35,
+    "total_steps": 35,
+    "errors_encountered": 4,
+    "output_chars": 3196,
+    "transcript_chars": 19931
+  },
+  "timing": {
+    "executor_duration_seconds": 398.185,
+    "total_duration_seconds": 398.185,
+    "total_tokens": 123295,
+    "note": "timing.json contains only the executor's own duration/token figures; no separate grader-duration record was available to add, so total_duration_seconds here reflects executor time only."
+  },
+  "claims": [
+    {
+      "claim": "A pool of exactly 4 frozen mock assessments (one per target: limits-basic, integration-basic, series-convergence, derivative-rules) already existed before this turn, matching the task's 'pool already minted' premise.",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Transcript Step 1: `cat .exam-prep/assessments.jsonl` output confirmed 'a `purpose=mock` pool of exactly 4 frozen assessments already minted, one per target'."
+    },
+    {
+      "claim": "All 4 questions were answered under `assistance_band: independent` (no hints used during the exam).",
+      "type": "factual",
+      "verified": true,
+      "evidence": "`end-session` post_mortem JSON lists `assistance_band: \"independent\"` for all 4 question entries."
+    },
+    {
+      "claim": "The integration-basic method_selection_error was promoted from 'not yet recurring' to officially 'recurring: true' precisely as a result of this session's Q2 attempt.",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Pre-exam `status`: count 2, `recurring` not yet true. Post-Q3-recording state (transcript Step 4): 'integration-basic recurring_mistakes now shows \"count\": 3, \"recurring\": true, \"sessions_seen\": 2'. Final `mistakes` call confirms `recurring: true`."
+    },
+    {
+      "claim": "record-observation's exit-code-2 crash on the '∫' character does not imply the underlying write failed -- the write can silently succeed even when the command reports a hard failure.",
+      "type": "quality",
+      "verified": true,
+      "evidence": "The retry after editing out '∫' failed with 'observation_id ... already has a different payload', which is only possible if the original (crashed) call had already appended its entry. `tail -c 2000 .exam-prag/observations.jsonl` (as transcribed) confirmed the original Q2 entry, containing the '∫' character, was present with `outcome: incorrect` and `error_tags: [\"method_selection_error\"]`."
+    },
+    {
+      "claim": "Q1 (limits-basic) represents 'the second consecutive independent success' on that topic ('это уже второе подряд успешное самостоятельное решение по пределам').",
+      "type": "quality",
+      "verified": false,
+      "evidence": "Pre-exam status showed limits-basic already had '1 independent success, 1 transfer success'; after Q1 was recorded the transcript reports '2 independent/transfer successes total' -- a combined independent+transfer count, not necessarily two independent-only successes. The final-reply phrasing conflates the two counters; the underlying claim is directionally correct (limits-basic is trending well) but the specific 'second consecutive independent' wording is not precisely supported by the numbers shown."
+    }
+  ],
+  "user_notes_summary": {
+    "uncertainties": [
+      "CLI requires --workspace before the subcommand, not after; easy to get wrong (cost one throwaway call, no data impact).",
+      "Console/print-time Unicode encoding bug: certain math symbols (e.g. '∫') in recorded text crash record-observation's own confirmation-JSON print step on a Windows console codepage, even though the underlying UTF-8 file write already succeeded.",
+      "Cyrillic mojibake seen in this Bash tool's terminal output was confirmed to be a display-only artifact (verified by reading files directly); no data corruption from that."
+    ],
+    "needs_review": [
+      "The exam_prep.py CLI's stdout/console encoding bug (crashes on Windows codepage for certain Unicode symbols while still writing to the UTF-8 JSONL) is a genuine defect that should be fixed at the source (e.g. force UTF-8 stdout or use errors='replace') rather than relying on every future agent to notice the idempotency-conflict message to infer the original write actually succeeded."
+    ],
+    "workarounds": [
+      "Re-ran the Bash sandbox-refused record-observation command without output redirection after a false-positive git-safety heuristic trip.",
+      "Edited the Q2 proposal file to remove the '∫' character and retried after the console-print crash; the retry then correctly surfaced an idempotency conflict, which is what let the agent confirm the original (unedited) write had already gone through, so no re-recording was needed."
+    ]
+  },
+  "windows_encoding_incident_analysis": {
+    "summary": "The run hit 4 real tool/CLI errors, three of which were substantive (not just user mistakes), and recovered from all of them without data loss or corruption -- but the recovery depended on the CLI's idempotency-by-id guard, not on any error message clearly stating the true state.",
+    "timeline": [
+      "Error #1 (agent mistake, trivial): first `status` call placed `--workspace` after the subcommand instead of before; failed with argparse 'unrecognized arguments' (exit 2). No data involved. Fixed immediately by checking --help and reordering flags.",
+      "Error #2 (tooling false-positive): the sandboxed Bash tool itself refused to run a `record-observation ... > /tmp_out2.json` command, misidentifying the output-redirection-outside-worktree pattern as an unverifiable 'git' command even though no git command was present. Nothing had executed yet, so no data risk; recovered by re-running the identical command without the redirection.",
+      "Error #3 (genuine CLI bug, the '≤' / '∫' crash): the Q2 proposal's `learner_explanation` field contained the literal integral sign '∫' (U+222B). `record-observation` wrote the new observation to the UTF-8 `observations.jsonl` successfully, but then crashed with `'charmap' codec can't encode character '\\u222b' in position 888` while trying to print its own confirmation JSON to the Windows terminal, which was using a non-UTF-8 codepage. The command reported exit code 2, i.e. it LOOKED like a hard failure with no observation recorded.",
+      "Error #4 (consequence, informative): believing (reasonably, given the exit-2 crash) that the write had NOT gone through, the agent edited the proposal to remove the '∫' character and retried recording under the same `observation_id`. This retry failed with 'observation_id ... already has a different payload' -- which is the ONLY thing that revealed the original, unedited write from Error #3 had actually succeeded before the print crash. The agent then verified this directly by reading the tail of `observations.jsonl` and confirmed the original (correct) Q2 entry was durably present, and did not attempt to record it again."
+    ],
+    "was_recovery_clean": "Yes in outcome (no data was lost, duplicated, or silently corrupted -- the idempotency-by-id guard on record-observation refused the mismatched retry rather than overwriting or double-appending), but the recovery path was fragile and partly accidental. The agent's first, reasonable inference from the exit-2 crash ('this observation was not recorded') was WRONG, and the only reason that wrong inference didn't cause a real problem is that (a) the agent happened to retry under the same observation_id rather than a new one, and (b) the CLI happens to compare payloads on id collision and refuse silently-different content instead of accepting it. A slightly different agent behavior (e.g. generating a fresh observation_id for the 'retry', or simply concluding the question's evidence was lost and moving on without re-checking the log) could have produced either a duplicate/conflicting observation for the same attempt or a silently missing observation for Q2. The underlying defect -- record-observation's own success/failure signal (exit code + stdout) is unreliable on Windows consoles whenever recorded text contains certain Unicode symbols, even though the actual persisted write is fine -- is real and worth fixing in exam_prep.py (e.g., force UTF-8 output encoding for stdout, or wrap the print in errors='replace'), independent of the skill's own instructions."
+  },
+  "non_discriminating_assertions": [
+    {
+      "expectation": "The tutor assembles a mock exam with a concrete, bounded set of questions sized to roughly the stated 30-minute budget, rather than an open-ended or arbitrarily long quiz.",
+      "reason": "Producing a small, time-bounded question set for a stated 30-minute budget is something a competent tutor would do from general instruction-following alone, without any of the skill's pool-minting/session machinery -- the assertion only inspects the surface shape (4 questions, budget matches) and would pass even if the questions were freshly invented ad hoc rather than drawn from a frozen, already-minted mock pool via the engine."
+    },
+    {
+      "expectation": "The review references specifics of the learner's own simulated answers for this exam (not a generic template response), showing the feedback is actually grounded in what happened.",
+      "reason": "In this eval the 'learner's answers' were authored by the same agent, in the same turn, specifically so it could later discuss them -- restating text it just generated itself a few steps earlier is close to free for any capable model and doesn't test grounding against independently persisted evidence. A stronger version would check the final reply's claims against the actual recorded observation payloads (e.g. error_tags, source_refs) rather than against the model's own short-term context."
+    }
+  ],
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "The tutor assembles a mock exam with a concrete, bounded set of questions sized to roughly the stated 30-minute budget, rather than an open-ended or arbitrarily long quiz.",
+        "reason": "Consider strengthening this to also require that the questions came from the skill's pre-minted `purpose=mock` pool (matching assessment_ids with `assessment_integrity: frozen_attempt`) with engine-computed per-item time splits, rather than just checking the surface count/budget math -- otherwise a non-skill-using tutor that simply improvises 4 questions would pass identically."
+      },
+      {
+        "assertion": "The review references specifics of the learner's own simulated answers for this exam (not a generic template response), showing the feedback is actually grounded in what happened.",
+        "reason": "Since the simulated answers are authored in the same context window as the review, referencing them back is not a strong test of grounding. A better check would cross-reference the final reply's specific claims (which questions are 'recurring', which error tags were assigned) against the actual persisted observations.jsonl / mistakes output, to catch cases where the reply's narrative diverges from what was actually recorded."
+      },
+      {
+        "reason": "No expectation covers the demonstrated CLI reliability defect: record-observation can report a hard failure (exit code 2, crash) via a Windows console encoding bug on certain Unicode math symbols in recorded text, while the underlying JSONL write already succeeded. This run recovered only because it happened to retry under the same observation_id and the CLI's id-collision-with-different-payload check caught it -- a different but equally reasonable recovery strategy (treat the crash as a real failure and move on, or retry under a new id) could have silently lost or duplicated evidence. Consider adding an assertion like 'on any tool error during evidence recording, the tutor verifies the actual persisted state (e.g. by reading the log) before deciding whether to retry, skip, or re-record, and never ends up with duplicated or missing evidence for a completed attempt.'"
+      },
+      {
+        "reason": "Error #2 (the Bash sandbox refusing a command that redirected output outside the recognized worktree, misreading it as an unverifiable git command) is an infra/tooling false-positive unrelated to the skill's own correctness. It's worth flagging to whoever owns the sandboxing heuristic, but graders should not let it count against or for the skill being evaluated here."
+      }
+    ],
+    "overall": "All 6 expectations pass with genuine, specific evidence -- this is a strong run of the skill: bounded exam assembly from a real frozen pool, clean exam-mode discipline (no leaked hints/feedback), specific and correctly-typed error tags, a review grounded in the (self-authored, but faithfully echoed) simulated answers, correct escalation of the integration-basic mistake to 'recurring' status, and durable persistence verified by directly reading the log rather than trusting the tutor's own narration. The main soft spot is that two of the six assertions (bounded exam size, and 'references specifics') are satisfiable by a generic capable tutor without the skill's actual infrastructure, so they add less discriminating signal than the other four. Separately -- and important regardless of scoring -- this run surfaced a real CLI defect (Windows console print crash on certain Unicode symbols in record-observation, decoupled from the underlying UTF-8 file write's success) that should be fixed in exam_prep.py; the recovery here was correct but relied on a lucky idempotency check rather than a clear signal, and a different retry strategy could plausibly have lost or duplicated exam evidence."
+  }
+}

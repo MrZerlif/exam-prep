@@ -1,0 +1,132 @@
+{
+  "expectations": [
+    {
+      "text": "The tutor reads the learner's existing local state before responding instead of starting from nothing.",
+      "passed": true,
+      "evidence": "Transcript Step 5 runs `python exam_prep.py --workspace ... status` before composing any reply, and reads back a fully populated existing workspace: course exam date 2026-09-22, delivery written, question_model problem_set, an already-open session (session-20260914211939-cf9c59, pending_action 'choose the next budget-fitting activity'), and three targets including integration-by-parts (mastery_status: unseen, all evidence counters 0, review due). The final reply opens with 'Заглянул в твой прогресс: тема «интегрирование по частям» пока ни разу не проверялась — статус «unseen», ноль попыток...' which is a direct paraphrase of that status output, not a generic opener."
+    },
+    {
+      "text": "The tutor gives the learner a real integration-by-parts problem to attempt and asks to see their work, rather than solving it for them up front.",
+      "passed": true,
+      "evidence": "final_reply.md poses a concrete problem, '∫ x·cos(x) dx', with explicit instructions to solve it fully step by step (choose u/dv, apply the by-parts formula, reach a final answer with +C) and states 'Теорию заранее не даю — попробуй сам(а), я смотрю' (I won't give the theory up front — try it yourself, I'm watching). No solution steps, u/dv choice, or antiderivative are given by the tutor."
+    },
+    {
+      "text": "The tutor does not impose the ticket_list-specific 'brief answer structure' checkpoint or 'unprompted reproduction from memory'/'delayed recall' framing on this problem_set request — it uses the intuition-to-transfer problem ladder (or an equivalent worked/faded/guided approach), not the recitation track.",
+      "passed": true,
+      "evidence": "Transcript Step 5 confirms `question_model: problem_set` from the workspace, and Step 3 explicitly selects the problem_set ladder ('intuition → worked → faded → guided → independent → transfer → exam → delayed recall') rather than ticket_list's brief-structure/recitation checkpoint. The reply gives a full problem to solve rather than demanding a memorized brief-structure recitation or unprompted definition recall; no 'reproduce from memory' framing appears anywhere in the reply."
+    },
+    {
+      "text": "No complete worked solution to the specific problem posed is disclosed before the learner has made an attempt.",
+      "passed": true,
+      "evidence": "final_reply.md contains only the problem statement and instructions ('Покажи, что берёшь за u...', 'Примени формулу...', 'Доведи до финального ответа с +C') — no u/dv assignment, no intermediate integral, and no final answer are given. The tutor explicitly defers evaluation: 'Я не буду подсказывать заранее; посмотрю на решение целиком...'"
+    },
+    {
+      "text": "The specific topic chosen (integration by parts) and any framing of difficulty/next steps is grounded in the learner's actual syllabus target for it, not a generic textbook problem picked with no reference to their tracked progress.",
+      "passed": true,
+      "evidence": "The topic itself was named by the learner, but the tutor's framing of it (unseen/zero-attempts/due-for-review, exam in exactly one week matching 'через неделю', question_model problem_set) is all sourced from the Step 5 `status` output, and the reply also surfaces the real `next --minutes 25` ranking result (substitution-method scoring higher due to prerequisite-unlock value) rather than presenting integration-by-parts as the uncontested top pick. user_notes.md documents this as a deliberate, disclosed deviation from the engine's top recommendation, not a default/generic choice."
+    },
+    {
+      "text": "The tutor does not claim mastery, session history, or progress that isn't grounded in real local files or the current message.",
+      "passed": true,
+      "evidence": "Every specific claim in the reply traces to a Step 5/7 CLI output: 'unseen'/'ноль попыток'/'due' status, exam date 2026-09-22, question_model problem_set, and the substitution-method priority tradeoff (score 0.233, driven by prerequisite_unlock_value) from the `next` call. No claim of prior sessions on this topic, no invented mastery level, and no fabricated rapport ('as we discussed last time', etc.) appears."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  },
+  "execution_metrics": {
+    "tool_calls": {
+      "Read": 4,
+      "Bash": 3,
+      "Write": 3
+    },
+    "total_tool_calls": 10,
+    "total_steps": 8,
+    "errors_encountered": 0,
+    "output_chars": 1207,
+    "transcript_chars": 10352
+  },
+  "timing": {
+    "executor_duration_seconds": 160.175,
+    "total_duration_seconds": 160.175,
+    "total_tokens": 83148
+  },
+  "claims": [
+    {
+      "claim": "The workspace was already initialized with an open session before this turn began.",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Transcript Step 5's `status` output shows an existing session (session-20260914211939-cf9c59, phase: study) rather than an 'uninitialized' state, so no `init` or `start` call was needed."
+    },
+    {
+      "claim": "The exam date (2026-09-22) is exactly one week from the conversation date, matching the learner's 'через неделю'.",
+      "type": "factual",
+      "verified": true,
+      "evidence": "2026-09-15 (today, per system reminder) + 7 days = 2026-09-22, matching the status output's exam date."
+    },
+    {
+      "claim": "`next` is a read-only/advisory ranking query that does not set session.current_task or current_target_id.",
+      "type": "process",
+      "verified": true,
+      "evidence": "Transcript Step 7 re-runs `status` after `next` and reports the session block is byte-for-byte identical (current_target_id and current_task still null), which is the actual evidence offered for this claim rather than an assumption."
+    },
+    {
+      "claim": "Integration-by-parts was ranked below substitution-method by the engine's `next` command, and the tutor disclosed this rather than silently complying with or silently overriding it.",
+      "type": "quality",
+      "verified": true,
+      "evidence": "Step 6 records the actual `next` scores (substitution-method 0.233243 vs. implied lower score for integration-by-parts), and both the reply text and user_notes.md explicitly surface this tradeoff to the learner."
+    },
+    {
+      "claim": "No CLI subcommand exists to directly set session.current_task, so posing the problem in chat without an extra CLI call was correct.",
+      "type": "process",
+      "verified": true,
+      "evidence": "Transcript Step 2 reports commands.md was read in full (85 lines) and no such subcommand was found; Step 7's unchanged status recheck is offered as corroborating evidence."
+    }
+  ],
+  "user_notes_summary": {
+    "uncertainties": [],
+    "needs_review": [],
+    "workarounds": [
+      "Deviated from the engine's top `next --minutes 25` recommendation (substitution-method) to honor the learner's explicit integration-by-parts request, disclosing the tradeoff in the reply per exam-optimizer.md guidance.",
+      "No CLI command exists to formally mark a task as 'current'; the tutor posed the problem directly in chat instead, deferring `record-observation` to a future turn once the learner submits an attempt."
+    ]
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "The tutor gives the learner a real integration-by-parts problem to attempt and asks to see their work, rather than solving it for them up front.",
+        "reason": "The learner's own message already says 'дай мне задачу и посмотри, как я её решаю' (give me a problem and watch me solve it) — a tutor with no skill and no file access would very likely comply with this explicit instruction anyway. This assertion mainly checks basic instruction-following, not skill-specific behavior; it would probably pass in a no-skill baseline too."
+      },
+      {
+        "assertion": "No complete worked solution to the specific problem posed is disclosed before the learner has made an attempt.",
+        "reason": "Same concern as above: since the learner explicitly asked to be given a problem and observed while solving it (rather than shown a solution), almost any reasonable assistant response — skilled or not — would withhold the solution here. This is a weak discriminator for whether the exam-prep skill's attempt-first/H0 policy specifically was applied, versus generic politeness/instruction-following."
+      },
+      {
+        "assertion": "The tutor does not impose the ticket_list-specific 'brief answer structure' checkpoint or 'unprompted reproduction from memory'/'delayed recall' framing on this problem_set request — it uses the intuition-to-transfer problem ladder (or an equivalent worked/faded/guided approach), not the recitation track.",
+        "reason": "This is a compound assertion bundling two distinct checks (absence of ticket_list-style recitation framing, and presence of the correct problem_set ladder). Both happened to hold here, but if only one had held the grader would have to make an arbitrary call on how to score it. Consider splitting into two separate assertions for cleaner signal in future runs, especially runs where a track-selection bug is suspected."
+      },
+      {
+        "assertion": null,
+        "reason": "No assertion checks whether the tutor's chosen problem difficulty/type is actually appropriate for an 'unseen' target under the problem_set ladder (i.e., that a diagnostic-stage problem, not an advanced/transfer-stage one, was chosen). Here ∫x·cos(x)dx is a reasonable moderate first example, but a run that gave an unreasonably hard or trivial first problem for an unseen concept would still pass all six current assertions."
+      },
+      {
+        "assertion": null,
+        "reason": "No assertion checks that the reply is not just grounded in local state but also correctly interprets it — e.g., that the tutor did not silently mis-state a status field. This transcript's claims all check out against the reported CLI output, but the eval only has the transcript's own narration of tool output to grade against (no raw workspace JSON was included in outputs_dir), so a subtly fabricated 'status output' embedded in the transcript would be difficult for a grader to catch without independent access to the workspace files."
+      }
+    ],
+    "overall": "All six expectations pass with genuine, traceable evidence (the tutor ran `status`/`next`, correctly read question_model to select the problem_set ladder over ticket_list, and grounded every specific claim in that tool output rather than fabricating history). The two solving-related assertions (giving a problem instead of a solution) are only weakly discriminating here because the learner's own phrasing already dictated that behavior — they would likely pass without the skill too. The state-reading and track-selection assertions (1, 3, 5, 6) are the ones actually doing the work of distinguishing skilled from unskilled behavior in this eval."
+  },
+  "non_discriminating_assertions": [
+    {
+      "expectation": "The tutor gives the learner a real integration-by-parts problem to attempt and asks to see their work, rather than solving it for them up front.",
+      "reason": "The learner explicitly asked for exactly this ('дай мне задачу и посмотри, как я её решаю'), so a generic assistant with no exam-prep skill and no tool access would very likely comply with this instruction on its own, independent of any skill-driven attempt-first policy."
+    },
+    {
+      "expectation": "No complete worked solution to the specific problem posed is disclosed before the learner has made an attempt.",
+      "reason": "Given the learner's explicit request to be given a problem and observed while solving it, withholding the solution is the natural compliant response for almost any assistant, skilled or not — this does not specifically test the skill's H0/attempt-first machinery."
+    }
+  ]
+}

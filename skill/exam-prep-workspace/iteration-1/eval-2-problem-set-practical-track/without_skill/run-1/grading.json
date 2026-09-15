@@ -1,0 +1,133 @@
+{
+  "expectations": [
+    {
+      "text": "The tutor reads the learner's existing local state before responding instead of starting from nothing.",
+      "passed": false,
+      "evidence": "Step 2/4 of the transcript show the tutor only ran `ls -la` on the workspace and on `.exam-prep`, discovering files like course.json, learner.json, syllabus.json, targets.json, session.json, review_queue.json. It explicitly did not open or read any of them: 'Since I have no defined way to safely interpret or trust this structured state (no schema, no tool built for it), I did not open or parse the individual files, and did not let their presence shape the tutoring approach.' user_notes.md confirms: 'I did not open or parse the individual files.' Listing filenames is not reading state; the response was composed with zero information drawn from any local file's content."
+    },
+    {
+      "text": "The tutor gives the learner a real integration-by-parts problem to attempt and asks to see their work, rather than solving it for them up front.",
+      "passed": true,
+      "evidence": "final_reply.md poses '∫ x·cos(x) dx' as a concrete problem and instructs: 'Реши её сам и распиши все шаги: 1. Что берёшь за u, а что за dv, и почему; 2. Найди du и v; 3. Подставь в формулу... Присылай решение целиком.' No answer or antiderivative is given anywhere in the reply."
+    },
+    {
+      "text": "The tutor does not impose the ticket_list-specific 'brief answer structure' checkpoint or 'unprompted reproduction from memory'/'delayed recall' framing on this problem_set request — it uses the intuition-to-transfer problem ladder (or an equivalent worked/faded/guided approach), not the recitation track.",
+      "passed": true,
+      "evidence": "The reply contains no ticket/brief-answer-structure checkpoint and no 'reproduce from memory without looking' or spaced/delayed-recall framing. Instead it gives a short formula reminder, a general u/dv heuristic, then one problem with an explicit numbered scaffold (identify u/dv and why; find du/v; substitute and finish) and asks to see the full solution — a lightly guided, single-problem approach consistent with (if not a full instantiation of) a worked/guided practice track rather than a recitation-checkpoint track."
+    },
+    {
+      "text": "No complete worked solution to the specific problem posed is disclosed before the learner has made an attempt.",
+      "passed": true,
+      "evidence": "final_reply.md stops at presenting ∫x·cos(x)dx and the solving steps to follow; no du, v, uv, ∫v du, or final antiderivative value is computed or shown anywhere in the reply."
+    },
+    {
+      "text": "The specific topic chosen (integration by parts) and any framing of difficulty/next steps is grounded in the learner's actual syllabus target for it, not a generic textbook problem picked with no reference to their tracked progress.",
+      "passed": false,
+      "evidence": "The topic itself came from the learner's own message, not tutor judgment, but the difficulty/framing was explicitly NOT grounded in tracked progress: syllabus.json, targets.json, and review_queue.json existed in .exam-prep and were never opened. user_notes.md states directly: 'The learner didn't specify their current skill level with integration by parts, so I guessed at an appropriate starting difficulty (∫x·cos(x) dx — a standard, moderate first example)... If this folder actually holds useful history about the learner's level or prior mistakes with integration by parts, that context was not incorporated.' This is precisely the failure mode the expectation describes."
+    },
+    {
+      "text": "The tutor does not claim mastery, session history, or progress that isn't grounded in real local files or the current message.",
+      "passed": true,
+      "evidence": "final_reply.md makes no statements about the learner's mastery level, past sessions, or tracked progress — it only reflects back what the learner said in the current message ('за неделю до экзамена', 'сборник задач без теории') and adds no fabricated history."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 2,
+    "total": 6,
+    "pass_rate": 0.6667
+  },
+  "execution_metrics": {
+    "tool_calls": {
+      "Bash": 3,
+      "Write": 4
+    },
+    "total_tool_calls": 7,
+    "total_steps": 5,
+    "errors_encountered": 0,
+    "output_chars": 757,
+    "transcript_chars": 4149
+  },
+  "timing": {
+    "executor_duration_seconds": null,
+    "grader_duration_seconds": null,
+    "total_duration_seconds": 105.134,
+    "total_tokens": 67860,
+    "note": "timing.json only contained total_tokens, duration_ms, and total_duration_seconds (105.134s) for the whole run; it did not break out separate executor/grader durations."
+  },
+  "claims": [
+    {
+      "claim": "The workspace's .exam-prep folder contains course.json, learner.json, syllabus.json, targets.json, session.json, review_queue.json, some empty .jsonl files, and recovery/ and revisions/ subfolders.",
+      "type": "factual",
+      "verified": true,
+      "evidence": "Directly reported as the output of the `ls -la` command in transcript Step 4; consistent with the tutor's own subsequent reasoning and user_notes.md."
+    },
+    {
+      "claim": "The tutor did not open or parse any of the individual .exam-prep files.",
+      "type": "process",
+      "verified": true,
+      "evidence": "Confirmed by transcript Step 4 reasoning and restated verbatim in outputs/user_notes.md; no Read/cat/parsing tool call on those files appears anywhere in the transcript."
+    },
+    {
+      "claim": "∫x·cos(x)dx is a pedagogically appropriate first problem for practicing the u/dv choice.",
+      "type": "quality",
+      "verified": true,
+      "evidence": "Standard, well-established textbook example (polynomial times trig function is a canonical LIATE-style case); reasonable as a generic warm-up, though see expectation 5 — its selection was not tied to the learner's actual tracked level."
+    },
+    {
+      "claim": "metrics.json reports 3 Bash tool calls, but the transcript's numbered steps only document 2 distinct Bash invocations (Step 2 and Step 4).",
+      "type": "factual",
+      "verified": false,
+      "evidence": "Step 4's shell block itself contains two semicolon-joined commands, which could count as one or two Bash tool calls depending on how the executor invoked them; the transcript's narrative does not account for a third Bash call, so the discrepancy with metrics.json ('Bash': 3) could not be fully verified from the available transcript text."
+    }
+  ],
+  "user_notes_summary": {
+    "uncertainties": [
+      "Whether the .exam-prep folder holds useful history about the learner's level or prior mistakes with integration by parts that went unused",
+      "Whether the chosen difficulty (∫x·cos(x)dx) matches the learner's actual current level, since it wasn't stated and wasn't checked against tracked progress"
+    ],
+    "needs_review": [],
+    "workarounds": [
+      "Treated the .exam-prep folder as opaque structured state with no known schema/tool, and proceeded as a generic tutor using only the current chat message"
+    ]
+  },
+  "eval_feedback": {
+    "suggestions": [
+      {
+        "assertion": "The tutor gives the learner a real integration-by-parts problem to attempt and asks to see their work, rather than solving it for them up front.",
+        "reason": "The learner's own message explicitly asked for exactly this ('дай мне задачу и посмотри, как я её решаю'). Almost any competent response, with or without a skill, would satisfy this by simply following the literal instruction — it doesn't discriminate skill-driven tutoring design from generic compliance."
+      },
+      {
+        "assertion": "No complete worked solution to the specific problem posed is disclosed before the learner has made an attempt.",
+        "reason": "Same issue as above: the learner asked to solve it themselves first, so withholding the solution is the path of least resistance for any tutor, not evidence of a deliberate pedagogical policy."
+      },
+      {
+        "assertion": "The tutor does not impose the ticket_list-specific 'brief answer structure' checkpoint or 'unprompted reproduction from memory'/'delayed recall' framing on this problem_set request...",
+        "reason": "In the without_skill condition the tutor has no access to a ticket_list/delayed-recall mechanism at all, so the 'does not impose it' half is tautologically true for every no-skill run and doesn't discriminate. Only the second half ('uses the ladder or equivalent guided approach') does real discriminating work, and here it was only thinly satisfied (one problem plus a short scaffold, not an actual ladder or faded-worked-example progression) — worth splitting into two separate assertions so a thin pass on the negative half doesn't mask a weak pass on the positive half."
+      },
+      {
+        "assertion": "The tutor does not claim mastery, session history, or progress that isn't grounded in real local files or the current message.",
+        "reason": "This is trivially satisfied by an agent that makes no claims about history or progress at all — which is exactly what happened here because the tutor chose to ignore all local state rather than engage with it. As written, an agent that correctly and richly grounds its claims in real files, and one that avoids the topic entirely by ignoring those files, both pass identically. Consider requiring the assertion to fire only when the tutor does reference progress/history, checking that any such reference is accurate."
+      }
+    ],
+    "overall": "The two substantive, discriminating assertions here are #1 (reads local state) and #5 (grounds difficulty/topic in tracked syllabus/targets) — both correctly caught genuine gaps: the tutor found rich per-learner state (syllabus.json, targets.json, review_queue.json) sitting right next to it and explicitly chose not to open any of it, then admitted to guessing at difficulty. That is arguably the single most important and well-documented failure in this transcript, and it's good that two assertions independently capture it. The other four assertions (#2, #3's negative half, #4, #6) are largely satisfied by default behavior that doesn't require any skill or deliberate design to produce, and would likely pass in nearly any without_skill run regardless of tutoring quality. A stronger eval would add an assertion checking whether the tutor made any attempt to actually open/read at least one of the discovered files (e.g., via Read/cat) rather than stopping at `ls -la` — that would distinguish 'aware of state but declined to use it because it looked risky/undocumented' from 'never noticed state existed,' which is a materially different (and more informative) failure signature than what's captured now."
+  },
+  "non_discriminating_assertions": [
+    {
+      "expectation": "The tutor gives the learner a real integration-by-parts problem to attempt and asks to see their work, rather than solving it for them up front.",
+      "reason": "The learner's message explicitly requested exactly this behavior, so any reasonable tutor response — skilled or not — would satisfy it by simply following the instruction."
+    },
+    {
+      "expectation": "No complete worked solution to the specific problem posed is disclosed before the learner has made an attempt.",
+      "reason": "The learner explicitly asked to solve it themselves and have the tutor watch, so withholding the answer is the default/easiest compliant behavior, not a signal of deliberate pedagogical design."
+    },
+    {
+      "expectation": "The tutor does not impose the ticket_list-specific 'brief answer structure' checkpoint or 'unprompted reproduction from memory'/'delayed recall' framing on this problem_set request...",
+      "reason": "In a without_skill run there is no ticket_list/delayed-recall mechanism available to impose in the first place, so the negation half of this compound assertion is tautologically true regardless of tutoring quality."
+    },
+    {
+      "expectation": "The tutor does not claim mastery, session history, or progress that isn't grounded in real local files or the current message.",
+      "reason": "An agent that simply avoids referencing any history or progress at all (as happened here, by ignoring the local state entirely) trivially passes this — it doesn't distinguish correct grounding from complete avoidance of the topic."
+    }
+  ]
+}

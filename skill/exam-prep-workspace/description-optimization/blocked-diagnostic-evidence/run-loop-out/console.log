@@ -1,0 +1,116 @@
+Split: 13 train, 7 test (holdout=0.4)
+
+============================================================
+Iteration 1/3
+Description: Use for interactive, exam-first preparation across subjects and sessions, especially with limited time, weak prerequisites, recurring mistakes, or a request to continue from persistent local progress.
+============================================================
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Warning: query failed: [WinError 10038] An operation was attempted on something that is not a socket
+Train: 21/39 correct, precision=100% recall=0% accuracy=54% (0.8s)
+  [FAIL] rate=0/3 expected=True: у меня гос экзамен через месяц, куча билетов, я уже вчера с 
+  [FAIL] rate=0/3 expected=True: trying to cram for my anatomy practical tomorrow morning, I 
+  [FAIL] rate=0/3 expected=True: I have my bar exam in six weeks and keep making the same mis
+  [FAIL] rate=0/3 expected=True: can you quiz me on the spanish subjunctive the way we did la
+  [FAIL] rate=0/3 expected=True: у меня через 4 дня экзамен по органической химии а я вообще 
+  [FAIL] rate=0/3 expected=True: continuing my calc 2 prep from yesterday, we were going thro
+  [PASS] rate=0/3 expected=False: quiz me on these 10 vocab words real quick: casa, perro, gat
+  [PASS] rate=0/3 expected=False: I'm giving a presentation next week on machine learning basi
+  [PASS] rate=0/3 expected=False: can you just explain how photosynthesis works, i have a bio 
+  [PASS] rate=0/3 expected=False: write me a summary of chapter 5 of my textbook (attached bel
+  [PASS] rate=0/3 expected=False: make me a set of flashcards for spanish vocab chapter 3, jus
+  [PASS] rate=0/3 expected=False: проверь пожалуйста вот это решение задачи, я хочу понять где
+  [PASS] rate=0/3 expected=False: могу я скинуть тебе список формул по тригонометрии, просто о
+Test : 12/21 correct, precision=100% recall=0% accuracy=57% (0.0s)
+  [FAIL] rate=0/3 expected=True: экзамен через 2 недели, билетов 40, устный, хочу проходить б
+  [FAIL] rate=0/3 expected=True: готовлюсь к ЕГЭ по физике, слабая база по механике, хочу что
+  [FAIL] rate=0/3 expected=True: my professor gave us the exact list of possible exam questio
+  [PASS] rate=0/3 expected=False: what's the difference between mitosis and meiosis? trying to
+  [PASS] rate=0/3 expected=False: help me with this one calculus homework problem, need to fin
+  [PASS] rate=0/3 expected=False: не мог бы ты просто объяснить теорему байеса на пальцах, без
+  [PASS] rate=0/3 expected=False: explain like im 5 what a p-value is
+
+Improving description...
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "C:\Users\lfyzer\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\local-agent-mode-sessions\skills-plugin\e6e56d04-65bf-45a7-806b-5dfd5a1ebc48\c7d7403a-cac9-4879-85d1-ae10191271a7\skills\skill-creator\scripts\run_loop.py", line 328, in <module>
+    main()
+  File "C:\Users\lfyzer\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\local-agent-mode-sessions\skills-plugin\e6e56d04-65bf-45a7-806b-5dfd5a1ebc48\c7d7403a-cac9-4879-85d1-ae10191271a7\skills\skill-creator\scripts\run_loop.py", line 293, in main
+    output = run_loop(
+             ^^^^^^^^^
+  File "C:\Users\lfyzer\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\local-agent-mode-sessions\skills-plugin\e6e56d04-65bf-45a7-806b-5dfd5a1ebc48\c7d7403a-cac9-4879-85d1-ae10191271a7\skills\skill-creator\scripts\run_loop.py", line 199, in run_loop
+    new_description = improve_description(
+                      ^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\lfyzer\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\local-agent-mode-sessions\skills-plugin\e6e56d04-65bf-45a7-806b-5dfd5a1ebc48\c7d7403a-cac9-4879-85d1-ae10191271a7\skills\skill-creator\scripts\improve_description.py", line 144, in improve_description
+    text = _call_claude(prompt, model)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\lfyzer\AppData\Local\Packages\Claude_pzs8sxrjxfjjc\LocalCache\Roaming\Claude\local-agent-mode-sessions\skills-plugin\e6e56d04-65bf-45a7-806b-5dfd5a1ebc48\c7d7403a-cac9-4879-85d1-ae10191271a7\skills\skill-creator\scripts\improve_description.py", line 35, in _call_claude
+    result = subprocess.run(
+             ^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\subprocess.py", line 548, in run
+    with Popen(*popenargs, **kwargs) as process:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Program Files\Python312\Lib\subprocess.py", line 1026, in __init__
+    self._execute_child(args, executable, preexec_fn, close_fds,
+  File "C:\Program Files\Python312\Lib\subprocess.py", line 1538, in _execute_child
+    hp, ht, pid, tid = _winapi.CreateProcess(executable, args,
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+FileNotFoundError: [WinError 2] The system cannot find the file specified

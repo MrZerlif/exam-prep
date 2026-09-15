@@ -1,0 +1,39 @@
+{
+  "eval_id": 4,
+  "eval_name": "eval-4-materials-to-minted-tickets",
+  "prompt": "Вот у меня текст лекций по теории вероятностей (вытащил из PDF, распознавание местами кривое, файл case4-lecture-notes.txt лежит в этой папке) и официальный список экзаменационных билетов от кафедры (case4-tickets-list.txt, тоже здесь). Экзамен устный, строго по этим 5 билетам. Помоги подготовиться с нуля — хочу, чтобы билеты в итоге были оформлены как экзаменационные карточки для тренировки, а не просто лежали текстом.",
+  "fixture": "No prior state (fresh learner). Two plain-text input files: lecture notes covering 4 of the 5 official tickets in some depth, and the official 5-ticket exam list from the department (authority: official_exam_list, outranks lecture_notes). Ticket 5 (independence of random variables) has NO corresponding lecture-notes coverage — an intentional source-coverage gap.",
+  "targets": "load materials from scratch and reach a state where the tickets exist as structured, individually practiceable assessment records ('minted'), not just prose",
+  "assertions": [
+    {
+      "id": "reads-both-materials",
+      "text": "The tutor reads both provided files in full before proposing anything.",
+      "expected_discriminating": false,
+      "rationale": "Any competent assistant given two named files and a task referencing them will read both; likely to pass in both configurations."
+    },
+    {
+      "id": "official-list-outranks-notes-and-gap-surfaced",
+      "text": "The tutor treats the official department ticket list as authoritative over the lecture notes, and specifically surfaces that ticket 5 (independence of random variables) has no matching lecture-notes coverage instead of silently inventing content for it.",
+      "expected_discriminating": true,
+      "rationale": "This requires the explicit source-authority-order and coverage-gap-reporting behavior documented in SKILL.md/source-of-truth.md; a generalist baseline has no equivalent policy and is likely to either merge everything unremarked or invent plausible probability-theory content for ticket 5 on its own general knowledge, which is exactly the silent-substitution failure mode being tested for."
+    },
+    {
+      "id": "reaches-minted-structured-tickets",
+      "text": "The five tickets end up represented as structured, individually addressable practice records (each with its own prompt/id that could be drawn later for a specific ticket) rather than only as a single prose document or a flat set of notes.",
+      "expected_discriminating": true,
+      "rationale": "This is literally the CLI's mint-assessments/freeze-assessment concept; nothing generic would produce an equivalent structured, re-drawable artifact without the skill's protocol."
+    },
+    {
+      "id": "validated-before-settled",
+      "text": "Before treating the proposed curriculum as final, some explicit validation/check step happens (not a silent, unchecked write of hand-authored targets).",
+      "expected_discriminating": true,
+      "rationale": "Tests the validate-curriculum-before-apply-curriculum discipline the skill mandates; a baseline has no such two-step discipline to follow."
+    },
+    {
+      "id": "honest-about-remaining-gaps",
+      "text": "The tutor's reply to the learner is honest about what's ready and what (if anything, e.g. the ticket-5 coverage gap) still needs the learner's input, rather than claiming full completion regardless.",
+      "expected_discriminating": true,
+      "rationale": "Depends on assertion 2 actually having surfaced the gap in the first place."
+    }
+  ]
+}

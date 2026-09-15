@@ -1,0 +1,45 @@
+{
+  "eval_id": 5,
+  "eval_name": "eval-5-mock-exam-and-review",
+  "prompt": "У меня есть 30 минут прямо сейчас. Устрой мне пробный экзамен и потом разбери результат — что я завалил и почему, по каждому вопросу.",
+  "fixture": "course.json exam.question_model=mixed, delivery=written, time_limit_minutes=30; syllabus has 4 problem_solving targets; prior evidence includes one clean independent success (limits-basic) and a recurring method_selection_error on integration-basic (2 occurrences); a purpose=mock pool of 4 FrozenAssessments (one per target) already minted from an earlier planning session; session is idle (cleanly closed) going into this turn.",
+  "targets": "assemble and run a real mock exam and deliver a grounded, typed post-mortem, matching the skill's exam-mode discipline",
+  "assertions": [
+    {
+      "id": "bounded-real-question-set",
+      "text": "The tutor assembles a mock exam with a concrete, bounded set of questions sized to roughly the stated 30-minute budget, rather than an open-ended or arbitrarily long quiz.",
+      "expected_discriminating": true,
+      "rationale": "with_skill draws from the pre-minted purpose=mock pool via the exam CLI command, which is budget-aware; a baseline inventing questions ad hoc may not size or bound them consistently."
+    },
+    {
+      "id": "no-hints-during-exam",
+      "text": "During the mock exam itself (before the learner's simulated answer for each question), the tutor gives no unsolicited hints and no feedback on an item before it is submitted.",
+      "expected_discriminating": true,
+      "rationale": "This is an explicit, named exam-mode rule in pedagogy.md; nothing generic enforces it, so a baseline tutoring persona (habitually helpful) is more likely to slip in a hint or a running comment."
+    },
+    {
+      "id": "typed-error-postmortem",
+      "text": "The post-mortem classifies each miss by a specific error type (e.g. conceptual / method-selection / algebra / formula-recall / notation / speed / careless), not just a generic right/wrong or 'review this topic more'.",
+      "expected_discriminating": true,
+      "rationale": "The skill defines a specific error-tag taxonomy for post-mortems; a baseline has no equivalent taxonomy to draw on."
+    },
+    {
+      "id": "grounded-in-actual-answers",
+      "text": "The review references specifics of the learner's own simulated answers for this exam (not a generic template response), showing the feedback is actually grounded in what happened.",
+      "expected_discriminating": false,
+      "rationale": "Since the same agent simulates both the learner's answers and the review in one turn, both configurations have direct access to what was 'said' and are likely to reference it; may pass in both."
+    },
+    {
+      "id": "acknowledges-recurring-mistake",
+      "text": "If the exam touches the integration-basic target, the review connects the result to the learner's pre-existing recurring method_selection_error on that topic rather than treating it as a first-time encounter.",
+      "expected_discriminating": true,
+      "rationale": "Requires reading mistakes/observation history; a baseline with no access to or habit of reading that state cannot make this connection even if it wanted to."
+    },
+    {
+      "id": "durable-trace-left",
+      "text": "The exam and its outcome leave some durable, re-readable trace (e.g. recorded observations/updated session state) rather than existing only inside this one chat reply.",
+      "expected_discriminating": true,
+      "rationale": "Only with_skill has a persistence mechanism (record-observation/end-session); a baseline literally cannot persist anything outside the conversation."
+    }
+  ]
+}
