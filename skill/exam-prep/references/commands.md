@@ -9,8 +9,13 @@ one entry here - `SKILL.md` should not need to change.
   preserves canonical files.
 - `load-syllabus <path>` - load or replace the syllabus.
 - `start` - open the active session, or resume the one already open.
-- `status` - compact snapshot: course, syllabus, session, review queue,
-  mistakes, pending action, capability/blueprint diagnostics, resume point.
+- `status` - snapshot: course, syllabus, session, review queue, mistakes,
+  pending action, capability/blueprint diagnostics, resume point.
+  `--compact` trims each target to availability/mastery_status/
+  recurring_mistakes, review_queue to due items only, and drops empty
+  diagnostics - use it once you already know what you're looking for and
+  just need the next-action inputs, not a full diagnostic dump (default
+  output is unchanged).
 - `validate` - deep diagnostic report on the whole workspace; never blocks
   on its own, only describes what it finds.
 - `next --minutes N` - pick one budget-fitting activity.
