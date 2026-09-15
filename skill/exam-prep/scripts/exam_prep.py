@@ -38,6 +38,10 @@ from exam_prep_lib.target_normalization import normalize_syllabus
 from exam_prep_lib.verifier_registry import VerifierRegistry, verify_request
 from exam_prep_lib.workspace import discover_git_root, resolve_workspace
 
+for _stream in (sys.stdout, sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8")
+
 
 class LegacyStateDetected(ValueError):
     """A legacy state tree needs an explicit migration before target runtime use."""
@@ -321,8 +325,20 @@ def _persist_learning(
     return concepts, reviews, manifest
 
 
+def _print_json(value: object, *, file=None) -> None:
+    # A Windows console with a non-UTF-8 codepage can raise UnicodeEncodeError
+    # on non-ASCII output (Cyrillic, math symbols) even after the underlying
+    # mutation already succeeded and was committed. Fall back to an ASCII-safe
+    # \\uXXXX-escaped encoding rather than losing a successful result to a
+    # display-only failure.
+    try:
+        print(json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2), file=file)
+    except UnicodeEncodeError:
+        print(json.dumps(value, ensure_ascii=True, sort_keys=True, indent=2), file=file)
+
+
 def _result(value: object) -> int:
-    print(json.dumps(value, ensure_ascii=False, sort_keys=True, indent=2))
+    _print_json(value)
     return 0
 
 
@@ -613,7 +629,7 @@ def main(argv: list[str] | None = None) -> int:
         # syllabus.json - the exact files load_state() (correctly, for every
         # other command) reads eagerly and would raise on.
         report = run_validation(store)
-        print(json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2))
+        _print_json(report)
         return 0 if report["valid"] else 1
 
     course, syllabus, learner, session, concepts, reviews = load_state(store)
@@ -987,6 +1003,6 @@ if __name__ == "__main__":
     try:
         raise SystemExit(main())
     except (SchemaError, ValueError, FileNotFoundError) as exc:
-        print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
+        _print_json({"error": str(exc)}, file=sys.stderr)
         raise SystemExit(2)
 
