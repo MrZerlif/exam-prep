@@ -33,9 +33,9 @@ that can be recomputed from that log with `rebuild`.
 
 ## What this actually buys you
 
-An audit in `skill/exam-prep-workspace/` compared this skill against plain
-Claude with generic file tools and no skill loaded, across five scenarios and
-28 graded assertions. The headline is 100% (28/28) with the skill against 76%
+An audit run against this skill compared it with plain Claude using generic
+file tools and no skill loaded, across five scenarios and 28 graded
+assertions. The headline is 100% (28/28) with the skill against 76%
 (21/28) without it, but that number on its own is misleading and the audit says
 so: **21 of the 28 assertions passed identically in both configurations**, and
 one entire scenario — resuming after a week away — was a 5/5 tie. Seven
@@ -51,8 +51,8 @@ So the honest claim is not that this unlocks a capability a capable model
 lacks. It is that it makes reading and using the learner's real recorded
 history reliable rather than occasional, and that it gives the state somewhere
 durable to live. The audit also measures the cost: roughly 2.2x wall time and
-1.4x tokens against the baseline. Full numbers and the per-scenario breakdown
-are in `skill/exam-prep-workspace/AUDIT-REPORT.md`.
+1.4x tokens against the baseline. The raw transcripts and per-run grading are
+kept outside this repository, as local working material.
 
 ## Exam formats
 
@@ -116,6 +116,10 @@ evidence enters only through `record-observation`; the derived files are never
 hand-edited. `exam` assembles a mock from a minted `purpose=mock` pool, sized
 and timed by the blueprint, drawn with a session-seeded shuffle rather than a
 sorted truncation, and `end-session` closes it with a per-question post-mortem.
+An attempt only reaches that post-mortem if its observation carries the
+ticket's `assessment_id`; without it the attempt is recorded as ordinary
+evidence and the ticket grades as unattempted, which the CLI now says at the
+time of recording rather than at the end.
 
 The full command catalog, with every flag and payload format, is
 `skill/exam-prep/references/commands.md`. It is the source of truth; this
@@ -154,9 +158,8 @@ attached a provider host.
 
 Whether the skill reliably *activates* on a real request has not been measured.
 The trigger-rate evaluation was written but never produced a valid result — it
-is blocked on an unauthenticated CLI in the test environment, documented in
-`skill/exam-prep-workspace/description-optimization/BLOCKER.md`. A skill that
-does not trigger is a skill that does not run, and that risk is currently
+is blocked on an unauthenticated CLI in the test environment. A skill that does
+not trigger is a skill that does not run, and that risk is currently
 unquantified.
 
 Working from photographs of handwritten work is architecturally possible, since
@@ -195,7 +198,7 @@ package imports nothing outside `argparse`, `ast`, `collections`, `copy`,
 
 Python 3.11 or newer is the intended floor, though the repository ships no
 packaging metadata that enforces it — the oldest feature actually used is
-`zoneinfo` (3.9). The suite is verified on Python 3.12.3: **321 tests, all
+`zoneinfo` (3.9). The suite is verified on Python 3.12.3: **337 tests, all
 passing**, run with `python3 -m unittest discover -s tests -t .` from the
 repository root.
 
@@ -219,10 +222,7 @@ skill/exam-prep/              the installable, self-contained skill package
 ├── examples/                 example syllabus, curriculum proposal,
 │                             observation proposal, mock exam, and others
 └── config/                   config.template.json
-skill/exam-prep-workspace/    audit artifacts: AUDIT-REPORT.md, per-run
-                              benchmarks, transcript findings, trigger-eval
-                              blocker (not part of the installed package)
-tests/                        47 test modules plus tests/scenarios/
+tests/                        49 test modules plus tests/scenarios/
                               (not part of the installed package)
 ~~~
 
@@ -241,5 +241,4 @@ the tracks and assistance ladder, `references/exam-optimizer.md` the
 prioritization formula and exam mode, `references/source-of-truth.md` the
 authority order between sources, `references/verification.md` the numeric
 answer checks, and `references/notebooklm-mcp.md` the optional provider
-integration. The audit that the claims above are drawn from is
-`skill/exam-prep-workspace/AUDIT-REPORT.md`.
+integration.
