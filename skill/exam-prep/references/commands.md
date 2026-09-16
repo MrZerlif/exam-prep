@@ -70,6 +70,39 @@ a ticket answered correctly after H1/H2 hints lands in `correct` but its
 assistance band is `guided`, and only `independent` counts. Two correct
 answers, one of them hinted, score 0.5.
 
+### Observation proposal payload
+
+`record-observation` validates the file before anything is written, and
+`additionalProperties: false` means an unknown key is an error, not a
+warning. Build the proposal from
+`schemas/observation-proposal-v2.schema.json`;
+`examples/observation-proposal.json` is a valid instance to copy the shape
+from, rather than reconstructing the field list from prose.
+
+Required on every v2 proposal:
+
+`schema_version` (the integer `2`), `observation_id`, `target_id`,
+`task_id`, `capability_id`, `task_type`, `outcome`, `assistance`,
+`error_tags`, `diagnostic_confidence`, `source_refs`.
+
+Tutor-supplied optional fields: `learner_self_confidence` (only when the
+learner states it), `learner_explanation`, `assessment_id` (above),
+`solution_exposed`, `explicit_exposure_reason`, `activity_id`. The schema
+is the complete list; anything outside it is rejected.
+
+A proposal carrying any of these engine-owned fields is rejected with
+`engine-owned field is not accepted from LLM`: `recorded_at`,
+`session_id`, `timestamp`, `expected_seconds`, `elapsed_seconds`,
+`assessment_integrity`, `assessment_spec_hash`,
+`canonical_assessment_hash`, `derived_evidence_maturity`, `independence`,
+`exposure_classification`, `verifier_result`. The engine owns the clock,
+session binding, timing, and independence/exposure classification; it derives
+them from `assistance` and `outcome`.
+
+A proposal whose `schema_version` is not `2` is validated against the v1
+schema (`concept_id` instead of `target_id`); that path exists for legacy
+workspaces only. Write `2`.
+
 ## Curriculum
 
 - `validate-curriculum <path>` - dry-run check of a curriculum proposal:
