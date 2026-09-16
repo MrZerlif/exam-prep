@@ -3,6 +3,34 @@
 Every `scripts/exam_prep.py` subcommand. Adding a new command means adding
 one entry here - `SKILL.md` should not need to change.
 
+## Invocation
+
+Every command below is a subcommand of one script:
+
+~~~bash
+python <skill-dir>/scripts/exam_prep.py [--workspace PATH] <command> [args]
+~~~
+
+`<skill-dir>` is this package's own directory - the one holding
+`SKILL.md`. Python puts the script's own directory on `sys.path`, so an
+absolute path works from any working directory and `exam_prep_lib` is
+found beside the script. There is nothing to install and nothing on
+`PATH`.
+
+The workspace is a separate thing from the skill directory: it is where
+`.exam-prep/` lives, and it is resolved in this order:
+
+1. `--workspace PATH`
+2. `EXAM_PREP_WORKSPACE`, then the legacy `MATH_STUDY_WORKSPACE`, then
+   `EXAM_PREP_PROJECT_ROOT`
+3. the nearest ancestor directory containing `.git`
+4. the current working directory
+
+Generic host variables `PROJECT_ROOT` and `WORKSPACE_ROOT` are ignored on
+purpose. Pass `--workspace` explicitly whenever the learner's course and
+the current directory might differ: a wrong workspace does not fail, it
+reports `uninitialized` and invites you to start a second, empty course.
+
 ## Lifecycle
 
 - `init` - create the workspace once; repeating it is a safe no-op that
