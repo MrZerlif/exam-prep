@@ -112,6 +112,40 @@ class SkillContractTests(unittest.TestCase):
             f"commands missing from SKILL.md and its linked references: {undocumented}",
         )
 
+    def test_commands_reference_carries_the_full_observation_proposal_contract(self):
+        # Audit finding 1: SKILL.md listed 7 of the 11 required fields and
+        # nothing pointed at schemas/ or examples/, so a proposal built from
+        # the prose alone failed on the first record-observation. The field
+        # list is read from the schema and the constant, never re-typed, so
+        # a newly required field fails here instead of shipping a doc that
+        # quietly omits it.
+        import json
+
+        from exam_prep_lib.schema_validation import ENGINE_OWNED_PROPOSAL_FIELDS
+
+        commands = (SKILL_ROOT / "references" / "commands.md").read_text(encoding="utf-8")
+        schema = json.loads(
+            (SKILL_ROOT / "schemas" / "observation-proposal-v2.schema.json").read_text(
+                encoding="utf-8"
+            )
+        )
+        tick = chr(96)
+        missing_required = [
+            field for field in schema["required"] if f"{tick}{field}{tick}" not in commands
+        ]
+        self.assertEqual(
+            [], missing_required, "commands.md omits required proposal fields"
+        )
+        missing_engine_owned = [
+            field
+            for field in sorted(ENGINE_OWNED_PROPOSAL_FIELDS)
+            if f"{tick}{field}{tick}" not in commands
+        ]
+        self.assertEqual(
+            [], missing_engine_owned, "commands.md omits engine-owned rejected fields"
+        )
+        self.assertIn("examples/observation-proposal.json", commands)
+
 
 if __name__ == "__main__":
     unittest.main()
