@@ -1,6 +1,7 @@
 import contextlib
 import io
 import json
+import re
 import sys
 import tempfile
 import unittest
@@ -11,8 +12,8 @@ ROOT = Path(__file__).parents[1]
 SCENARIOS = ROOT / "tests" / "scenarios"
 sys.path.insert(0, str(SCENARIOS))
 
-from evaluate_transcripts import EvaluationError, summarize_scores  # noqa: E402
-from run_scenarios import build_prompt_packet, emit_evaluation_set, load_case, main as run_scenarios  # noqa: E402
+from evaluate_transcripts import EvaluationError, release_case_ids, summarize_scores  # noqa: E402
+from run_scenarios import build_prompt_packet, emit_evaluation_set, load_case, load_cases, main as run_scenarios  # noqa: E402
 
 
 class PressureRunnerTests(unittest.TestCase):
@@ -184,6 +185,31 @@ class PressureRunnerTests(unittest.TestCase):
             "ticket_list_exam_no_forced_problems",
             {item["case_id"] for item in records},
         )
+
+    def test_documented_cases_flag_names_only_known_cases(self):
+        # The exact drift this guards: baseline-prompts.md documented
+        # --cases premature_solution_pressure,short_time_budget,
+        # resume_pending_action,... none of which exist, so the one command
+        # a reader would copy died with "unknown case".
+        doc = (SCENARIOS / "baseline-prompts.md").read_text(encoding="utf-8")
+        known = {case["id"] for case in load_cases()}
+        documented = {
+            case_id
+            for group in re.findall(r"--cases\s+([a-z0-9_,]+)", doc)
+            for case_id in group.split(",")
+            if case_id
+        }
+        self.assertEqual(
+            set(), documented - known, "baseline-prompts.md names unknown case ids"
+        )
+
+    def test_baseline_prompts_names_the_release_gate_set(self):
+        # Non-vacuous counterpart: dropping --cases must not also drop the
+        # reader's only statement of what the default export actually covers.
+        doc = (SCENARIOS / "baseline-prompts.md").read_text(encoding="utf-8")
+        known = {case["id"] for case in load_cases()}
+        named = {token for token in re.findall(r"\x60([^\x60\n]+)\x60", doc) if token in known}
+        self.assertEqual(set(release_case_ids()), named)
 
 
 if __name__ == "__main__":
