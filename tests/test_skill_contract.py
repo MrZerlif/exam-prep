@@ -165,6 +165,18 @@ class SkillContractTests(unittest.TestCase):
         for name in env_names:
             self.assertIn(name, commands, f"commands.md does not document {name}")
 
+    def test_skill_names_the_entrypoint_and_points_at_the_proposal_schema(self):
+        # Audit findings 1 and 4 at the level the tutor reads first: SKILL.md
+        # said "Run status first" without ever naming the script, and
+        # described the observation payload as a prose field list missing
+        # four required fields. Both are now one pointer each; the detail
+        # lives in references/commands.md.
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("scripts/exam_prep.py", text)
+        self.assertIn("--workspace", text)
+        self.assertIn("schemas/observation-proposal-v2.schema.json", text)
+        self.assertIn("examples/observation-proposal.json", text)
+
 
 if __name__ == "__main__":
     unittest.main()
