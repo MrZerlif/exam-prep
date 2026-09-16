@@ -18,10 +18,13 @@ history. The baseline is behavioral evidence, not runtime state.
 ## Executable fresh-context evaluation
 
 The deterministic runner is not a model evaluator. For a fresh-context comparison,
-export both variants and five repetitions for the selected cases:
+export both variants and five repetitions. With no `--cases` override the export
+covers the four release-gate cases - `restart`, `one_mistake_show_answer`,
+`fifteen_minute_budget`, `teacher_material_conflict` - the same set
+`evaluate_transcripts.py` requires scores for:
 
 ~~~powershell
-python tests/scenarios/run_scenarios.py --emit-eval-set .tmp/exam-prep-eval.jsonl --repeat 5 --cases premature_solution_pressure,short_time_budget,resume_pending_action,teacher_material_conflict
+python tests/scenarios/run_scenarios.py --emit-eval-set .tmp/exam-prep-eval.jsonl --repeat 5
 ~~~
 
 Run each packet in the chosen host/model context. Add the externally observed
