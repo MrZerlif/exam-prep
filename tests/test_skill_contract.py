@@ -146,6 +146,25 @@ class SkillContractTests(unittest.TestCase):
         )
         self.assertIn("examples/observation-proposal.json", commands)
 
+    def test_commands_reference_documents_the_entrypoint_and_workspace_order(self):
+        # Audit finding 4: every command was written bare (status, init)
+        # and the workspace precedence lived only in READMEs the tutor never
+        # loads - so a run could silently start a second empty course in the
+        # wrong directory. The env var names are read out of the resolver, so
+        # a new one cannot be added without documenting it.
+        import inspect
+
+        from exam_prep_lib import workspace as workspace_module
+
+        commands = (SKILL_ROOT / "references" / "commands.md").read_text(encoding="utf-8")
+        self.assertIn("scripts/exam_prep.py", commands)
+        self.assertIn("--workspace", commands)
+        source = inspect.getsource(workspace_module.resolve_workspace)
+        env_names = re.findall(r'"([A-Z_]*WORKSPACE[A-Z_]*|[A-Z_]*PROJECT_ROOT)"', source)
+        self.assertTrue(env_names, "could not read env var names from resolve_workspace")
+        for name in env_names:
+            self.assertIn(name, commands, f"commands.md does not document {name}")
+
 
 if __name__ == "__main__":
     unittest.main()
