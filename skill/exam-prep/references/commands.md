@@ -31,14 +31,24 @@ purpose. Pass `--workspace` explicitly whenever the learner's course and
 the current directory might differ: a wrong workspace does not fail, it
 reports `uninitialized` and invites you to start a second, empty course.
 
+## Before initialization
+
+Only `status`, `init`, `validate`, and `validate-curriculum` run on a
+workspace that has no `.exam-prep/` yet. Every other command returns
+`workspace_not_initialized` with the missing canonical files named, and
+creates nothing - it is a normal refusal, not a failure, and the repair is
+`init` (or `validate` when files are partially present), not a retry.
+
 ## Lifecycle
 
 - `init` - create the workspace once; repeating it is a safe no-op that
   preserves canonical files.
 - `load-syllabus <path>` - load or replace the syllabus.
 - `start` - open the active session, or resume the one already open.
-- `status` - snapshot: course, syllabus, session, review queue, mistakes,
-  pending action, capability/blueprint diagnostics, resume point.
+- `status` - snapshot: course, session, targets, review queue, recurring
+  mistakes, pending action, capability/blueprint diagnostics, and resume point.
+  It does not return the syllabus document or full target titles; use `roadmap`
+  when full target metadata is needed.
   `--compact` trims each target to availability/mastery_status/
   recurring_mistakes, review_queue to due items only, and drops empty
   diagnostics - use it once you already know what you're looking for and
@@ -57,7 +67,8 @@ reports `uninitialized` and invites you to start a second, empty course.
 - `end-session` - close the session; produces a summary, and a
   per-question post-mortem when the session was an `exam`.
 - `rebuild` - recompute derived state from the canonical observation log.
-- `verify <path>` - numeric/symbolic answer check (`references/verification.md`).
+- `verify <path>` - derivative/antiderivative answer check
+  (`references/verification.md`); unsupported kinds return `unavailable`.
 
 ### Linking an attempt to a frozen assessment
 

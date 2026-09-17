@@ -20,15 +20,27 @@ is illustrative documentation only; the runtime does not load it automatically.
 
 NotebookLM MCP is an optional P2 agent-host integration. When present, the host
 normalizes its returned evidence into a SourceEvidenceEnvelope and passes that
-data to the CLI. The Python core has no NotebookLM transport or SDK dependency.
+data to the CLI. Connector availability is not consent: installation,
+authentication, material transfer, and every external write require explicit
+user confirmation naming the material and destination. The Python core has no
+NotebookLM transport or SDK dependency.
 
-Deterministic engine tests (`python tests/scenarios/run_scenarios.py --deterministic`)
-check runtime behavior and persistence only. Fresh-context behavioral evaluation is a
-separate host-level/manual step: export prompts with
-`python tests/scenarios/run_scenarios.py --emit-eval-set ...`, run each packet in the
-chosen host, then submit explicit independent scores to
-`tests/scenarios/evaluate_transcripts.py`. Passing deterministic tests alone does not
-claim behavioral compliance.
+The test suite is not part of this package. It lives in the source repository
+(this directory is `skill/exam-prep/` there), and every command below is run
+from that repository's root, not from an installed copy:
+
+~~~bash
+python -m unittest discover -s tests -t .
+python tests/scenarios/run_scenarios.py --deterministic
+~~~
+
+Deterministic engine tests check runtime behavior and persistence only.
+Fresh-context behavioral evaluation is a separate host-level/manual step:
+export prompts with `run_scenarios.py --emit-eval-set ...`, run each packet in
+the chosen host, then submit explicit independent scores to
+`tests/scenarios/evaluate_transcripts.py`. Passing deterministic tests alone
+does not claim behavioral compliance. Discovery has a separate
+positive/negative packet export: `run_scenarios.py --emit-activation-set ...`.
 The primary package examples are subject-neutral. The separate
 examples/mathematics-regression-syllabus.json is retained only for
 mathematics-specific regression coverage.

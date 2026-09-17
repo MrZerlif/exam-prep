@@ -7,6 +7,7 @@ that does not include the repo), then drives the documented CLI lifecycle.
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -95,6 +96,37 @@ class StandaloneInstallTests(unittest.TestCase):
 
         end_result = self.run_cli("end-session")
         self.assertEqual(end_result["status"], "session_ended")
+
+
+    def test_package_readme_says_where_its_test_commands_run(self):
+        """The package README is what a person reads *after* copying this
+        directory into a skills folder, where `python tests/...` resolves to
+        nothing. Naming paths is fine - leaving the reader to discover that
+        they belong to the source repository is not. Each referenced path must
+        also exist at the repository root, so the commands are real somewhere.
+        """
+        readme = (self.install_root / "README.md").read_text(encoding="utf-8")
+        self.assertRegex(
+            readme,
+            r"(?i)test suite is not part of this package|from that repository's root",
+            "package README runs tests/ commands without saying they are "
+            "repository-root commands, not package ones",
+        )
+        referenced = sorted(set(re.findall(r"`?(tests/[\w./-]+\.py)", readme)))
+        self.assertTrue(referenced, "README no longer references the test suite")
+        missing = [path for path in referenced if not (ROOT / path).exists()]
+        self.assertEqual([], missing, "README references test files that do not exist")
+
+    def test_the_package_ships_no_empty_directories(self):
+        """state/ and syllabus/ survived the math-study rename as empty
+        leftovers. Git does not track empty directories, so they are invisible
+        in `git status` but are copied into every install."""
+        empty = [
+            str(path.relative_to(self.install_root))
+            for path in self.install_root.rglob("*")
+            if path.is_dir() and not any(path.iterdir())
+        ]
+        self.assertEqual([], sorted(empty), "empty directories shipped in the package")
 
 
 if __name__ == "__main__":

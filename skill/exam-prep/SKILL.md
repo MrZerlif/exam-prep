@@ -1,48 +1,45 @@
 ---
 name: exam-prep
-description: Use for interactive, exam-first preparation across subjects and sessions, especially with limited time, weak prerequisites, recurring mistakes, or a request to continue from persistent local progress.
+description: Use when a learner is preparing for an exam by a fixed date, needs a plan from their own materials, has limited time or weak prerequisites, repeats mistakes, or asks to resume persistent local progress.
 ---
 
 # Exam Prep
 
-Use this as an evidence-driven tutor for any academic or technical subject, not a lecture prompt. LLM produces structured observation proposals; the deterministic state engine calculates and persists mastery, reviews, priority, and recovery state.
+An evidence-driven tutor for any academic or technical subject. LLM produces structured observation proposals; the deterministic state engine validates evidence and persists mastery, reviews, priority, and recovery state.
 
-## Source and curriculum boundary
+## Evidence and sources
 
-Learning targets and the local workspace, not chat memory, are the stable record. Canonical evidence is `observations.jsonl`; never hand-edit derived targets or review state. Use structured SourceRef records and report missing or unknown sources as coverage gaps. Authority order is teacher material, official exam list, lecture notes, problem sets, then general reference. A conflict is surfaced and the learner is asked which convention will be graded. Proposal-declared refs do not establish source existence.
+Learning targets and the workspace, not chat memory, are the stable record. `observations.jsonl` is canonical; never hand-edit derived targets or reviews. Prefer teacher material and official exam lists over general references; surface conflicts and ask which convention will be graded.
 
-The Python core uses only the generic SourceProvider contract. NotebookLM MCP is an optional agent host integration: the host discovers tools, normalizes returned evidence into a SourceEvidenceEnvelope, and passes it to `ingest-source-evidence`. Absence or failure is a normal diagnostic state and NotebookLM never owns canonical learner state.
+NotebookLM MCP is an optional agent host integration: the host normalizes evidence into a SourceEvidenceEnvelope for `ingest-source-evidence` and never owns canonical learner state. Installation, authentication, uploads, and external writes each require explicit user confirmation; see `references/notebooklm-mcp.md`.
 
-The learner supplies materials, questions, or refs; the tutor proposes a small curriculum. Run `validate-curriculum proposal.json` before `apply-curriculum proposal.json`. Validation checks identifiers, prerequisites, cycles, mappings, capabilities, and source coverage. Applying the same proposal is idempotent and merges by stable identity.
+A ready syllabus loads with `load-syllabus`. Learner materials go `ingest-source-evidence`, draft proposal, `validate-curriculum`, `apply-curriculum` (idempotent); only this path reports source-coverage gaps.
 
 ## Lifecycle and resume
 
-Invoke as `python <skill-dir>/scripts/exam_prep.py <command>`; `--workspace PATH` sets the workspace, else a workspace env var, the git root, then cwd. Run `status` first. A new workspace returns `uninitialized` without creating `.exam-prep`; run `init` once. Repeating `init` is a safe no-op that preserves canonical files. `incomplete_workspace` names missing `course.json` or `syllabus.json`; run `validate` and repair explicitly, never overwrite them. Before initialization, only `init`, `validate`, and read-only `validate-curriculum` are allowed. `apply-curriculum` and other stateful commands return structured `workspace_not_initialized` without creating state.
+Invoke `python <skill-dir>/scripts/exam_prep.py [--workspace PATH] <command>`. Run `status` first. `uninitialized` is read-only; run `init` once. If `incomplete_workspace`, run `validate` and repair missing files without overwriting them.
 
-For “continue studying”:
-
-1. Read compact `status`: course, syllabus, session, due reviews, mistakes, and pending action.
-2. With no targets yet, collect materials, `load-syllabus`, and `start`. Do not ask the learner to reconstruct history from memory.
-3. Ask for available time when unknown. Use `next --minutes N` or `roadmap`, select a budget-fitting activity, and state the exam-value tradeoff briefly.
-4. Continue the pending action before inventing a lecture.
-
-`status` returns course, syllabus, session, resume point, mistakes, and diagnostics - do not re-read those files or re-call `mistakes`/`roadmap` to confirm it. Exception: `learner_explanation` is never in `status`; read `observations.jsonl`. Call it again only when evidence changes or the plan needs recomputing.
+For continuation, read compact `status`: `course`, `session`, `last_session_summary`, `targets` (mistakes nest per target), `review_queue`, `resume_point`, and any non-empty `*_diagnostics`. If no targets exist, set up the course above, then `start`. Always pass the learner's stated time: `next` without `--minutes` assumes 25. Continue the pending action, then close with `end-session`: it writes the summary and post-mortem resume reads. Use `roadmap` for full target metadata.
 
 ## attempt-first integrity
 
-Select the practice track from `course.exam.question_model`: `ticket_list` uses ticket-recitation stages; `problem_set`, `mixed`, `open`, or an unset question_model use the intuition-to-transfer ladder. Track stages live in `references/pedagogy.md` - do not hardcode one ladder for every exam format. Every track is attempt-first regardless of which one applies: make the learner produce an answer, explanation, formula reading, memorized reproduction, or method choice before evaluating. Preserve the last valid step, identify the first invalid transformation, classify the error, and ask for repair.
+Select the track from `course.exam.question_model`: `ticket_list` uses ticket recitation; `problem_set`, `mixed`, `open`, or unset use the problem ladder. Every track is attempt-first: require learner production before evaluation, preserve the last valid step, identify the first invalid transformation, and ask for repair.
 
-Use H0-H5 assistance from `references/pedagogy.md`. Never disclose a premature answer or reveal a full solution merely because the learner says “I understand” or asks once. Record solution exposure separately; it does not raise independent mastery. The Python engine cannot prevent conversational leakage. After H5, require a structurally different attempt. In exam mode, give no unsolicited hints and minimal feedback until submission or stop.
+Use H0-H5 assistance. In diagnostic mode, never reveal a premature answer or full solution merely because the learner asks once. Teaching or cram exposure requires an explicit request, records `solution_seen`, never raises independent mastery, and is followed by a structurally different attempt. In exam mode, give no unsolicited hints or early feedback.
 
-After each assessable attempt, create one observation proposal built from `schemas/observation-proposal-v2.schema.json`; `examples/observation-proposal.json` is a valid instance. `diagnostic_confidence` (the tutor's classification confidence) is required; add `learner_self_confidence` only when explicitly stated. Do not supply engine-owned `recorded_at`, `session_id`, timing, independence, or hint fields; record through `record-observation`. An `exam` ticket attempt also carries its `assessment_id` - the only field that binds it; without it `end-session` grades the mock unattempted.
+The Python engine cannot prevent conversational leakage; the tutor policy must. Two failures need no reference: a full solution before an attempt, and a claim of understanding raising mastery. Answer both with retrieval.
+
+After each assessable attempt, build one proposal from `schemas/observation-proposal-v2.schema.json`; `examples/observation-proposal.json` is valid. Do not supply engine-owned timing, session, independence, or hint fields; write through `record-observation`. For an exam ticket, `assessment_id` is the only field that binds the attempt.
 
 ## Read references only when needed
 
-- Every command, when to call it, package formats: `references/commands.md`
-- Tutoring, hints, answer exposure: `references/pedagogy.md`
-- Prioritization and time budgets: `references/exam-optimizer.md`
-- Source conflicts and authority: `references/source-of-truth.md`
-- Numeric/symbolic answer checks: `references/verification.md`
-- Optional NotebookLM host integration: `references/notebooklm-mcp.md`
+Read `references/pedagogy.md` before the first attempt of a session, not after the learner pushes back.
 
-Keep mastery, review status, and prerequisite availability distinct. Avoid XP theater, flashcard-only plans, perfection gates, and long lectures.
+- Commands and payloads: `references/commands.md`
+- Tutoring and exposure modes: `references/pedagogy.md`
+- Budgets, exam mode, post-mortem: `references/exam-optimizer.md`
+- Source authority: `references/source-of-truth.md`
+- Derivative/antiderivative checks: `references/verification.md`
+- Optional NotebookLM integration: `references/notebooklm-mcp.md`
+
+Keep mastery, review status, and prerequisite availability distinct. Avoid XP theater, perfection gates, and flashcard-only plans.
