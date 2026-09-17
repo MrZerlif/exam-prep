@@ -118,14 +118,16 @@ learner states it), `learner_explanation`, `assessment_id` (above),
 `solution_exposed`, `explicit_exposure_reason`, `activity_id`. The schema
 is the complete list; anything outside it is rejected.
 
-A proposal carrying any of these engine-owned fields is rejected with
-`engine-owned field is not accepted from LLM`: `recorded_at`,
+A proposal carrying any of these engine-owned fields at its own top level
+is rejected with `engine-owned field is not accepted from LLM`: `recorded_at`,
 `session_id`, `timestamp`, `expected_seconds`, `elapsed_seconds`,
 `assessment_integrity`, `assessment_spec_hash`,
 `canonical_assessment_hash`, `derived_evidence_maturity`, `independence`,
 `exposure_classification`, `verifier_result`. The engine owns the clock,
 session binding, timing, and independence/exposure classification; it derives
-them from `assistance` and `outcome`.
+them from `assistance` and `outcome`. Only top-level keys are checked: the
+optional `assessment` sub-object carries its own `spec_hash` and
+`assessment_spec_hash`, and those are accepted.
 
 A proposal whose `schema_version` is not `2` is validated against the v1
 schema (`concept_id` instead of `target_id`); that path exists for legacy

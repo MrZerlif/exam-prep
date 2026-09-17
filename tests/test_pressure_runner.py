@@ -206,9 +206,17 @@ class PressureRunnerTests(unittest.TestCase):
     def test_baseline_prompts_names_the_release_gate_set(self):
         # Non-vacuous counterpart: dropping --cases must not also drop the
         # reader's only statement of what the default export actually covers.
+        # Scoped to the paragraph making that claim, so documenting some
+        # other case elsewhere in the file stays legal - an earlier version
+        # compared against every backticked id in the whole document and
+        # would have failed a perfectly correct `--cases exam_mode` example.
         doc = (SCENARIOS / "baseline-prompts.md").read_text(encoding="utf-8")
+        claims = [part for part in re.split(r"\n\s*\n", doc) if "release-gate cases" in part]
+        self.assertEqual(
+            1, len(claims), "baseline-prompts.md must state the default export set exactly once"
+        )
         known = {case["id"] for case in load_cases()}
-        named = {token for token in re.findall(r"\x60([^\x60\n]+)\x60", doc) if token in known}
+        named = {token for token in re.findall(r"`([^`\n]+)`", claims[0]) if token in known}
         self.assertEqual(set(release_case_ids()), named)
 
 
