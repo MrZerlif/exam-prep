@@ -62,8 +62,25 @@ MISTAKE_SUMMARIES = {
     "domain_condition_error": "missed a domain or validity condition",
     "proof_structure_error": "proof structure is incomplete",
 }
-def derive_assistance_band(assistance: dict[str, Any]) -> str:
-    levels = set(assistance.get("levels_revealed", []))
+def derive_assistance_band(assistance: Any) -> str:
+    """Total by construction, and conservative when it cannot tell.
+
+    Proposals are schema-checked before they are appended, but logs written
+    while the v2 assistance object was a bare `{"type": "object"}` can still
+    hold `null`, `{}`, or a string where the ladder belongs. This function has
+    to read those without raising: `rebuild` is the documented repair for such
+    a workspace, and the canonical log must never be hand-edited.
+
+    Unreadable assistance falls back to `guided`, not `independent`. An empty
+    ladder is an explicit claim that no hint was given; a missing or malformed
+    one is the absence of a claim, and independence is the strongest evidence
+    in the model - it is never granted to an attempt that cannot show it.
+    """
+    if not isinstance(assistance, dict):
+        return "guided"
+    raw_levels = assistance.get("levels_revealed")
+    stated = isinstance(raw_levels, (list, tuple, set))
+    levels = set(raw_levels) if stated else set()
     if assistance.get("full_solution_viewed") or "H5" in levels:
         return "solution_seen"
     if assistance.get("partial_transformation_shown") or "H4" in levels:
@@ -72,7 +89,7 @@ def derive_assistance_band(assistance: dict[str, Any]) -> str:
         return "guided"
     if "H1" in levels:
         return "lightly_scaffolded"
-    return "independent"
+    return "independent" if stated else "guided"
 
 
 def average_known_mastery(mastery: dict[str, Any]) -> float:
