@@ -72,7 +72,11 @@ class InitializationLifecycleTests(unittest.TestCase):
 
         code, _ = self.invoke("validate-curriculum", str(proposal_path))
 
-        self.assertEqual(0, code)
+        # `{}` is an invalid proposal, and an invalid proposal now exits 1 so
+        # that a caller checking only the exit code cannot walk into
+        # apply-curriculum. What this test is actually about is unchanged:
+        # validating before init must not create the workspace.
+        self.assertEqual(1, code)
         self.assertFalse((self.root / ".exam-prep").exists())
 
     def test_pre_init_apply_curriculum_is_explicitly_rejected_without_state_change(self):

@@ -504,12 +504,17 @@ def main(argv: list[str] | None = None) -> int:
                 verified_source_catalog=verified_source_catalog,
             )
         except CurriculumValidationError as exc:
-            return _result({
+            # SKILL.md puts validate-curriculum in front of apply-curriculum,
+            # so a rejected proposal has to reach a caller that only checks the
+            # exit code - agent or CI. Plain `validate` already returns 1 in
+            # the same situation; these two were the outliers.
+            _print_json({
                 "valid": False,
                 "errors": exc.issues,
                 "warnings": exc.warnings,
                 "coverage_gaps": exc.coverage_gaps,
             })
+            return 1
         return _result({
             "valid": True,
             "proposal_id": validated["proposal_id"],
@@ -521,12 +526,17 @@ def main(argv: list[str] | None = None) -> int:
         try:
             result = apply_curriculum_proposal(store, proposal)
         except CurriculumValidationError as exc:
-            return _result({
+            # SKILL.md puts validate-curriculum in front of apply-curriculum,
+            # so a rejected proposal has to reach a caller that only checks the
+            # exit code - agent or CI. Plain `validate` already returns 1 in
+            # the same situation; these two were the outliers.
+            _print_json({
                 "valid": False,
                 "errors": exc.issues,
                 "warnings": exc.warnings,
                 "coverage_gaps": exc.coverage_gaps,
             })
+            return 1
         return _result(result.to_mapping())
 
     if args.command == "freeze-assessment":

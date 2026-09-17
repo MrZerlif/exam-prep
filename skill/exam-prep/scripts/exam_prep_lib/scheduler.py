@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 from .capabilities import AssessmentCapability, CapabilityRegistry
 from .evidence_maturity import FACETS
-from .reducer import DIMENSIONS, average_known_mastery
+from .reducer import DIMENSIONS, average_known_mastery, derive_assistance_band
 from .target_normalization import normalize_event, normalize_syllabus
 
 # Minimum interval floor so a review is never scheduled instantly/negatively
@@ -96,17 +96,17 @@ def _average_mastery(state: dict[str, Any]) -> float:
 
 
 def _event_band(event: dict[str, Any]) -> str:
-    levels = set(event.get("assistance", {}).get("levels_revealed", []))
-    assistance = event.get("assistance", {})
-    if event.get("solution_exposed") or assistance.get("full_solution_viewed") or "H5" in levels:
+    """The reducer's ladder plus this scheduler's one extra signal.
+
+    This used to be a hand-copied duplicate of derive_assistance_band, which
+    is how a log the reducer could not read stayed unreadable here too:
+    rebuild got past the reducer and then died on the same record in review
+    scheduling. Delegating keeps one definition of what a band means, and
+    inherits its totality for events written under the permissive schema.
+    """
+    if event.get("solution_exposed"):
         return "solution_seen"
-    if assistance.get("partial_transformation_shown") or "H4" in levels:
-        return "heavily_scaffolded"
-    if levels.intersection({"H2", "H3"}):
-        return "guided"
-    if "H1" in levels:
-        return "lightly_scaffolded"
-    return "independent"
+    return derive_assistance_band(event.get("assistance"))
 
 
 def _review_kind(task_type: str) -> str:
