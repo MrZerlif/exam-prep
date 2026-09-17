@@ -17,7 +17,7 @@ The learner supplies materials, questions, or refs; the tutor proposes a small c
 
 ## Lifecycle and resume
 
-Invoke as `python <skill-dir>/scripts/exam_prep.py <command>`; `--workspace PATH` sets the workspace, else `EXAM_PREP_WORKSPACE`, the git root, then cwd. Run `status` first. A new workspace returns `uninitialized` without creating `.exam-prep`; run `init` once. Repeating `init` is a safe no-op that preserves canonical files. `incomplete_workspace` names missing `course.json` or `syllabus.json`; run `validate` and repair explicitly, never overwrite them. Before initialization, only `init`, `validate`, and read-only `validate-curriculum` are allowed. `apply-curriculum` and other stateful commands return structured `workspace_not_initialized` without creating state.
+Invoke as `python <skill-dir>/scripts/exam_prep.py <command>`; `--workspace PATH` sets the workspace, else a workspace env var, the git root, then cwd. Run `status` first. A new workspace returns `uninitialized` without creating `.exam-prep`; run `init` once. Repeating `init` is a safe no-op that preserves canonical files. `incomplete_workspace` names missing `course.json` or `syllabus.json`; run `validate` and repair explicitly, never overwrite them. Before initialization, only `init`, `validate`, and read-only `validate-curriculum` are allowed. `apply-curriculum` and other stateful commands return structured `workspace_not_initialized` without creating state.
 
 For “continue studying”:
 

@@ -129,9 +129,8 @@ class SkillContractTests(unittest.TestCase):
                 encoding="utf-8"
             )
         )
-        tick = chr(96)
         missing_required = [
-            field for field in schema["required"] if f"{tick}{field}{tick}" not in commands
+            field for field in schema["required"] if f"`{field}`" not in commands
         ]
         self.assertEqual(
             [], missing_required, "commands.md omits required proposal fields"
@@ -139,7 +138,7 @@ class SkillContractTests(unittest.TestCase):
         missing_engine_owned = [
             field
             for field in sorted(ENGINE_OWNED_PROPOSAL_FIELDS)
-            if f"{tick}{field}{tick}" not in commands
+            if f"`{field}`" not in commands
         ]
         self.assertEqual(
             [], missing_engine_owned, "commands.md omits engine-owned rejected fields"
