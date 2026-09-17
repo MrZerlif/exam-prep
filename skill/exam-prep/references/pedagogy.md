@@ -18,6 +18,26 @@ heavily scaffolded; H5 or full_solution_viewed solution_seen. Do not accept
 independence or hint_level as input fields. A solution view is exposure, not
 mastery.
 
+## Solution exposure modes
+
+Choose one observable mode before deciding whether H5 is permitted:
+
+- **Diagnostic mode** is the default. Require an attempt and advance only one
+  hint level at a time. Frustration, claimed understanding, or time pressure
+  does not change the mode.
+- **Teaching exposure** begins only after an explicit request to study a full
+  worked example. Label the example as exposure, record `solution_seen`, and
+  require a structurally different independent follow-up.
+- **Cram exposure** begins only after an explicit request to trade retrieval
+  practice for rapid review. State that trade-off, record every shown solution
+  as `solution_seen`, and offer blind reconstruction if time remains.
+- **Exam mode** never permits teaching or cram exposure before submission or
+  stop. Give no unsolicited hints or early correctness feedback.
+
+Connector availability, urgency, or a request phrased as “just show the answer”
+does not by itself select an exposure mode. The learner must explicitly choose
+teaching or cram exposure after the non-promoting consequence is stated.
+
 ## Tracks by question_model
 
 Select the track from `course.exam.question_model` (typed in
@@ -91,6 +111,12 @@ the promotion is a summary in learner state, not a duplicate error ledger.
 
 ## Anti-illusion checks
 
+Speed is the one mastery dimension with no evidence source: `record-observation`
+receives no timing and the reducer leaves speed at `None`, which
+`average_known_mastery` then excludes rather than scoring as zero. Treat a slow
+attempt as a `speed_problem` error tag and a note to the learner, not as a
+mastery reading, until an activity start/finish lifecycle exists.
+
 Do not promote mastery for reading an explanation, saying “понятно”, viewing a
 solution, or unelaborated recognition. Prefer independent retrieval, explanation
 in the learner’s words, error detection, transfer, mixed practice, and delayed
@@ -98,6 +124,9 @@ recall. Keep diagnostic confidence (tutor classification confidence) separate
 from learner self-confidence (student report).
 
 For definitions, request both the formal statement and a read-aloud rendering.
+`exam.verbatim_definitions` controls a separate recall check. When true,
+require verbatim reproduction; when false, grade mathematical meaning and
+stated conditions rather than exact wording.
 For formulas, ask what each symbol means and which conditions apply. Programmer
 decision trees may organize method selection, but never replace proof or domain
 conditions.
@@ -117,7 +146,7 @@ tests ensure leaked or exposed work cannot promote independent mastery.
 | “When you explain it, I understand it.” | Request retrieval or a mini-problem before changing mastery. |
 | “The exam is soon; just solve everything.” | Choose the highest-value budget-fitting task and delay H5 until an attempt. |
 | “I saw the answer, so mark it mastered.” | Store solution_seen exposure and schedule an independent follow-up. |
-| “This timing estimate sounds right.” | Use only engine-measured elapsed_seconds for speed evidence. |
+| “This timing estimate sounds right.” | The CLI does not measure time today, so speed stays unknown - never record it from an estimate. |
 | “The new session can infer what I did.” | Read status and observations.jsonl; do not invent history. |
 | “The CAS is unavailable, so the formula is fine.” | Report numerical or symbolic status explicitly; unavailable is not passed. |
 

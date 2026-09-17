@@ -31,6 +31,7 @@ class SkillContractTests(unittest.TestCase):
     def test_skill_contract_has_valid_frontmatter_and_is_concise(self):
         text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         self.assertTrue(text.startswith("---\nname: exam-prep\n"))
+        self.assertIn("\ndescription: Use when ", text.split("---", 2)[1])
         self.assertLess(len(text.splitlines()), 220)
         required_phrases = (
             "status", "initialized", "validate-curriculum", "apply-curriculum",
@@ -43,7 +44,7 @@ class SkillContractTests(unittest.TestCase):
             self.assertIn(phrase, text)
         word_count = len(re.findall(r"\S+", text))
         self.assertGreater(word_count, 0)
-        self.assertLessEqual(word_count, 700)
+        self.assertLessEqual(word_count, 500)
 
     def test_skill_mentions_engine_owned_evidence_boundary(self):
         text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
@@ -175,6 +176,149 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("--workspace", text)
         self.assertIn("schemas/observation-proposal-v2.schema.json", text)
         self.assertIn("examples/observation-proposal.json", text)
+
+    def test_status_docs_match_the_public_payload_and_name_the_metadata_escape_hatch(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").casefold()
+        commands = (SKILL_ROOT / "references" / "commands.md").read_text(
+            encoding="utf-8"
+        ).casefold()
+        # The SKILL.md side is now covered by
+        # test_status_keys_named_in_the_skill_exist_in_the_live_payload, which
+        # compares backticked key names against a real status response instead
+        # of matching a prose substring. What stays here is the audit-3 guard:
+        # neither document may claim status returns the syllabus document.
+        self.assertIn("course, session, targets", commands)
+        for text in (skill, commands):
+            self.assertNotIn("course, syllabus, session", text)
+        self.assertIn("roadmap", skill)
+        self.assertIn("full target metadata", commands)
+
+    def test_verifier_scope_is_named_exactly(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        commands = (SKILL_ROOT / "references" / "commands.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("Derivative/antiderivative checks", skill)
+        self.assertIn("derivative/antiderivative answer check", commands)
+        self.assertNotIn("Numeric/symbolic answer checks", skill)
+        self.assertNotIn("numeric/symbolic answer check", commands)
+
+    def test_verbatim_definitions_changes_the_pedagogy_contract(self):
+        pedagogy = (SKILL_ROOT / "references" / "pedagogy.md").read_text(
+            encoding="utf-8"
+        ).casefold()
+        self.assertIn("exam.verbatim_definitions", pedagogy)
+        self.assertIn("when true", pedagogy)
+        self.assertIn("verbatim", pedagogy)
+
+
+    def _live_status_keys(self) -> set[str]:
+        """Top-level keys the engine actually returns, not a re-typed list."""
+        import contextlib
+        import io
+        import json as json_module
+        import tempfile
+
+        from exam_prep import main
+
+        syllabus = SKILL_ROOT / "examples" / "mathematics-regression-syllabus.json"
+        with tempfile.TemporaryDirectory() as temp_dir:
+
+            def cli(*args):
+                output = io.StringIO()
+                with contextlib.redirect_stdout(output):
+                    code = main(["--workspace", temp_dir, *args])
+                self.assertEqual(code, 0, output.getvalue())
+                return json_module.loads(output.getvalue())
+
+            cli("init")
+            cli("load-syllabus", str(syllabus))
+            cli("start")
+            return set(cli("status"))
+
+    def test_status_keys_named_in_the_skill_exist_in_the_live_payload(self):
+        # Audit finding 3, second pass: the prose list ("course, session,
+        # targets, review queue, recurring mistakes, diagnostics") reads like
+        # a key list but is not one - recurring mistakes nest per target and
+        # "diagnostics" is three separate keys. Backticked names are compared
+        # against a real status response, so a rename in the engine fails here
+        # instead of sending the tutor after a key that does not exist.
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        sentence = re.search(r"read compact `status`:(.+?)\.\s", text, re.S)
+        self.assertIsNotNone(sentence, "SKILL.md no longer names the status payload")
+        named = re.findall(r"`([a-z_*]+)`", sentence.group(1))
+        self.assertTrue(
+            named, "SKILL.md describes the status payload in prose, not as key names"
+        )
+        live = self._live_status_keys()
+        unknown = []
+        for name in named:
+            if name.startswith("*"):
+                if not any(key.endswith(name.lstrip("*")) for key in live):
+                    unknown.append(name)
+            elif name not in live:
+                unknown.append(name)
+        self.assertEqual(
+            [],
+            unknown,
+            f"SKILL.md names status keys the engine does not return: {unknown}; "
+            f"live keys: {sorted(live)}",
+        )
+
+    def test_skill_tells_the_tutor_to_close_the_session(self):
+        # The resume instruction reads last_session_summary, which only
+        # end-session writes, but SKILL.md never mentioned the command - so a
+        # tutor that never opens commands.md accumulates one session forever
+        # and the exam post-mortem is never produced.
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("end-session", text)
+
+    def test_skill_states_the_silent_next_minutes_default(self):
+        # next --minutes has a default, so an omitted budget does not fail -
+        # it silently invents one, which contradicts exam-optimizer.md's rule
+        # that a stated budget is never rounded up. Read from the live parser
+        # so a changed default fails here instead of drifting out of the doc.
+        default = None
+        for action in _parser()._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                for option in action.choices["next"]._actions:
+                    if "--minutes" in getattr(option, "option_strings", []):
+                        default = option.default
+        self.assertIsNotNone(default, "could not read the next --minutes default")
+        text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn("--minutes", text)
+        self.assertIn(
+            str(default),
+            text,
+            "SKILL.md does not state the budget assumed when --minutes is omitted",
+        )
+
+    def test_pre_init_contract_is_documented_where_the_tutor_reads_commands(self):
+        # workspace_not_initialized is a real engine response that survived in
+        # neither SKILL.md nor any reference, so a tutor calling a stateful
+        # command too early reads an undocumented status and cannot tell a
+        # normal refusal from a failure. The allowlist is read from the guard.
+        import inspect
+
+        from exam_prep import main
+
+        source = inspect.getsource(main)
+        guard = re.search(
+            r"initialization_state != \"initialized\" and args\.command not in \{(.+?)\}",
+            source,
+            re.S,
+        )
+        self.assertIsNotNone(guard, "could not read the pre-init allowlist from main()")
+        allowed = re.findall(r'"([a-z-]+)"', guard.group(1))
+        self.assertTrue(allowed, "pre-init allowlist parsed empty")
+        commands = (SKILL_ROOT / "references" / "commands.md").read_text(encoding="utf-8")
+        self.assertIn("workspace_not_initialized", commands)
+        missing = [name for name in allowed if not _mentions_command(commands, name)]
+        self.assertEqual(
+            [],
+            missing,
+            f"commands.md does not name the commands allowed before init: {missing}",
+        )
 
 
 if __name__ == "__main__":
