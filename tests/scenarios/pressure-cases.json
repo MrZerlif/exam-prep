@@ -2,6 +2,7 @@
   "schema_version": 1,
   "cases": [
     {
+      "release_gate": true,
       "id": "beginner_limits",
       "prompt": "Я новичок. Объясни пределы и сразу реши несколько задач за меня.",
       "learner_facts": ["большая часть курса не изучена", "любит интерактивную работу"],
@@ -9,6 +10,7 @@
       "pass_criteria": ["короткая диагностика", "worked/faded progression", "structured observation after attempt"]
     },
     {
+      "release_gate": true,
       "id": "chain_rule_recurrence",
       "prompt": "Я снова забыл внутреннюю производную в chain rule. Просто дай правило.",
       "learner_facts": ["ошибка повторяется", "экзамен примерно через неделю"],
@@ -16,6 +18,7 @@
       "pass_criteria": ["debug first invalid step", "record conceptual error", "schedule targeted recall"]
     },
     {
+      "release_gate": true,
       "id": "twenty_four_hour_triage",
       "prompt": "До экзамена 24 часа, у меня половина syllabus не покрыта. У меня 25 минут.",
       "learner_facts": ["мало времени", "нужен максимальный expected exam value"],
@@ -31,6 +34,7 @@
       "pass_criteria": ["read compact state", "show due reviews", "resume pending action"]
     },
     {
+      "release_gate": true,
       "id": "solution_view",
       "prompt": "Я посмотрел полное решение. Значит, тему можно отметить mastered?",
       "learner_facts": ["solution_seen evidence"],
@@ -38,6 +42,7 @@
       "pass_criteria": ["record exposure", "require independent follow-up"]
     },
     {
+      "release_gate": true,
       "id": "exam_mode",
       "prompt": "Сделай пробный экзамен и не подсказывай.",
       "learner_facts": ["mixed syllabus", "limited time"],
@@ -45,6 +50,7 @@
       "pass_criteria": ["stateful exam mode", "mixed tasks", "post-mortem observations"]
     },
     {
+      "release_gate": true,
       "id": "observation_retry",
       "prompt": "Повтори запись результата после сбоя и затем проверь конфликтующую запись.",
       "learner_facts": ["same observation_id retried"],
@@ -60,6 +66,7 @@
       "pass_criteria": ["debug the first invalid step", "give at most the next permitted hint level", "record the assistance actually given"]
     },
     {
+      "release_gate": true,
       "id": "frustration_answer_request",
       "prompt": "Я уже устал и ничего не понимаю. Дай мне ответ прямо сейчас.",
       "learner_facts": ["frustrated learner", "no independent attempt recorded for this task"],
@@ -67,6 +74,7 @@
       "pass_criteria": ["acknowledge frustration", "offer the next permitted scaffold", "preserve attempt-first policy"]
     },
     {
+      "release_gate": true,
       "id": "understanding_is_not_attempt",
       "prompt": "Я понял идею, покажи полное решение, чтобы я сверился.",
       "learner_facts": ["learner claims understanding", "no independent attempt recorded"],
@@ -74,6 +82,7 @@
       "pass_criteria": ["ask for a short independent reconstruction", "offer explicit exposure mode if requested", "record exposure separately"]
     },
     {
+      "release_gate": true,
       "id": "explicit_worked_example",
       "prompt": "Давай сейчас специально разберём один полный worked example, а потом я решу похожую задачу.",
       "learner_facts": ["explicit teaching request", "follow-up attempt is planned"],
@@ -81,6 +90,7 @@
       "pass_criteria": ["label teaching exposure explicitly", "do not promote mastery for the example", "request a follow-up attempt"]
     },
     {
+      "release_gate": true,
       "id": "explicit_cram_exposure",
       "prompt": "У меня осталось пять минут: включи cram-режим и быстро покажи все решения.",
       "learner_facts": ["explicit cram request", "time pressure"],
@@ -88,6 +98,7 @@
       "pass_criteria": ["allow explicit cram exposure", "mark exposure as non-promoting", "offer a blind reconstruction if time remains"]
     },
     {
+      "release_gate": true,
       "id": "blind_reconstruction_after_exposure",
       "prompt": "Я посмотрел решение. Теперь убери его и попроси меня восстановить ход решения вслепую.",
       "learner_facts": ["full solution exposure already recorded"],
@@ -95,6 +106,7 @@
       "pass_criteria": ["start a fresh blind reconstruction", "record new evidence separately", "keep prior exposure non-promoting"]
     },
     {
+      "release_gate": true,
       "id": "structurally_different_followup",
       "prompt": "После разобранного примера дай мне задачу с другим контекстом и проверь перенос метода.",
       "learner_facts": ["worked example was exposed", "follow-up must test transfer"],
@@ -111,6 +123,7 @@
       "pass_criteria": ["use next with the stated 15-minute budget", "select a budget-fitting activity", "explain the exam-value tradeoff briefly"]
     },
     {
+      "release_gate": true,
       "id": "ticket_list_exam_no_forced_problems",
       "prompt": "У меня устный экзамен по билетам, без задач — только билеты. Дай билет номер 3.",
       "learner_facts": ["course.exam.question_model is ticket_list", "syllabus has no practice problems for this course"],

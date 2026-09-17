@@ -3,12 +3,30 @@
 NotebookLM MCP is optional. Core exam-prep operation must work when no
 NotebookLM capability is available or when the host call fails.
 
+## Consent and data boundary
+
+Connector availability is not consent. Default to local, read-only operation.
+Get explicit user confirmation separately before:
+
+1. installation or setup of a provider;
+2. authentication or cookie access;
+3. sending course material, notes, prompts, or excerpts to the provider;
+4. any external write, including `source_add`.
+
+Before requesting confirmation, name the material that will leave the local
+workspace, name the destination notebook/account, and state whether the action
+is authentication, a read, or a write. Approval for one material/destination
+pair does not authorize another, and approval to query existing sources does
+not authorize upload. If confirmation is absent or declined, keep using the
+local SourceProvider path.
+
 The integration belongs to the agent host, not the deterministic Python CLI:
 
 1. The agent skill detects whether the current host exposes NotebookLM MCP
    capabilities.
-2. The host invokes the available capability without assuming a vendor tool
-   name, transport, server package, or authentication mechanism.
+2. After the consent gate above, the host invokes the approved capability
+   without assuming a vendor tool name, transport, server package, or
+   authentication mechanism.
 3. The host normalizes returned citations, excerpts, locators, authority, and
    provider status into a SourceEvidenceEnvelope.
 4. The host passes that JSON to the exam-prep ingest-source-evidence command.

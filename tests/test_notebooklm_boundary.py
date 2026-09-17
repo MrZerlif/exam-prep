@@ -60,6 +60,22 @@ class NotebookLmBoundaryTests(unittest.TestCase):
             for phrase in ("optional", "agent host", "normalizes", "sourceevidenceenvelope", "canonical learner state"):
                 self.assertIn(phrase, text)
 
+    def test_notebooklm_external_actions_require_specific_user_consent(self):
+        reference = (EXAM_PREP / "references" / "notebooklm-mcp.md").read_text(
+            encoding="utf-8"
+        ).casefold()
+        for phrase in (
+            "connector availability is not consent",
+            "explicit user confirmation",
+            "installation",
+            "authentication",
+            "external write",
+            "`source_add`",
+            "name the material",
+            "name the destination",
+        ):
+            self.assertIn(phrase, reference)
+
 
 if __name__ == "__main__":
     unittest.main()

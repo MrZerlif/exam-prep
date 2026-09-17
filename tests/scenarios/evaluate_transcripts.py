@@ -29,8 +29,8 @@ def _cases_by_id() -> dict[str, dict[str, Any]]:
 
 def _release_case_ids(cases: dict[str, dict[str, Any]]) -> tuple[str, ...]:
     case_ids = tuple(sorted(case_id for case_id, case in cases.items() if case.get("release_gate") is True))
-    if len(case_ids) != 4:
-        raise EvaluationError("manifest must identify exactly four release cases")
+    if not case_ids:
+        raise EvaluationError("manifest must identify at least one release case")
     return case_ids
 
 
