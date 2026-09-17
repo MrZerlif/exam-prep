@@ -1,7 +1,9 @@
 __pycache__/
 *.pyc
 
-docs/superpowers/
+# Local working material: plans, specs and audit notes carry local paths
+# and go stale against the code they describe.
+docs/
 
 # Audit artifacts and run transcripts: local working material, not part of
 # the installable package, and they carry local filesystem paths.
