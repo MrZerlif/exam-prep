@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "id": "exam_with_deadline",
+      "prompt": "У меня экзамен по термодинамике через три недели. Помоги составить подготовку по моим билетам.",
+      "should_activate": true
+    },
+    {
+      "id": "resume_local_progress",
+      "prompt": "Продолжим подготовку к экзамену с того места, где остановились; локальный прогресс сохранён.",
+      "should_activate": true
+    },
+    {
+      "id": "limited_time_weak_prerequisites",
+      "prompt": "До экзамена пять дней, база слабая, а сегодня есть только 20 минут. Что учить первым?",
+      "should_activate": true
+    },
+    {
+      "id": "generic_learning_question",
+      "prompt": "Объясни простыми словами, почему небо голубое.",
+      "should_activate": false
+    },
+    {
+      "id": "non_exam_project_planning",
+      "prompt": "Составь план разработки небольшого Telegram-бота на две недели.",
+      "should_activate": false
+    },
+    {
+      "id": "generic_flashcards",
+      "prompt": "Сделай десять карточек по этому тексту без расписания и отслеживания прогресса.",
+      "should_activate": false
+    }
+  ]
+}

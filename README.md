@@ -1,244 +1,250 @@
 # Exam Prep
 
-An interactive tutor for preparing for one specific exam by one specific date,
-built as an Agent Skill over a local state directory. It works from the
-learner's own materials and official question list, keeps every attempt as
-durable local evidence, and plans each session against the time the learner
-actually has.
+An evidence-driven Agent Skill for preparing for one exam by a fixed date. It
+turns a learner's own materials and exam requirements into a local curriculum,
+records every assessable attempt, and uses a deterministic Python engine to
+plan reviews and time-boxed study sessions.
+
+Exam Prep is designed for agent hosts that can load skills. The installable
+package lives in [`skill/exam-prep/`](skill/exam-prep/); learner data stays in a
+separate `.exam-prep/` directory inside the active study workspace.
+
+[Quick start](#quick-start) · [How it works](#how-it-works) ·
+[Daily workflow](#daily-workflow) · [Command reference](skill/exam-prep/references/commands.md) ·
+[Limitations](#current-limitations)
+
+## Why use it?
+
+- **Attempts, not confidence, drive mastery.** Reading a solution or saying “I
+  understand” does not count as independent evidence.
+- **Progress survives the chat.** The append-only observation log is the
+  canonical learner record; derived mastery and review state can be rebuilt.
+- **Plans fit the available time.** The engine selects a useful next activity
+  against the learner's exam horizon, prerequisites, due reviews, and stated
+  time budget.
+- **The exam format changes the teaching track.** Fixed oral-ticket exams use
+  staged recall; problem sets and mixed exams use an intuition-to-transfer
+  progression.
+- **The core is local and dependency-free.** The runtime uses the Python
+  standard library and does not require a database, hosted account, or external
+  source provider.
 
 ## How it works
 
-The skill splits one job between two parties that are bad at different things.
-The language model runs the conversation: it asks for an attempt, reads what
-the learner produced, finds the first invalid step, and classifies the error.
-It then emits a single structured observation. A deterministic Python engine
-takes that observation and does all the arithmetic — mastery per dimension,
-the review queue, prerequisite availability, priority under a time budget — and
-persists the result.
+The agent handles conversation and diagnosis. The Python engine validates
+structured observations, calculates mastery and review state, and persists the
+result locally.
 
-The point of that split is what the model *cannot* do. Mastery is not something
-the tutor asserts; it is computed from recorded evidence. Saying "I understand"
-does not move it. Reading an explanation does not move it. Viewing a full
-solution is recorded as exposure (`solution_seen`) and explicitly does not raise
-independent mastery — the engine counts an independent success only when an
-attempt succeeded with no assistance revealed. A tutor that has been talked into
-agreeing that a topic is learned still cannot write that agreement into the
-learner's state. `skill/exam-prep/SKILL.md` states the contract; the
-anti-illusion rules and the H0–H5 assistance ladder are in
-`skill/exam-prep/references/pedagogy.md`.
+```mermaid
+flowchart LR
+    A[Learner attempt] --> B[Agent tutor]
+    B -->|Observation proposal| C[Deterministic Python engine]
+    C --> D[(Local .exam-prep state)]
+    D -->|Status, reviews, next activity| B
+```
 
-Canonical evidence is an append-only log, `.exam-prep/observations.jsonl`.
-Everything else — mastery, the review queue, priorities — is a derived snapshot
-that can be recomputed from that log with `rebuild`.
+The boundary is intentional: the model can explain, ask questions, and classify
+an error, but it cannot promote mastery by assertion. The engine derives
+independence from the recorded outcome and assistance level. A full solution is
+stored as exposure and must be followed by a structurally different learner
+attempt.
 
-## What this actually buys you
+See the [pedagogy protocol](skill/exam-prep/references/pedagogy.md) for the H0–H5
+assistance ladder and the tracks selected by `course.exam.question_model`.
 
-An audit run against this skill compared it with plain Claude using generic
-file tools and no skill loaded, across five scenarios and 28 graded
-assertions. The headline is 100% (28/28) with the skill against 76%
-(21/28) without it, but that number on its own is misleading and the audit says
-so: **21 of the 28 assertions passed identically in both configurations**, and
-one entire scenario — resuming after a week away — was a 5/5 tie. Seven
-assertions actually discriminated.
+## Requirements
 
-The useful finding is in the failures. In two of the five scenarios the
-baseline found the `.exam-prep/` directory, explicitly declined to open it —
-citing no documented protocol for the format in one case, treating it as opaque
-in the other — and then guessed at the learner's level instead. The skill read
-local state in all five.
+- Python 3.11 or newer is the documented target. The repository currently has
+  no packaging metadata that enforces this version.
+- An agent host that supports local skills is needed for the conversational
+  tutor. The Python CLI can be inspected and tested independently.
+- No third-party Python runtime packages are required.
 
-So the honest claim is not that this unlocks a capability a capable model
-lacks. It is that it makes reading and using the learner's real recorded
-history reliable rather than occasional, and that it gives the state somewhere
-durable to live. The audit also measures the cost: roughly 2.2x wall time and
-1.4x tokens against the baseline. The raw transcripts and per-run grading are
-kept outside this repository, as local working material.
+## Install
 
-## Exam formats
+Clone the repository, then copy the self-contained `skill/exam-prep/` directory
+into your agent host's skills directory. The exact destination depends on the
+host. The copied directory—the one containing `SKILL.md`—is referred to below
+as `<skill-dir>`.
 
-The teaching track is selected from the exam blueprint stored in
-`.exam-prep/course.json`, not hardcoded. `question_model` accepts
-`ticket_list`, `problem_set`, `mixed`, or `open`; `delivery` accepts `written`,
-`oral`, or `mixed`.
+You can verify the package before installing it:
 
-That choice changes the pedagogy. A `ticket_list` exam — a fixed list of oral
-questions on theory — runs ticket recitation stages: brief answer structure
-first as its own checkpoint, then the model answer, comprehension check,
-unprompted reproduction from memory, and delayed recall. A `problem_set` exam
-runs the intuition-to-transfer ladder instead. A syllabus with no problems on
-the exam never gets a practice-problem stage forced onto it.
+```bash
+python skill/exam-prep/scripts/exam_prep.py --help
+```
 
-The blueprint also carries `question_count`, `time_limit_minutes` or
-`per_question_minutes`, `grading_criteria`, `expected_total_points`, and
-`follow_up_questions` — the last of which adds a follow-up stage to the
-ticket_list track and is surfaced when a mock exam is assembled. The schema
-additionally accepts a `verbatim_definitions` boolean, but nothing in the
-engine or the tutoring references currently reads it; it is stored and
-otherwise inert.
-
-Editing the blueprint through `update-exam-blueprint` advances
-`exam.revision` automatically whenever the content really changed, so evidence
-recorded under an older blueprint stays distinguishable.
+There is no package installer and no `exam-prep` executable added to `PATH`.
+Every command is a subcommand of `scripts/exam_prep.py`.
 
 ## Quick start
 
-The package is `skill/exam-prep/`. It is self-contained: copy that one
-directory into a skills folder and it runs with nothing else from this
-repository. State goes to `.exam-prep/` inside the active workspace, resolved
-from `--workspace`, then `EXAM_PREP_WORKSPACE`, then the git root, then the
-current directory.
+Keep the skill package and learner workspace separate. Pass `--workspace`
+explicitly when there is any chance the current directory points at a different
+course.
 
-Run the CLI from the package's `scripts/` directory. A path from raw materials
-to a scored mock exam looks like this:
+```bash
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> status
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> init
 
-~~~bash
-python3 exam_prep.py --workspace ~/calculus init
-python3 exam_prep.py --workspace ~/calculus validate-curriculum proposal.json
-python3 exam_prep.py --workspace ~/calculus apply-curriculum proposal.json
-python3 exam_prep.py --workspace ~/calculus update-exam-blueprint blueprint.json
-python3 exam_prep.py --workspace ~/calculus mint-assessments mock-pool.json
-python3 exam_prep.py --workspace ~/calculus start
-python3 exam_prep.py --workspace ~/calculus exam --minutes 30
-python3 exam_prep.py --workspace ~/calculus end-session
-~~~
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> validate-curriculum <curriculum-proposal.json>
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> apply-curriculum <curriculum-proposal.json>
 
-In practice the learner does not hand-author those JSON files. They give the
-tutor their lecture notes and the official ticket list in chat; the tutor
-drafts the curriculum proposal and the assessment batch, and runs the commands.
-`validate-curriculum` is a dry run that reports identifier problems,
-prerequisite cycles, capability mapping errors, and source coverage gaps before
-anything is written; `apply-curriculum` is idempotent.
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> start
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> next --minutes 25
+```
 
-During a session the everyday commands are `status` (add `--compact` when you
-only need the inputs for picking the next action rather than a full diagnostic
-dump), `next --minutes N`, `review-due`, `mistakes`, and `roadmap`. Learner
-evidence enters only through `record-observation`; the derived files are never
-hand-edited. `exam` assembles a mock from a minted `purpose=mock` pool, sized
-and timed by the blueprint, drawn with a session-seeded shuffle rather than a
-sorted truncation, and `end-session` closes it with a per-question post-mortem.
-An attempt only reaches that post-mortem if its observation carries the
-ticket's `assessment_id`; without it the attempt is recorded as ordinary
-evidence and the ticket grades as unattempted, which the CLI now says at the
-time of recording rather than at the end.
+Run `status` first. A new workspace reports `uninitialized` without creating
+files; `init` creates `.exam-prep/`, and running `init` again is a safe no-op.
 
-The full command catalog, with every flag and payload format, is
-`skill/exam-prep/references/commands.md`. It is the source of truth; this
-section is only a path through it.
+The learner normally supplies course materials and the official exam question
+list in chat. The agent drafts the curriculum rather than asking the learner to
+hand-author JSON. Curriculum validation is a dry run that checks identifiers,
+prerequisites, cycles, capability mappings, and source coverage before state is
+changed. Use the
+[`CurriculumProposal` schema](skill/exam-prep/schemas/curriculum-proposal.schema.json)
+and [example proposal](skill/exam-prep/examples/curriculum-proposal.json) as the
+payload contract.
 
-## Optional NotebookLM MCP integration
+## Daily workflow
 
-If the agent host exposes a NotebookLM (now Gemini Notebook) MCP server, the
-host can pull citations from course material and hand them to
-`ingest-source-evidence` as a normalized envelope, which is what makes a
-`source_id` count as registered rather than merely declared. The recommended
-implementation is `jacob-bd/gemini-notebook-mcp-cli`.
+After the workspace and curriculum exist, the common loop is:
 
-Treat it as experimental. It was exercised in zero of the five audit scenarios,
-so this path has no observed behavior on record. The upstream project reaches
-internal, undocumented Google endpoints and warns they can change without
-notice; it authenticates as the user's own Google account through browser
-cookies rather than a scoped credential, with a cookie lifetime of roughly two
-to four weeks; and usage is metered on a rolling window plus a weekly cap.
+```bash
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> status --compact
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> review-due
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> next --minutes 25
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> record-observation <observation.json>
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> end-session
+```
 
-Without it, everything works. The Python core has no MCP transport, SDK, or
-provider dependency, and an absent or failing provider is a normal diagnostic
-state rather than an error. NotebookLM's own quizzes and flashcards are
-deliberately not importable as assessments — they carry no `spec_hash`, no
-hold-out guarantee, and no blueprint binding; generated questions have to go
-through the normal curriculum and minting path. See
-`skill/exam-prep/references/notebooklm-mcp.md`.
+Only `record-observation` should add learner evidence. Build each v2 payload
+from the
+[`observation-proposal-v2` schema](skill/exam-prep/schemas/observation-proposal-v2.schema.json)
+or [valid example](skill/exam-prep/examples/observation-proposal.json); do not
+invent engine-owned timestamp, session, timing, or independence fields.
 
-## What is not verified
+Useful inspection and recovery commands include:
 
-Stated plainly, because these are the gaps a reviewer would otherwise find
-after the claims above:
+| Command | Purpose |
+| --- | --- |
+| `status [--compact]` | Read the current workspace and resume point. |
+| `roadmap` | Show targets, mastery, review state, and availability. |
+| `mistakes` | Show unresolved recurring error patterns. |
+| `review-due` | Show due and overdue reviews. |
+| `validate` | Diagnose the full workspace without repairing it. |
+| `rebuild` | Recompute derived state from canonical observations. |
+| `verify <path>` | Check supported derivative or antiderivative answers. |
 
-The NotebookLM branch has never run end to end. Zero of five audit scenarios
-attached a provider host.
+The [command catalog](skill/exam-prep/references/commands.md) documents every
+subcommand, payload, workspace-resolution rule, and migration path.
 
-Whether the skill reliably *activates* on a real request has not been measured.
-The trigger-rate evaluation was written but never produced a valid result — it
-is blocked on an unauthenticated CLI in the test environment. A skill that does
-not trigger is a skill that does not run, and that risk is currently
-unquantified.
+## Mock exams
 
-Working from photographs of handwritten work is architecturally possible, since
-the tutor authors the observation from whatever it can read, but all five audit
-scenarios used typed text. It has not been tested.
+The exam blueprint is stored in `.exam-prep/course.json`. It can model
+`ticket_list`, `problem_set`, `mixed`, or `open` exams, plus written, oral, or
+mixed delivery.
 
-The audit sampled each scenario once. Run-to-run variance was not measured, so
-the per-scenario figures describe single runs, not stable averages.
+```bash
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> update-exam-blueprint <blueprint-patch.json>
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> mint-assessments <mock-pool.json>
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> exam --minutes 30
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> end-session
+```
 
-`verify` covers derivatives and antiderivatives only. Limits, series
-convergence, and algebraic identities return `unavailable`, and the tutor's own
-judgment is the only check available for them.
+An attempt against a frozen mock ticket must copy that ticket's `assessment_id`
+into its observation proposal. `task_id` identifies the activity but does not
+bind the attempt to the ticket. An omitted binding is preserved as ordinary
+evidence and diagnosed, while the mock ticket remains unattempted.
 
-## What this deliberately does not do
+## State and recovery
 
-There are no streaks, no XP, no badges, no missed-day counters, and no language
-that frames a gap in studying as a personal failure. For a learner who is
-already struggling to start, a counter that resets to zero is a reason to avoid
-opening the tool at all, which is the opposite of the intended effect. The one
-counter that exists, `clean_streak`, is internal bookkeeping for when a
-recurring mistake can be considered resolved, and is never presented to the
-learner as a score.
+The active workspace stores runtime data in `.exam-prep/`:
 
-There is also no external service that owns learner state. The canonical log is
-a local file. A provider integration can contribute citations as provenance
-input; it can never own, overwrite, or become the source of the learner's
-record.
+- `course.json` and `syllabus.json` describe the course and exam;
+- `observations.jsonl` is the canonical append-only evidence log;
+- `assessments.jsonl`, `source_evidence.jsonl`, and `sources.json` hold frozen
+  assessments and registered provenance;
+- `targets.json` and `review_queue.json` are rebuildable derived snapshots;
+- `learner.json` and `session.json` are protected snapshots;
+- `revisions/` and `recovery/` support multi-file write recovery.
 
-## Requirements and maturity
+Stateful commands use a shared recovery path. If a derived snapshot is stale,
+the engine can replay canonical observations. The project does not claim
+whole-directory atomicity, so keep normal filesystem backups for important
+study data.
 
-Standard library only. The complete third-party dependency list is empty; the
-package imports nothing outside `argparse`, `ast`, `collections`, `copy`,
-`dataclasses`, `datetime`, `hashlib`, `json`, `math`, `operator`, `os`,
-`pathlib`, `random`, `re`, `shutil`, `sys`, `tempfile`, `typing`, `uuid`, and
-`zoneinfo`. No database, no YAML runtime config, no mandatory CAS.
+## Optional NotebookLM integration
 
-Python 3.11 or newer is the intended floor, though the repository ships no
-packaging metadata that enforces it — the oldest feature actually used is
-`zoneinfo` (3.9). The suite is verified on Python 3.12.3: **337 tests, all
-passing**, run with `python3 -m unittest discover -s tests -t .` from the
-repository root.
+NotebookLM (Gemini Notebook) can be connected by the agent host as an optional
+source provider. It is not a dependency of the Python core and never owns the
+canonical learner record.
 
-Multi-file writes go through revision manifests with a recovery path; the
-project does not claim whole-directory atomicity. Every stateful command loads
-through one recovery path that falls back through corrupt, incomplete, or
-hash-mismatched revisions and replays the canonical log when a derived snapshot
-is stale, so a damaged convenience file does not break a normal command.
+Connector availability is not consent. Installation, authentication, sending
+course material, and every external write require explicit confirmation that
+names the material and destination. Declining leaves the local workflow intact.
+
+This path is experimental and has not been exercised end to end in the
+repository's recorded scenarios. Its recommended upstream integration uses
+undocumented Google endpoints and account browser cookies. Enable it only after
+reviewing the authentication and data boundary in the
+[NotebookLM integration notes](skill/exam-prep/references/notebooklm-mcp.md).
+Core study, review, mock exam, state, and recovery workflows continue to work
+without it.
+
+## Current limitations
+
+- Deterministic tests verify the Python engine and persistence behavior; they do
+  not prove that every agent host will activate or follow the skill correctly.
+- Fresh-context behavioral evaluation requires external model runs. The
+  repository includes the scenario exporter and evaluator, but not versioned
+  transcripts that would support a current comparative quality claim.
+- Positive and negative activation packets can be exported, but versioned
+  live-host activation results are not included.
+- `verify` currently supports derivatives and antiderivatives only. Limits,
+  series, algebraic identities, and other answer types return `unavailable` or
+  require tutor judgment.
+- Photograph and handwriting workflows have not been tested in the recorded
+  scenarios.
+- The repository has no release packaging, continuous-integration workflow, or
+  `LICENSE` file. Reuse and distribution permissions are therefore unspecified.
+
+Treat the project as a developer-facing, experimental skill until the relevant
+host behavior and optional integrations have been independently exercised.
 
 ## Repository layout
 
-~~~text
-skill/exam-prep/              the installable, self-contained skill package
-├── SKILL.md                  the skill contract the model loads
-├── references/               6 protocol documents (commands, pedagogy,
-│                             exam-optimizer, source-of-truth, verification,
-│                             notebooklm-mcp)
-├── scripts/                  exam_prep.py plus exam_prep_lib/
-├── schemas/                  19 JSON schemas for every payload and state file
-├── templates/                initial state files written by init
-├── examples/                 example syllabus, curriculum proposal,
-│                             observation proposal, mock exam, and others
-└── config/                   config.template.json
-tests/                        49 test modules plus tests/scenarios/
-                              (not part of the installed package)
-~~~
+```text
+skill/exam-prep/
+├── SKILL.md           Agent contract
+├── scripts/           CLI entrypoint and deterministic engine
+├── schemas/           JSON payload and state contracts
+├── examples/          Valid example payloads
+├── references/        Commands, pedagogy, verification, and source rules
+├── templates/         Initial workspace files
+└── config/            Illustrative configuration template
+tests/                 Unit, integration, and deterministic scenario tests
+```
 
-A workspace in use holds `course.json` and `syllabus.json` as canonical course
-input, `observations.jsonl` and `sessions.jsonl` as append-only logs,
-`assessments.jsonl` for frozen assessments, `source_evidence.jsonl` and
-`sources.json` for registered sources, `targets.json` and `review_queue.json`
-as rebuildable derived snapshots, `learner.json` and `session.json` as
-protected snapshots, plus `current.json`, `revisions/`, and `recovery/`.
+Start with [`skill/exam-prep/SKILL.md`](skill/exam-prep/SKILL.md) for the agent
+contract, then use these focused references:
 
-## Where to read more
+- [Commands and payloads](skill/exam-prep/references/commands.md)
+- [Pedagogy and assistance levels](skill/exam-prep/references/pedagogy.md)
+- [Exam prioritization](skill/exam-prep/references/exam-optimizer.md)
+- [Source authority and conflicts](skill/exam-prep/references/source-of-truth.md)
+- [Numeric and symbolic verification](skill/exam-prep/references/verification.md)
 
-`skill/exam-prep/SKILL.md` is the contract the model actually follows. Beneath
-it, `references/commands.md` documents every command, `references/pedagogy.md`
-the tracks and assistance ladder, `references/exam-optimizer.md` the
-prioritization formula and exam mode, `references/source-of-truth.md` the
-authority order between sources, `references/verification.md` the numeric
-answer checks, and `references/notebooklm-mcp.md` the optional provider
-integration.
+## Development
+
+Run the deterministic test suite from the repository root:
+
+```bash
+python -m unittest discover -s tests -t .
+python tests/scenarios/run_scenarios.py --deterministic
+```
+
+The first command covers the CLI, schemas, persistence, recovery, scheduling,
+assessment integrity, and contract checks. The scenario runner exercises
+deterministic runtime behavior; fresh-context agent behavior is a separate
+manual or host-level evaluation described in
+[`tests/scenarios/baseline-prompts.md`](tests/scenarios/baseline-prompts.md).

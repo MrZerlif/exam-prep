@@ -18,10 +18,11 @@ history. The baseline is behavioral evidence, not runtime state.
 ## Executable fresh-context evaluation
 
 The deterministic runner is not a model evaluator. For a fresh-context comparison,
-export both variants and five repetitions. With no `--cases` override the export
-covers the four release-gate cases - `restart`, `one_mistake_show_answer`,
-`fifteen_minute_budget`, `teacher_material_conflict` - the same set
-`evaluate_transcripts.py` requires scores for:
+export both variants and five repetitions. With no `--cases` override, the
+release-gate cases are every manifest entry marked `release_gate: true`. The
+current manifest marks all declared pressure cases, and
+`evaluate_transcripts.py` requires scores for that dynamic set rather than a
+fixed count:
 
 ~~~powershell
 python tests/scenarios/run_scenarios.py --emit-eval-set .tmp/exam-prep-eval.jsonl --repeat 5
@@ -40,3 +41,16 @@ python tests/scenarios/evaluate_transcripts.py scores.jsonl
 Model execution and semantic scoring remain host-level/manual; Python tests must
 not call a model API. Do not claim behavioral compliance from the deterministic
 engine suite alone.
+
+## Activation discovery evaluation
+
+Export the positive and negative activation cases separately. Run them in a
+fresh host with normal skill discovery; do not inject `SKILL.md` manually:
+
+~~~powershell
+python tests/scenarios/run_scenarios.py --emit-activation-set .tmp/exam-prep-activation.jsonl
+~~~
+
+Record whether exam-prep activated before answering and compare that observation
+with `should_activate`. The repository provides the executable packet set, not
+versioned live-host activation results.

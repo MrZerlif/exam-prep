@@ -12,17 +12,30 @@ ROOT = Path(__file__).parents[1]
 SCENARIOS = ROOT / "tests" / "scenarios"
 sys.path.insert(0, str(SCENARIOS))
 
-from evaluate_transcripts import EvaluationError, release_case_ids, summarize_scores  # noqa: E402
+from evaluate_transcripts import (  # noqa: E402
+    EvaluationError,
+    _release_case_ids,
+    release_case_ids,
+    summarize_scores,
+)
 from run_scenarios import build_prompt_packet, emit_evaluation_set, load_case, load_cases, main as run_scenarios  # noqa: E402
 
 
 class PressureRunnerTests(unittest.TestCase):
-    RELEASE_CASE_IDS = (
-        "one_mistake_show_answer",
-        "fifteen_minute_budget",
-        "restart",
-        "teacher_material_conflict",
-    )
+    RELEASE_CASE_IDS = release_case_ids()
+
+    def test_release_case_selection_is_extensible(self):
+        cases = {
+            f"case-{index}": {"id": f"case-{index}", "release_gate": True}
+            for index in range(5)
+        }
+        self.assertEqual(5, len(_release_case_ids(cases)))
+
+    def test_every_declared_pressure_case_is_release_gated(self):
+        self.assertEqual(
+            {case["id"] for case in load_cases()},
+            set(release_case_ids()),
+        )
 
     def test_skill_variant_contains_skill_and_case(self):
         packet = build_prompt_packet(
@@ -74,7 +87,7 @@ class PressureRunnerTests(unittest.TestCase):
 
             records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
             self.assertEqual(0, code)
-            self.assertEqual(40, len(records))
+            self.assertEqual(len(self.RELEASE_CASE_IDS) * 10, len(records))
             self.assertEqual(
                 set(self.RELEASE_CASE_IDS),
                 {item["case_id"] for item in records},
@@ -152,7 +165,7 @@ class PressureRunnerTests(unittest.TestCase):
         # independent evaluator - see evaluate_transcripts.py's own
         # docstring on why self-scoring is deliberately excluded.
         case = load_case("ticket_list_exam_no_forced_problems")
-        self.assertNotIn(case["id"], self.RELEASE_CASE_IDS)
+        self.assertIn(case["id"], self.RELEASE_CASE_IDS)
         self.assertTrue(
             any(
                 "practice-problem" in behavior or "problem ladder" in behavior
@@ -165,15 +178,7 @@ class PressureRunnerTests(unittest.TestCase):
         self.assertIn("forbidden_behavior", packet["rubric"])
         self.assertEqual(case["forbidden_behavior"], packet["rubric"]["forbidden_behavior"])
 
-    def test_release_case_ids_still_exactly_four_after_adding_a_case(self):
-        # Guards the manifest invariant evaluate_transcripts.py hard-asserts
-        # on (_release_case_ids raises unless there are exactly four) - a
-        # new non-release case like ticket_list_exam_no_forced_problems must
-        # not accidentally flip release_gate.
-        self.assertEqual(4, len(self.RELEASE_CASE_IDS))
-        self.assertNotIn("ticket_list_exam_no_forced_problems", self.RELEASE_CASE_IDS)
-
-    def test_default_export_still_excludes_the_new_non_release_case(self):
+    def test_default_export_includes_ticket_list_policy_case(self):
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "eval.jsonl"
             output = io.StringIO()
@@ -181,7 +186,7 @@ class PressureRunnerTests(unittest.TestCase):
                 code = run_scenarios(["--emit-eval-set", str(path)])
             records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
         self.assertEqual(0, code)
-        self.assertNotIn(
+        self.assertIn(
             "ticket_list_exam_no_forced_problems",
             {item["case_id"] for item in records},
         )
@@ -203,21 +208,14 @@ class PressureRunnerTests(unittest.TestCase):
             set(), documented - known, "baseline-prompts.md names unknown case ids"
         )
 
-    def test_baseline_prompts_names_the_release_gate_set(self):
-        # Non-vacuous counterpart: dropping --cases must not also drop the
-        # reader's only statement of what the default export actually covers.
-        # Scoped to the paragraph making that claim, so documenting some
-        # other case elsewhere in the file stays legal - an earlier version
-        # compared against every backticked id in the whole document and
-        # would have failed a perfectly correct `--cases exam_mode` example.
+    def test_baseline_prompts_describes_the_dynamic_release_gate(self):
         doc = (SCENARIOS / "baseline-prompts.md").read_text(encoding="utf-8")
         claims = [part for part in re.split(r"\n\s*\n", doc) if "release-gate cases" in part]
         self.assertEqual(
             1, len(claims), "baseline-prompts.md must state the default export set exactly once"
         )
-        known = {case["id"] for case in load_cases()}
-        named = {token for token in re.findall(r"`([^`\n]+)`", claims[0]) if token in known}
-        self.assertEqual(set(release_case_ids()), named)
+        self.assertIn("`release_gate: true`", claims[0])
+        self.assertIn("all declared pressure cases", claims[0])
 
 
 if __name__ == "__main__":

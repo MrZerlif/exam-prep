@@ -13,6 +13,7 @@ from evaluate_transcripts import release_case_ids
 
 ROOT = Path(__file__).parents[2]
 MANIFEST = Path(__file__).with_name("pressure-cases.json")
+ACTIVATION_MANIFEST = Path(__file__).with_name("activation-cases.json")
 SKILL_PATH = ROOT / "skill" / "exam-prep" / "SKILL.md"
 
 
@@ -25,6 +26,29 @@ def load_case(case_id: str) -> dict[str, Any]:
         if case.get("id") == case_id:
             return dict(case)
     raise ValueError(f"unknown case: {case_id}")
+
+
+def load_activation_cases() -> list[dict[str, Any]]:
+    return json.loads(ACTIVATION_MANIFEST.read_text(encoding="utf-8"))["cases"]
+
+
+def emit_activation_set(path: Path) -> int:
+    cases = load_activation_cases()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("w", encoding="utf-8", newline="\n") as handle:
+        for case in cases:
+            packet = {
+                "case_id": case["id"],
+                "system_context": (
+                    "Run this prompt in a fresh host context using normal skill discovery. "
+                    "Do not inject exam-prep instructions manually. Record whether the host "
+                    "activated exam-prep before answering."
+                ),
+                "user_prompt": case["prompt"],
+                "should_activate": case["should_activate"],
+            }
+            handle.write(json.dumps(packet, ensure_ascii=False, sort_keys=True) + "\n")
+    return len(cases)
 
 
 def build_prompt_packet(
@@ -93,6 +117,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--case")
     parser.add_argument("--deterministic", action="store_true")
     parser.add_argument("--emit-eval-set", type=Path)
+    parser.add_argument("--emit-activation-set", type=Path)
     parser.add_argument("--repeat", type=int, default=5)
     parser.add_argument("--cases", help="comma-separated case IDs")
     parser.add_argument("--skill-file", type=Path, default=SKILL_PATH)
@@ -127,6 +152,17 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as exc:
             parser.error(str(exc))
         print(json.dumps({"status": "evaluation_set_written", "records": count, "path": str(args.emit_eval_set)}))
+        return 0
+    if args.emit_activation_set:
+        try:
+            count = emit_activation_set(args.emit_activation_set)
+        except (OSError, ValueError) as exc:
+            parser.error(str(exc))
+        print(json.dumps({
+            "status": "activation_set_written",
+            "records": count,
+            "path": str(args.emit_activation_set),
+        }))
         return 0
     if args.list:
         print(json.dumps([case["id"] for case in cases], ensure_ascii=False, indent=2))
