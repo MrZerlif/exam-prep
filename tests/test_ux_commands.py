@@ -1,4 +1,7 @@
+import contextlib
+import io
 import sys
+import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -6,6 +9,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "skill" / "exam-prep" / "scripts"))
 
 from exam_prep_lib.planner import build_cheatsheet, forecast_plan, last_minute_review
+from exam_prep import main
 
 
 NOW = datetime(2026, 9, 19, tzinfo=timezone.utc)
@@ -31,6 +35,17 @@ class UxCommandTests(unittest.TestCase):
         result = forecast_plan(SYLLABUS, CONCEPTS, {}, COURSE, NOW, days=2, minutes_per_day=30)
         self.assertEqual(2, len(result["days"]))
         self.assertTrue(all(day["minutes"] <= 30 for day in result["days"]))
+
+    def test_cheatsheet_cli_uses_internal_derived_target_items(self):
+        syllabus = Path(__file__).parents[1] / "skill" / "exam-prep" / "examples" / "mathematics-regression-syllabus.json"
+        with tempfile.TemporaryDirectory() as directory:
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(0, main(["--workspace", directory, "init"]))
+                self.assertEqual(0, main(["--workspace", directory, "load-syllabus", str(syllabus)]))
+                self.assertEqual(0, main(["--workspace", directory, "start"]))
+                self.assertEqual(0, main(["--workspace", directory, "cheatsheet"]))
+            self.assertIn('"status": "cheatsheet_written"', output.getvalue())
 
 
 if __name__ == "__main__":

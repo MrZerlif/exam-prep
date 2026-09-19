@@ -46,19 +46,30 @@ def natural_key(value: str | Path) -> tuple[object, ...]:
     return tuple(int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", str(value)))
 
 
-def classify(path: str | Path) -> str:
-    name = Path(path).stem.casefold()
-    if any(token in name for token in ("реш", "ответ", "solution", "answer", "key", "otvety")):
+def _content_kind(content: str) -> str:
+    sample = content[:12000].casefold()
+    if re.search(r"(?m)^\s*(?:решение|ответ|отв\.?|solution|answer|key|reshenie|resheniya|otvet|otvety)\b", sample):
         return "solution"
-    if any(token in name for token in ("дз", "домашн", "homework", "hw", "семинар", "практик")):
-        return "homework"
-    if any(token in name for token in ("экзамен", "экзам", "зачёт", "зачет", "билет", "коллоквиум", "контрольн", "exam", "test")):
+    if re.search(r"(?m)^\s*(?:экзамен|экзам|зачёт|зачет|билет|билеты|exam|test|ekzamen|zachet|bilet|bilety|variant|вариант)\b", sample):
         return "exam"
-    if any(token in name for token in ("конспект", "notes")):
-        return "notes"
-    if any(token in name for token in ("лекц", "лекци", "lecture", "lekci", "методич")):
-        return "lecture"
+    if re.search(r"(?m)^\s*(?:задача|упражнение|пример|вопрос|№|question|exercise|problem|dz|zadacha)\b", sample):
+        return "homework"
     return "other"
+
+
+def classify(path: str | Path, content: str | None = None) -> str:
+    name = Path(path).stem.casefold()
+    if any(token in name for token in ("реш", "ответ", "solution", "solutions", "answer", "answers", "key", "keys", "resh", "reshenie", "resheniya", "otvet", "otvety", "otv")):
+        return "solution"
+    if any(token in name for token in ("дз", "домашн", "homework", "hw", "dz", "d_z", "семинар", "seminar", "praktik", "praktikum", "lab", "zadach", "упражн")):
+        return "homework"
+    if any(token in name for token in ("экзамен", "экзам", "зачёт", "зачет", "zachet", "zach", "ekzamen", "ekz", "билет", "билеты", "bilet", "bilety", "коллоквиум", "kontrol", "контрольн", "exam", "test", "variant", "вариант")):
+        return "exam"
+    if any(token in name for token in ("конспект", "konspekt", "notes", "summary")):
+        return "notes"
+    if any(token in name for token in ("лекц", "лекци", "lecture", "lekci", "lekts", "metodich", "методич")):
+        return "lecture"
+    return _content_kind(content) if content else "other"
 
 
 def _xml_text(element: ET.Element) -> str:
@@ -202,9 +213,10 @@ def extract_source(root: str | Path, path: str | Path, *, max_file_bytes: int = 
         pages, backend, backend_version = (), None, None
         issues.append(IngestIssue("bad_pdf_extraction", relative, str(exc), "gap"))
     pages = strip_repeated_lines(pages)
+    kind = classify(source, "\n".join(page.text for page in pages))
     if not pages:
         issues.append(IngestIssue("unsupported_page", relative, "no pages were extracted", "gap"))
-    return ExtractedSource(relative, classify(source), tuple(pages), hashlib.sha256(raw).hexdigest(), backend, backend_version, tuple(issues))
+    return ExtractedSource(relative, kind, tuple(pages), hashlib.sha256(raw).hexdigest(), backend, backend_version, tuple(issues))
 
 
 def extract_sources(root: str | Path, *, max_file_bytes: int = MAX_FILE_BYTES) -> tuple[ExtractedSource, ...]:

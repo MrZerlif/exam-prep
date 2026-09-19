@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import metadata as importlib_metadata
 from pathlib import Path
 from typing import Any
 
@@ -19,18 +20,25 @@ class PdfBackend:
     version: str
 
 
+def _distribution_version(distribution: str, module: Any) -> str:
+    try:
+        return str(importlib_metadata.version(distribution))
+    except importlib_metadata.PackageNotFoundError:
+        return str(getattr(module, "__version__", "unknown"))
+
+
 def pdf_backend() -> PdfBackend | None:
     try:
         import pypdfium2  # type: ignore
 
-        version = str(getattr(pypdfium2, "__version__", "unknown"))
+        version = _distribution_version("pypdfium2", pypdfium2)
         return PdfBackend("pypdfium2", version)
     except ImportError:
         pass
     try:
         import pypdf  # type: ignore
 
-        version = str(getattr(pypdf, "__version__", "unknown"))
+        version = _distribution_version("pypdf", pypdf)
         return PdfBackend("pypdf", version)
     except ImportError:
         return None
