@@ -24,6 +24,16 @@ class IngestIssueTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             IngestIssue("not-a-kind", None, "bad", "info")
 
+    def test_new_extraction_issue_kinds_are_valid(self):
+        for kind in (
+            "extraction_anomaly",
+            "no_questions_extracted",
+            "unclassified_source",
+            "unsupported_language",
+            "low_confidence_question",
+        ):
+            self.assertEqual(kind, IngestIssue(kind, "source.md", "detail", "gap").kind)
+
 
 if __name__ == "__main__":
     unittest.main()

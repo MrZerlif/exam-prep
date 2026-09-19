@@ -11,6 +11,20 @@ from exam_prep_lib.storage import StudyStore
 
 
 class MaterialIndexTests(unittest.TestCase):
+    def test_dense_lecture_gets_blocking_extraction_anomaly(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            materials = root / "materials"
+            materials.mkdir()
+            pages = []
+            for page_number in range(1, 13):
+                pages.append("\n".join(f"Question {page_number}.{item} Heading" for item in range(1, 22)))
+            (materials / "lecture.md").write_text("\n".join(pages), encoding="utf-8")
+            store = StudyStore.for_exam_prep(root)
+            result = ingest_materials(materials, store, mode="lightweight")
+            issues = [issue for entry in result["index"]["entries"] for issue in entry["issues"]]
+            self.assertTrue(any(issue["kind"] == "extraction_anomaly" and issue["severity"] == "blocking" for issue in issues))
+
     def test_lightweight_mode_writes_index_without_evidence(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

@@ -14,6 +14,7 @@ from exam_prep_lib.workspace import runtime_paths
 from .chapters import number_from_name
 from .extractor import EXTRACTOR_VERSION, MAX_FILE_BYTES, ExtractedSource, extract_sources
 from .ingest import build_envelope
+from .questions import source_question_issues
 
 
 def _write_json(path: Path, value: object) -> None:
@@ -48,7 +49,7 @@ def build_material_index(materials_dir: str | Path, *, max_file_bytes: int = MAX
                     "backend": source.backend,
                     "backend_version": source.backend_version,
                     "configuration_hash": configuration_hash,
-                    "issues": [issue.to_mapping() for issue in source.issues],
+                    "issues": [issue.to_mapping() for issue in tuple(source.issues) + source_question_issues(source)],
                 }
             )
     return {"schema_version": 1, "extractor": "local-materials", "extractor_version": EXTRACTOR_VERSION, "configuration_hash": configuration_hash, "entries": entries}
@@ -94,6 +95,7 @@ def ingest_materials(
     authority_map: Mapping[str, str] | None = None,
     max_excerpt_chars: int = 1200,
     max_file_bytes: int = MAX_FILE_BYTES,
+    include_unclassified: bool = False,
 ) -> dict[str, Any]:
     if mode not in {"lightweight", "full"}:
         raise ValueError("mode must be lightweight or full")

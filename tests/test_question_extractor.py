@@ -13,6 +13,19 @@ def source(path: str, kind: str, text: str) -> ExtractedSource:
 
 
 class QuestionExtractorTests(unittest.TestCase):
+    def test_lecture_source_yields_no_questions(self):
+        questions = extract_questions(
+            (source("lecture.md", "lecture", "1.1 Introduction\nExplain limits\n1.2 Limits\nExplain continuity"),)
+        )
+        self.assertEqual((), questions)
+
+    def test_other_source_requires_opt_in_and_marks_issue(self):
+        material = source("unknown.md", "other", "Question 1\nCompute x")
+        self.assertEqual((), extract_questions((material,)))
+        questions = extract_questions((material,), include_unclassified=True)
+        self.assertEqual(1, len(questions))
+        self.assertTrue(any(issue.kind == "unclassified_source" for issue in questions[0].issues))
+
     def test_matches_solution_by_label_and_options_are_preserved(self):
         questions = extract_questions(
             (
