@@ -52,6 +52,14 @@ class RuntimePaths:
         return self.root / "review_queue.json"
 
     @property
+    def material_index(self) -> Path:
+        return self.root / "material_index.json"
+
+    @property
+    def ingest_issues(self) -> Path:
+        return self.root / "ingest_issues.json"
+
+    @property
     def learner(self) -> Path:
         return self.root / "learner.json"
 

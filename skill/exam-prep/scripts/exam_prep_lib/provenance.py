@@ -17,6 +17,24 @@ AUTHORITY_RANKS = {
     "unknown": 0,
 }
 
+PROVENANCE_LABELS = ("[SOURCE]", "[SUPPLEMENT]", "[GENERATED]")
+
+
+def provenance_label(
+    *,
+    source_refs: Any = (),
+    origin: str | None = None,
+    supplement: bool = False,
+) -> str:
+    """Return the product provenance label, independent of authority rank."""
+
+    if origin == "model_generated" or not source_refs:
+        return "[GENERATED]"
+    refs = source_refs if isinstance(source_refs, (list, tuple)) else ()
+    if any(isinstance(ref, Mapping) and ref.get("source_id") and ref.get("locator") for ref in refs):
+        return "[SOURCE]"
+    return "[SUPPLEMENT]" if supplement else "[SUPPLEMENT]"
+
 
 @dataclass(frozen=True)
 class SourceRef:

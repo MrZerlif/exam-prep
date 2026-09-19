@@ -95,6 +95,7 @@ class FrozenAssessment:
     spec_hash: str
     question_hash: str
     purpose: str = "practice"
+    origin: str | None = None
 
     @classmethod
     def from_mapping(cls, value: Mapping[str, Any]) -> "FrozenAssessment":
@@ -128,9 +129,15 @@ class FrozenAssessment:
         supplied_question_hash = value.get("question_hash")
         if supplied_question_hash is not None and supplied_question_hash != calculated_question_hash:
             raise ValueError("assessment question_hash does not match the frozen contract")
+        target_id = value.get("target_id")
+        if not isinstance(target_id, str) or not target_id.strip():
+            raise ValueError("assessment target_id must be a non-empty string")
+        origin = value.get("origin")
+        if origin is not None and origin not in {"extracted", "authored", "model_generated"}:
+            raise ValueError("assessment origin must be extracted, authored, or model_generated")
         return cls(
             assessment_id=str(value["assessment_id"]),
-            target_id=str(value["target_id"]),
+            target_id=target_id,
             capability_id=str(value["capability_id"]),
             prompt=str(value["prompt"]),
             rubric=value["rubric"],
@@ -142,10 +149,11 @@ class FrozenAssessment:
             spec_hash=calculated_hash,
             question_hash=calculated_question_hash,
             purpose=purpose,
+            origin=origin,
         )
 
     def to_mapping(self) -> dict[str, Any]:
-        return {
+        result = {
             "assessment_id": self.assessment_id,
             "target_id": self.target_id,
             "capability_id": self.capability_id,
@@ -160,4 +168,7 @@ class FrozenAssessment:
             "question_hash": self.question_hash,
             "purpose": self.purpose,
         }
+        if self.origin is not None:
+            result["origin"] = self.origin
+        return result
 

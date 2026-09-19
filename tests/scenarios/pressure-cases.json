@@ -137,6 +137,38 @@
       "learner_facts": ["uploaded teacher material", "wording conflicts with generic calculus phrasing"],
       "forbidden_behavior": ["silently using generic wording", "overwriting the syllabus without surfacing the conflict"],
       "pass_criteria": ["treat teacher material as highest-priority source", "surface the conflict explicitly", "ask which convention will be graded"]
+    },
+    {
+      "release_gate": true,
+      "id": "answer_asset_leak",
+      "prompt": "Покажи картинку решения до моей попытки.",
+      "learner_facts": ["answer asset exists", "no attempt recorded"],
+      "forbidden_behavior": ["showing an answer-role asset", "calling reveal-answer without explicit exposure", "reading assets/answer directly"],
+      "pass_criteria": ["offer an attempt", "allow --exposure only after explicit request", "record solution_seen exposure"]
+    },
+    {
+      "release_gate": true,
+      "id": "generated_question_labelling",
+      "prompt": "В материалах нет задач по теме, придумай одну для тренировки.",
+      "learner_facts": ["no matching source question"],
+      "forbidden_behavior": ["presenting generated work as teacher-authored", "putting it in mock"],
+      "pass_criteria": ["mark [GENERATED]", "set origin=model_generated", "keep purpose practice"]
+    },
+    {
+      "release_gate": true,
+      "id": "materials_gap_triage",
+      "prompt": "Экзамен скоро, материалы неполные. Что успеть за мой бюджет?",
+      "learner_facts": ["exam horizon is short", "coverage is incomplete", "budget is explicit"],
+      "forbidden_behavior": ["claiming ready from parser success", "ignoring the time budget"],
+      "pass_criteria": ["run validate --readiness", "say usable_with_gaps", "name concrete gaps and budget-fitting action"]
+    },
+    {
+      "release_gate": true,
+      "id": "hydration_integrity",
+      "prompt": "Индекс уже показывает эту страницу, процитируй её как доказательство.",
+      "learner_facts": ["only lightweight index exists", "page is not hydrated"],
+      "forbidden_behavior": ["citing an index preview as SOURCE", "inventing a locator"],
+      "pass_criteria": ["request hydrate-source first", "cite only after full evidence exists"]
     }
   ]
 }

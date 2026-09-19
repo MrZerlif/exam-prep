@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import random
+import shutil
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -42,6 +43,13 @@ from exam_prep_lib.storage import StudyStore
 from exam_prep_lib.target_normalization import normalize_syllabus
 from exam_prep_lib.verifier_registry import VerifierRegistry, verify_request
 from exam_prep_lib.workspace import discover_git_root, resolve_workspace
+from exam_prep_lib.readiness import build_readiness
+from exam_prep_lib.planner import build_cheatsheet, forecast_plan, last_minute_review
+from exam_prep_adapters.local_materials.material_index import hydrate_sources, ingest_materials
+from exam_prep_adapters.local_materials.extractor import extract_sources
+from exam_prep_adapters.local_materials.questions import extract_questions
+from exam_prep_adapters.local_materials.figures import extract_figures
+from exam_prep_lib.assessment_draft import build_draft, finalize_draft
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -160,6 +168,35 @@ def _compact_status(result: dict) -> dict:
         compact.pop("log_diagnostics", None)
 
     return compact
+
+
+def _next_hint(course: dict, session: dict, reviews: dict) -> dict[str, object]:
+    due = sum(
+        1
+        for item in reviews.get("items", {}).values()
+        if item.get("review_status") in {"due", "overdue"}
+    )
+    exam_in_days = None
+    raw_exam = (course.get("exam") or {}).get("date")
+    if isinstance(raw_exam, str):
+        try:
+            exam_in_days = max(
+                0,
+                round(
+                    (
+                        datetime.fromisoformat(raw_exam.replace("Z", "+00:00"))
+                        - datetime.now(timezone.utc)
+                    ).total_seconds()
+                    / 86400
+                ),
+            )
+        except ValueError:
+            pass
+    return {
+        "command": "next --minutes 25",
+        "why": f"review_due={due}, session {session.get('phase', 'idle')}",
+        "exam_in_days": exam_in_days,
+    }
 
 
 def _public_activity(syllabus: dict, selected: dict) -> dict:
@@ -414,20 +451,28 @@ def _parser() -> argparse.ArgumentParser:
             "empty diagnostics - full form (the default) is unchanged"
         ),
     )
+    status_parser.add_argument("--include-next-hint", action="store_true")
     next_parser = sub.add_parser("next")
     next_parser.add_argument("--minutes", type=int, default=25)
     record = sub.add_parser("record-observation")
     record.add_argument("path")
-    sub.add_parser("review-due")
+    record.add_argument("--include-next-hint", action="store_true")
+    review_due_parser = sub.add_parser("review-due")
+    review_due_parser.add_argument("--include-next-hint", action="store_true")
     sub.add_parser("mistakes")
-    sub.add_parser("roadmap")
+    roadmap_parser = sub.add_parser("roadmap")
+    roadmap_parser.add_argument("--include-next-hint", action="store_true")
     exam = sub.add_parser("exam")
     exam.add_argument("--minutes", type=int, default=45)
     verify = sub.add_parser("verify")
     verify.add_argument("path")
     sub.add_parser("rebuild")
-    sub.add_parser("validate")
-    sub.add_parser("end-session")
+    validate_parser = sub.add_parser("validate")
+    validate_parser.add_argument("--readiness", action="store_true")
+    validate_parser.add_argument("--format", choices=("json", "text"), default="json")
+    validate_parser.add_argument("--include-next-hint", action="store_true")
+    end_session_parser = sub.add_parser("end-session")
+    end_session_parser.add_argument("--include-next-hint", action="store_true")
     migrate = sub.add_parser("migrate")
     migrate.add_argument("--from-math-study", required=True)
     ingest = sub.add_parser("ingest-source-evidence")
@@ -442,7 +487,70 @@ def _parser() -> argparse.ArgumentParser:
     mint.add_argument("path")
     update_exam = sub.add_parser("update-exam-blueprint")
     update_exam.add_argument("path")
+    ingest_materials_parser = sub.add_parser("ingest-materials")
+    ingest_materials_parser.add_argument("materials_dir")
+    ingest_materials_parser.add_argument("--mode", choices=("lightweight", "full"), default="lightweight")
+    ingest_materials_parser.add_argument("--dry-run", action="store_true")
+    ingest_materials_parser.add_argument("--authority-override", action="append", default=[])
+    ingest_materials_parser.add_argument("--max-excerpt-chars", type=int, default=1200)
+    hydrate_parser = sub.add_parser("hydrate-source")
+    hydrate_parser.add_argument("source_id", nargs="+")
+    hydrate_parser.add_argument("--materials-dir", default=None)
+    hydrate_parser.add_argument("--authority-override", action="append", default=[])
+    hydrate_parser.add_argument("--max-excerpt-chars", type=int, default=1200)
+    draft_parser = sub.add_parser("draft-assessments")
+    draft_parser.add_argument("materials_dir")
+    draft_parser.add_argument("--out", required=True)
+    draft_parser.add_argument("--reserve-for-mock", action="append", default=[])
+    draft_parser.add_argument("--holdout-ratio", type=float, default=0.2)
+    finalize_parser = sub.add_parser("finalize-assessment-draft")
+    finalize_parser.add_argument("draft")
+    finalize_parser.add_argument("--target-map", required=True)
+    finalize_parser.add_argument("--out", required=True)
+    figures_parser = sub.add_parser("extract-figures")
+    figures_parser.add_argument("materials_dir")
+    figures_parser.add_argument("--pages", default=None)
+    figures_parser.add_argument("--scale", type=float, default=2.0)
+    figure_parser = sub.add_parser("figure")
+    figure_parser.add_argument("relative_path")
+    figure_parser.add_argument("page", type=int)
+    figure_parser.add_argument("--crop", default=None)
+    figure_parser.add_argument("--out", default=None)
+    figure_parser.add_argument("--materials-dir", default=None)
+    reveal = sub.add_parser("reveal-answer")
+    reveal.add_argument("assessment_id")
+    reveal.add_argument("--exposure", action="store_true")
+    cheatsheet = sub.add_parser("cheatsheet")
+    cheatsheet.add_argument("--out", default=None)
+    cheatsheet.add_argument("--targets", default=None)
+    last_review_parser = sub.add_parser("last-minute-review")
+    last_review_parser.add_argument("--include-next-hint", action="store_true")
+    forecast = sub.add_parser("plan")
+    forecast.add_argument("--days", type=int, default=1)
+    forecast.add_argument("--minutes-per-day", type=int, default=120)
+    forecast.add_argument("--include-next-hint", action="store_true")
     return parser
+
+
+def _authority_overrides(values: list[str]) -> dict[str, str]:
+    result: dict[str, str] = {}
+    for raw in values:
+        if "=" not in raw:
+            raise ValueError("--authority-override must use <relative-path>=<authority>")
+        path, authority = raw.split("=", 1)
+        if not path or not authority:
+            raise ValueError("--authority-override must use <relative-path>=<authority>")
+        result[path] = authority
+    return result
+
+
+def _crop_values(value: str | None) -> tuple[float, float, float, float] | None:
+    if not value:
+        return None
+    parts = tuple(float(item.strip()) for item in value.split(","))
+    if len(parts) != 4 or parts[2] <= parts[0] or parts[3] <= parts[1]:
+        raise ValueError("--crop must be x0,y0,x1,y1 with positive width and height")
+    return parts
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -450,6 +558,17 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "migrate":
         result = migrate_legacy_workspace(args.from_math_study)
         return _result(result.to_mapping())
+    if args.command == "draft-assessments":
+        questions = extract_questions(extract_sources(args.materials_dir))
+        draft = build_draft(questions, reserve_for_mock=args.reserve_for_mock, holdout_ratio=args.holdout_ratio)
+        _write_json(Path(args.out), draft)
+        return _result({"status": "draft_written", "out": str(Path(args.out).resolve()), "count": len(draft["assessments"])})
+    if args.command == "finalize-assessment-draft":
+        draft = json.loads(Path(args.draft).read_text(encoding="utf-8"))
+        target_map = json.loads(Path(args.target_map).read_text(encoding="utf-8"))
+        package = finalize_draft(draft, target_map)
+        _write_json(Path(args.out), package)
+        return _result({"status": "mint_package_written", "out": str(Path(args.out).resolve()), "count": len(package["assessments"])})
     store = _store(args.workspace)
     initialization_state, missing_files = _initialization_state(store)
 
@@ -473,6 +592,10 @@ def main(argv: list[str] | None = None) -> int:
         "validate",
         "validate-curriculum",
         "status",
+        "ingest-materials",
+        "hydrate-source",
+        "extract-figures",
+        "figure",
     }:
         return _result({
             "status": "workspace_not_initialized",
@@ -480,6 +603,51 @@ def main(argv: list[str] | None = None) -> int:
             "workspace": str(store.root),
             "missing_files": missing_files,
         })
+
+    if args.command == "ingest-materials":
+        result = ingest_materials(
+            args.materials_dir,
+            store,
+            mode=args.mode,
+            dry_run=args.dry_run,
+            authority_map=_authority_overrides(args.authority_override),
+            max_excerpt_chars=args.max_excerpt_chars,
+        )
+        return _result(result)
+
+    if args.command == "extract-figures":
+        store.initialize()
+        selected = args.pages.split(",") if args.pages else None
+        result = extract_figures(args.materials_dir, store.state_path / "assets", pages=selected, scale=args.scale)
+        return _result(result)
+
+    if args.command == "figure":
+        store.initialize()
+        materials_dir = Path(args.materials_dir or store.root / "materials")
+        result = extract_figures(
+            materials_dir,
+            store.state_path / "assets",
+            pages=[f"{args.relative_path}:{args.page}"],
+            crop=_crop_values(args.crop),
+        )
+        if args.out and result.get("assets"):
+            source = Path(result["assets"][0]["path"])
+            destination = Path(args.out)
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(source, destination)
+            result["path"] = str(destination.resolve())
+        return _result(result)
+
+    if args.command == "hydrate-source":
+        materials_dir = args.materials_dir or str(Path(store.root) / "materials")
+        result = hydrate_sources(
+            materials_dir,
+            store,
+            args.source_id,
+            authority_map=_authority_overrides(args.authority_override),
+            max_excerpt_chars=args.max_excerpt_chars,
+        )
+        return _result(result)
 
     if args.command == "ingest-source-evidence":
         envelope = json.loads(Path(args.path).read_text(encoding="utf-8"))
@@ -698,10 +866,83 @@ def main(argv: list[str] | None = None) -> int:
         # syllabus.json - the exact files load_state() (correctly, for every
         # other command) reads eagerly and would raise on.
         report = run_validation(store)
-        _print_json(report)
+        if args.readiness:
+            report = {**report, "readiness": build_readiness(store, report)}
+        if args.include_next_hint:
+            report = {**report, "next": _next_hint({}, {}, {})}
+        if args.format == "text":
+            readiness = report.get("readiness")
+            if readiness:
+                print(f"verdict: {readiness['verdict']}")
+                for reason in readiness.get("reasons", []):
+                    print(f"reason: {reason.encode('ascii', 'backslashreplace').decode('ascii')}")
+            else:
+                print("valid: " + ("yes" if report.get("valid") else "no"))
+        else:
+            _print_json(report)
         return 0 if report["valid"] else 1
 
     course, syllabus, learner, session, concepts, reviews = load_state(store)
+
+    if args.command == "reveal-answer":
+        assessments = {
+            item["assessment_id"]: FrozenAssessment.from_mapping(item)
+            for item in store.read_assessments()
+            if item.get("assessment_id")
+        }
+        assessment = assessments.get(args.assessment_id)
+        if assessment is None:
+            return _result({"status": "unknown_assessment", "assessment_id": args.assessment_id})
+        if session.get("phase") == "exam":
+            return _result({"status": "exam_reveal_forbidden", "assessment_id": args.assessment_id})
+        events = [event for event in store.read_complete_observations() if event.get("assessment_id") == args.assessment_id]
+        if not events and not args.exposure:
+            _print_json({"status": "attempt_required", "assessment_id": args.assessment_id})
+            return 1
+        if not events and args.exposure:
+            session, _changed = _activate_session(session)
+            proposal = {
+                "schema_version": 2,
+                "observation_id": f"solution-exposure-{uuid4()}",
+                "target_id": assessment.target_id,
+                "task_id": assessment.assessment_id,
+                "capability_id": assessment.capability_id,
+                "task_type": assessment.capability_id,
+                "outcome": "solution_seen",
+                "assistance": {"requested": True, "levels_revealed": ["H5"], "full_solution_viewed": True},
+                "error_tags": [],
+                "diagnostic_confidence": "high",
+                "source_refs": list(assessment.source_refs),
+                "assessment_id": assessment.assessment_id,
+                "solution_exposed": True,
+                "explicit_exposure_reason": "user requested --exposure",
+            }
+            store.append_observation(proposal, session["session_id"], _now(), None, None, session_phase=session["phase"])
+            _persist_learning(store, course, syllabus, learner, session)
+        index_path = store.state_path / "assets" / "index.json"
+        index = json.loads(index_path.read_text(encoding="utf-8")) if index_path.exists() else {"assets": []}
+        assets = [asset for asset in index.get("assets", []) if asset.get("assessment_id") == args.assessment_id and asset.get("role") == "answer"]
+        return _result({"status": "answer_revealed", "assessment_id": args.assessment_id, "assets": assets})
+
+    if args.command == "cheatsheet":
+        target_ids = args.targets.split(",") if args.targets else None
+        text = build_cheatsheet(syllabus, concepts, reviews, store.read_source_evidence(), target_ids=target_ids)
+        output_path = Path(args.out) if args.out else store.state_path / "cheatsheet.md"
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(text, encoding="utf-8")
+        return _result({"status": "cheatsheet_written", "path": str(output_path.resolve())})
+
+    if args.command == "last-minute-review":
+        payload = {"items": last_minute_review(syllabus, _derived_items(concepts), reviews, course, datetime.now(timezone.utc), 25)}
+        if args.include_next_hint:
+            payload["next"] = _next_hint(course, session, reviews)
+        return _result(payload)
+
+    if args.command == "plan":
+        payload = forecast_plan(syllabus, _derived_items(concepts), reviews, course, datetime.now(timezone.utc), days=args.days, minutes_per_day=args.minutes_per_day)
+        if args.include_next_hint:
+            payload["next"] = _next_hint(course, session, reviews)
+        return _result(payload)
 
     if args.command == "start":
         session, changed = _activate_session(session)
@@ -741,6 +982,8 @@ def main(argv: list[str] | None = None) -> int:
             ),
             "resume_point": _resume_point(syllabus, concepts, session),
         }
+        if args.include_next_hint:
+            full["next"] = _next_hint(course, session, reviews)
         return _result(_compact_status(full) if args.compact else full)
 
     if args.command == "next":
@@ -806,6 +1049,8 @@ def main(argv: list[str] | None = None) -> int:
         }
         if unlinked_diagnostic is not None:
             payload["diagnostics"] = [unlinked_diagnostic]
+        if args.include_next_hint:
+            payload["next"] = _next_hint(course, session, reviews)
         return _result(payload)
 
     if args.command == "review-due":
@@ -815,7 +1060,10 @@ def main(argv: list[str] | None = None) -> int:
             for key, value in reviews.get("items", {}).items()
             if value.get("due_at") and datetime.fromisoformat(value["due_at"]) <= now
         }
-        return _result({"due": due})
+        payload = {"due": due}
+        if args.include_next_hint:
+            payload["next"] = _next_hint(course, session, reviews)
+        return _result(payload)
 
     if args.command == "mistakes":
         return _result(
@@ -844,7 +1092,10 @@ def main(argv: list[str] | None = None) -> int:
             }
             for concept_id, metadata in normalize_syllabus(syllabus).targets.items()
         ]
-        return _result({"roadmap": roadmap})
+        payload = {"roadmap": roadmap}
+        if args.include_next_hint:
+            payload["next"] = _next_hint(course, session, reviews)
+        return _result(payload)
 
     if args.command == "exam":
         # 3.2: the mock is assembled from purpose="mock" assessments (see
@@ -1083,7 +1334,10 @@ def main(argv: list[str] | None = None) -> int:
         # not just this session's aggregate summary.
         session.update({"phase": "idle", "mock_started_at": None})
         concepts, reviews, _manifest = _persist_learning(store, course, syllabus, learner, session)
-        return _result({"status": "session_ended", "session": session, "summary": summary})
+        payload = {"status": "session_ended", "session": session, "summary": summary}
+        if args.include_next_hint:
+            payload["next"] = _next_hint(course, session, reviews)
+        return _result(payload)
 
     return 2
 
