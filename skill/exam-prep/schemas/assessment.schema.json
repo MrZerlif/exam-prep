@@ -17,6 +17,7 @@
     "rubric_version": {"type": "integer", "minimum": 1},
     "spec_hash": {"type": "string", "minLength": 1},
     "question_hash": {"type": "string", "minLength": 1},
-    "purpose": {"type": "string", "enum": ["practice", "retest", "held_out", "mock"]}
+    "purpose": {"type": "string", "enum": ["practice", "retest", "held_out", "mock"]},
+    "origin": {"type": "string", "enum": ["extracted", "authored", "model_generated"]}
   }
 }

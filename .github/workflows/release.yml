@@ -1,0 +1,23 @@
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build self-contained skill archive
+        run: |
+          mkdir -p dist/exam-prep
+          cp -R skill/exam-prep/SKILL.md skill/exam-prep/scripts skill/exam-prep/references \
+            skill/exam-prep/schemas skill/exam-prep/templates skill/exam-prep/config \
+            skill/exam-prep/examples skill/exam-prep/vendor dist/exam-prep/
+          (cd dist && zip -r exam-prep.zip exam-prep)
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/exam-prep.zip

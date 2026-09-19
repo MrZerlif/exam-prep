@@ -459,6 +459,30 @@ def compute_priority(
         f"{due_text}{independence_text}"
     )
     exam_revision = int(exam.get("revision", course.get("exam_revision", 1)))
+    scheduler = course.get("scheduler") or {}
+    requested_mode = str(scheduler.get("mode", "exam_cram"))
+    if requested_mode not in {"normal", "accelerated", "emergency", "exam_cram"}:
+        raise ValueError(f"unknown scheduler mode: {requested_mode!r}")
+    effective_mode = requested_mode
+    if requested_mode in {"accelerated", "emergency"} and days_left <= 1.0:
+        effective_mode = "emergency"
+    if requested_mode == "exam_cram":
+        mode_multiplier = 1.0
+    elif effective_mode == "normal":
+        mode_multiplier = 1.0
+    elif effective_mode == "accelerated":
+        mode_multiplier = 1.0 + min(0.25, 0.08 * exam_value)
+    else:
+        recurring = state.get("recurring_mistakes", [])
+        recurring_count = sum(bool(item.get("recurring", True)) for item in recurring if isinstance(item, dict))
+        mode_multiplier = (
+            1.0
+            + min(0.45, 0.12 * exam_value)
+            + min(0.25, 0.10 * max(0.0, prerequisite_unlock_value - 1.0) * 2)
+            + min(0.30, 0.08 * recurring_count)
+        )
+    score = round(score * mode_multiplier, 6)
+    reason += f", scheduler {requested_mode}->{effective_mode} ({mode_multiplier:.2f}x)"
     return {
         "concept_id": concept_id,
         "score": score,
@@ -474,6 +498,8 @@ def compute_priority(
             "computed_at": now.isoformat(),
             "budget_minutes": int(budget_minutes),
             "exam_revision": exam_revision,
+            "requested_mode": requested_mode,
+            "effective_mode": effective_mode,
         },
     }
 

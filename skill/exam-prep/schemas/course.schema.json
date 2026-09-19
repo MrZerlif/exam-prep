@@ -28,7 +28,17 @@
     },
     "time_budget": {"type": "object"},
     "source_policy": {"type": "object"},
-    "scheduler": {"type": "object"}
+    "scheduler": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {"type": "string", "enum": ["normal", "accelerated", "emergency", "exam_cram"]},
+        "max_review_interval_hours": {"type": "integer", "minimum": 1},
+        "review_warmup_limit": {"type": "integer", "minimum": 0},
+        "recurring_mistake_sessions": {"type": "integer", "minimum": 0},
+        "recurring_mistake_policy": {"type": "object"}
+      }
+    }
   }
 }
 

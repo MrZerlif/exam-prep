@@ -56,6 +56,28 @@ creates nothing - it is a normal refusal, not a failure, and the repair is
   output is unchanged).
 - `validate` - deep diagnostic report on the whole workspace; never blocks
   on its own, only describes what it finds.
+- `validate --readiness` - add a `blocked`, `usable_with_gaps`, or `ready`
+  verdict without changing the ordinary validate payload. `--format text`
+  prints an ASCII summary.
+- `ingest-materials <materials-dir> [--mode lightweight|full] [--dry-run]` -
+  build the derived material index; full mode hydrates every extracted page.
+- `hydrate-source <source-id> [<source-id> ...] --materials-dir <dir>` -
+  hydrate selected pages into the append-only source evidence log. Repeating
+  the command is idempotent.
+- `draft-assessments <materials-dir> --out <path>` - extract questions into a
+  target-unassigned `AssessmentDraft`.
+- `finalize-assessment-draft <draft> --target-map <path> --out <path>` -
+  require a complete question-to-target map before minting.
+- `extract-figures <materials-dir> [--pages <relative-path>:<page>]
+  [--scale 2.0]` / `figure <relative-path> <page> [--crop x0,y0,x1,y1]
+  [--out <path>]` - derive hash-named prompt, answer, and reference assets.
+- `reveal-answer <assessment-id> [--exposure]` - return answer assets only
+  after an attempt, or after explicit exposure that records `solution_seen`.
+- `cheatsheet`, `last-minute-review`, and `plan` - deterministic derived
+  review artifacts; `plan --days N --minutes-per-day M` is a forecast and
+  never changes the exam date.
+- State-changing and overview commands accept opt-in `--include-next-hint`;
+  no hint is emitted without the flag.
 - `next --minutes N` - pick one budget-fitting activity.
 - `roadmap` - full target list with mastery, review, and availability.
 - `review-due` - concepts with a due or overdue review.

@@ -59,6 +59,9 @@ assistance ladder and the tracks selected by `course.exam.question_model`.
 - An agent host that supports local skills is needed for the conversational
   tutor. The Python CLI can be inspected and tested independently.
 - No third-party Python runtime packages are required.
+- Optional `pypdfium2` enables PDF rendering and figure extraction; optional
+  `pypdf` enables PDF text fallback. Without them, non-PDF materials and the
+  rest of the engine continue to work.
 
 ## Install
 
@@ -85,6 +88,8 @@ course.
 ```bash
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> status
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> init
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> ingest-materials <materials-dir> --mode lightweight
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> hydrate-source lecture-01.pdf#p3 --materials-dir <materials-dir>
 
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> validate-curriculum <curriculum-proposal.json>
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> apply-curriculum <curriculum-proposal.json>
@@ -104,6 +109,14 @@ changed. Use the
 [`CurriculumProposal` schema](skill/exam-prep/schemas/curriculum-proposal.schema.json)
 and [example proposal](skill/exam-prep/examples/curriculum-proposal.json) as the
 payload contract.
+
+## Third-party code
+
+The local-material adapters preserve the MIT attribution for compatible
+surfaces adapted from
+[`ZeKaiNie/universal-examprep-skill`](https://github.com/ZeKaiNie/universal-examprep-skill).
+See [`skill/exam-prep/vendor/exam-cram-coach/`](skill/exam-prep/vendor/exam-cram-coach/)
+for the donor license and pinned source commit.
 
 ## Daily workflow
 
