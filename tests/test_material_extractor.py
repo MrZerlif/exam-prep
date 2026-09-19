@@ -51,6 +51,7 @@ class MaterialExtractorTests(unittest.TestCase):
             "ekzamen_2025.pdf": "exam",
             "bilety.docx": "exam",
             "kontrolnaya_2.pdf": "exam",
+            "kollokvium.pdf": "exam",
             "zachet.md": "exam",
             "resheniya.md": "solution",
             "variant_5.md": "exam",

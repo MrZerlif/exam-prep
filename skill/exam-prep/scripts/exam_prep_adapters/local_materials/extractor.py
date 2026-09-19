@@ -50,7 +50,7 @@ def _content_kind(content: str) -> str:
     sample = content[:12000].casefold()
     if re.search(r"(?m)^\s*(?:решение|ответ|отв\.?|solution|answer|key|reshenie|resheniya|otvet|otvety)\b", sample):
         return "solution"
-    if re.search(r"(?m)^\s*(?:экзамен|экзам|зачёт|зачет|билет|билеты|exam|test|ekzamen|zachet|bilet|bilety|variant|вариант)\b", sample):
+    if re.search(r"(?m)^\s*(?:экзамен|экзам|зачёт|зачет|билет|билеты|коллоквиум|exam|test|ekzamen|zachet|bilet|bilety|kollokvium|variant|вариант)\b", sample):
         return "exam"
     if re.search(r"(?m)^\s*(?:задача|упражнение|пример|вопрос|№|question|exercise|problem|dz|zadacha)\b", sample):
         return "homework"
@@ -63,7 +63,7 @@ def classify(path: str | Path, content: str | None = None) -> str:
         return "solution"
     if any(token in name for token in ("дз", "домашн", "homework", "hw", "dz", "d_z", "семинар", "seminar", "praktik", "praktikum", "lab", "zadach", "упражн")):
         return "homework"
-    if any(token in name for token in ("экзамен", "экзам", "зачёт", "зачет", "zachet", "zach", "ekzamen", "ekz", "билет", "билеты", "bilet", "bilety", "коллоквиум", "kontrol", "контрольн", "exam", "test", "variant", "вариант")):
+    if any(token in name for token in ("экзамен", "экзам", "зачёт", "зачет", "zachet", "zach", "ekzamen", "ekz", "билет", "билеты", "bilet", "bilety", "коллоквиум", "kollokvium", "kontrol", "контрольн", "exam", "test", "variant", "вариант")):
         return "exam"
     if any(token in name for token in ("конспект", "konspekt", "notes", "summary")):
         return "notes"
