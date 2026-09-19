@@ -493,6 +493,7 @@ def _parser() -> argparse.ArgumentParser:
     ingest_materials_parser.add_argument("--dry-run", action="store_true")
     ingest_materials_parser.add_argument("--authority-override", action="append", default=[])
     ingest_materials_parser.add_argument("--max-excerpt-chars", type=int, default=1200)
+    ingest_materials_parser.add_argument("--include-unclassified", action="store_true")
     hydrate_parser = sub.add_parser("hydrate-source")
     hydrate_parser.add_argument("source_id", nargs="+")
     hydrate_parser.add_argument("--materials-dir", default=None)
@@ -503,6 +504,7 @@ def _parser() -> argparse.ArgumentParser:
     draft_parser.add_argument("--out", required=True)
     draft_parser.add_argument("--reserve-for-mock", action="append", default=[])
     draft_parser.add_argument("--holdout-ratio", type=float, default=0.2)
+    draft_parser.add_argument("--include-unclassified", action="store_true")
     finalize_parser = sub.add_parser("finalize-assessment-draft")
     finalize_parser.add_argument("draft")
     finalize_parser.add_argument("--target-map", required=True)
@@ -559,7 +561,10 @@ def main(argv: list[str] | None = None) -> int:
         result = migrate_legacy_workspace(args.from_math_study)
         return _result(result.to_mapping())
     if args.command == "draft-assessments":
-        questions = extract_questions(extract_sources(args.materials_dir))
+        questions = extract_questions(
+            extract_sources(args.materials_dir),
+            include_unclassified=args.include_unclassified,
+        )
         draft = build_draft(questions, reserve_for_mock=args.reserve_for_mock, holdout_ratio=args.holdout_ratio)
         _write_json(Path(args.out), draft)
         return _result({"status": "draft_written", "out": str(Path(args.out).resolve()), "count": len(draft["assessments"])})
@@ -612,6 +617,7 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             authority_map=_authority_overrides(args.authority_override),
             max_excerpt_chars=args.max_excerpt_chars,
+            include_unclassified=args.include_unclassified,
         )
         return _result(result)
 

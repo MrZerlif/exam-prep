@@ -13,6 +13,11 @@ IssueKind = Literal[
     "source_conflict",
     "unsupported_page",
     "insufficient_evidence",
+    "extraction_anomaly",
+    "no_questions_extracted",
+    "unclassified_source",
+    "unsupported_language",
+    "low_confidence_question",
 ]
 IssueSeverity = Literal["blocking", "gap", "info"]
 
@@ -25,6 +30,11 @@ ISSUE_KINDS = frozenset(
         "source_conflict",
         "unsupported_page",
         "insufficient_evidence",
+        "extraction_anomaly",
+        "no_questions_extracted",
+        "unclassified_source",
+        "unsupported_language",
+        "low_confidence_question",
     }
 )
 ISSUE_SEVERITIES = frozenset({"blocking", "gap", "info"})

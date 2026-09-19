@@ -11,6 +11,12 @@ import re
 from typing import Iterable, Sequence
 
 from exam_prep_lib.ingest_issues import IngestIssue
+from exam_prep_lib.defaults import (
+    EXTRACTION_ACCEPTED_FRACTION_BLOCKING,
+    EXTRACTION_HARD_QUESTION_CAP,
+    EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING,
+    EXTRACTION_QUESTIONS_PER_PAGE_GAP,
+)
 
 from .chapters import number_from_name
 from .extractor import ExtractedPage, ExtractedSource
@@ -19,6 +25,8 @@ QUESTION_RE = re.compile(r"^\s*(?:задача|упражнение|пример
 SOLUTION_RE = re.compile(r"^\s*(?:решение|ответ|отв\.?|указание|доказательство|solution|answer|key)\s*([0-9]+(?:[.\-][0-9A-Za-z]+)*)?\s*[.:)]?\s*(.*)$", re.IGNORECASE)
 POINTS_RE = re.compile(r"\(\s*(\d+)\s*балл\w*\s*\)|\(\s*(\d+)\s*points?\s*\)", re.IGNORECASE)
 OPTION_RE = re.compile(r"^\s*([A-DА-Г])\s*[).:-]\s*(.+)$", re.IGNORECASE)
+EXTRACTABLE_KINDS = frozenset({"exam", "homework"})
+OPT_IN_KINDS = frozenset({"other", "lecture", "notes"})
 
 
 @dataclass(frozen=True)
@@ -124,7 +132,56 @@ def _match_solution(label: str | None, solutions: dict[str | None, str]) -> str 
     return solutions.get(pair_key(label))
 
 
-def extract_questions(sources: Iterable[ExtractedSource]) -> tuple[ExtractedQuestion, ...]:
+def source_question_issues(source: ExtractedSource) -> tuple[IngestIssue, ...]:
+    blocks = [block for page in source.pages for block in _blocks(page.text)]
+    question_count = len(blocks)
+    nonempty_lines = sum(1 for page in source.pages for line in page.text.splitlines() if line.strip())
+    page_count = max(1, len(source.pages))
+    questions_per_page = question_count / page_count
+    accepted_fraction = question_count / max(1, nonempty_lines)
+    blocking = (
+        accepted_fraction > EXTRACTION_ACCEPTED_FRACTION_BLOCKING
+        or (source.kind in {"lecture", "notes"} and questions_per_page > EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING)
+        or question_count > EXTRACTION_HARD_QUESTION_CAP
+    )
+    anomaly = questions_per_page > EXTRACTION_QUESTIONS_PER_PAGE_GAP
+    issues: list[IngestIssue] = []
+    if blocking or anomaly:
+        severity = "blocking" if blocking else "gap"
+        issues.append(
+            IngestIssue(
+                "extraction_anomaly",
+                source.relative_path,
+                f"{question_count} question blocks across {page_count} page(s); accepted_fraction={accepted_fraction:.3f}",
+                severity,
+            )
+        )
+    if source.kind in EXTRACTABLE_KINDS and question_count == 0:
+        issues.append(
+            IngestIssue(
+                "no_questions_extracted",
+                source.relative_path,
+                f"no question blocks extracted from {source.kind} source",
+                "gap",
+            )
+        )
+    if source.kind == "other":
+        issues.append(
+            IngestIssue(
+                "unclassified_source",
+                source.relative_path,
+                "source kind is other; use --include-unclassified to opt in",
+                "gap",
+            )
+        )
+    return tuple(issues)
+
+
+def extract_questions(
+    sources: Iterable[ExtractedSource],
+    *,
+    include_unclassified: bool = False,
+) -> tuple[ExtractedQuestion, ...]:
     materialized = tuple(sources)
     solutions_by_file: dict[str, dict[str | None, str]] = {}
     for source in materialized:
@@ -139,8 +196,11 @@ def extract_questions(sources: Iterable[ExtractedSource]) -> tuple[ExtractedQues
     for source in materialized:
         if source.kind == "solution":
             continue
+        if source.kind not in EXTRACTABLE_KINDS and not (include_unclassified and source.kind == "other"):
+            continue
         kind = "exam" if source.kind == "exam" else "homework"
         solutions = solutions_by_file.get(_solution_file_key(source.relative_path), {})
+        source_issues = tuple(source.issues) + source_question_issues(source)
         for page in source.pages:
             for label, raw_prompt in _blocks(page.text):
                 prompt = _strip_shared_lines(raw_prompt)
@@ -154,7 +214,7 @@ def extract_questions(sources: Iterable[ExtractedSource]) -> tuple[ExtractedQues
                 normalized = " ".join(prompt.split())
                 question_id = hashlib.sha256((source.relative_path + (label or "") + normalized).encode("utf-8")).hexdigest()[:16]
                 source_id = f"{source.relative_path}#p{page.number}"
-                issues = list(source.issues)
+                issues = list(source_issues)
                 if not answer:
                     issues.append(IngestIssue("missing_answer", source_id, "no matching reference answer", "gap"))
                 result.append(
