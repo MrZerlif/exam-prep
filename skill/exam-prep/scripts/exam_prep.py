@@ -926,7 +926,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "cheatsheet":
         target_ids = args.targets.split(",") if args.targets else None
-        text = build_cheatsheet(syllabus, concepts, reviews, store.read_source_evidence(), target_ids=target_ids)
+        text = build_cheatsheet(syllabus, _derived_items(concepts), reviews, store.read_source_evidence(), target_ids=target_ids)
         output_path = Path(args.out) if args.out else store.state_path / "cheatsheet.md"
         output_path.parent.mkdir(parents=True, exist_ok=True)
         output_path.write_text(text, encoding="utf-8")
