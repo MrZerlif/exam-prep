@@ -64,8 +64,13 @@ creates nothing - it is a normal refusal, not a failure, and the repair is
 - `hydrate-source <source-id> [<source-id> ...] --materials-dir <dir>` -
   hydrate selected pages into the append-only source evidence log. Repeating
   the command is idempotent.
-- `draft-assessments <materials-dir> --out <path>` - extract questions into a
-  target-unassigned `AssessmentDraft`.
+- `draft-assessments <materials-dir> --out <path>
+  [--include-unclassified] [--include-lecture-exercises]` - extract questions
+  into a target-unassigned `AssessmentDraft`. Lecture and notes sources are
+  skipped unless `--include-lecture-exercises` is given, and then only their
+  unambiguous `accept` candidates are taken; each is marked with an
+  informational issue naming the source it came from, and lands as `practice`,
+  never in the mock pool.
 - `finalize-assessment-draft <draft> --target-map <path> --out <path>` -
   require a complete question-to-target map before minting.
 - `extract-figures <materials-dir> [--pages <relative-path>:<page>]
