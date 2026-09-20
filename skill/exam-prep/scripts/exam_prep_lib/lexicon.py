@@ -176,16 +176,28 @@ def learned_lexicon_path(workspace: str | Path, language: str) -> Path:
 
 
 def _build_learned(raw: Mapping[str, Any]) -> Lexicon:
+    """Build the overlay, letting it declare how its language matches.
+
+    A learned lexicon exists precisely for languages with no bundled file,
+    and some of them - Thai, Khmer, Lao - are written without spaces, so
+    the overlay has to be able to say so. Where a bundled file does exist
+    these values are ignored: `load` keeps the bundled rules and takes only
+    the overlay's words.
+    """
+
     validate_learned(raw)
+    normalization = raw.get("normalization") or {}
+    fold = {str(key): str(value) for key, value in (normalization.get("fold") or {}).items()}
+    strip_marks = bool(normalization.get("strip_marks", True))
     return Lexicon(
         language=str(raw["language"]),
-        word_boundaries=True,
-        fold={},
+        word_boundaries=bool(raw.get("word_boundaries", True)),
+        fold=fold,
         by_slot={
-            slot: tuple(_entry(entry, {}, True) for entry in raw["slots"].get(slot, ()))
+            slot: tuple(_entry(entry, fold, strip_marks) for entry in raw["slots"].get(slot, ()))
             for slot in LEXICON_SLOTS
         },
-        strip_marks=True,
+        strip_marks=strip_marks,
         stopwords=(),
     )
 
@@ -213,6 +225,13 @@ def merge_learned(existing: Mapping[str, Any] | None, addition: Mapping[str, Any
         if str(existing["language"]) != language:
             raise ValueError("learned lexicon language does not match the existing overlay")
     result: dict[str, Any] = {"schema_version": 1, "language": language, "slots": {}}
+    # Matching rules describe the language, not the words, so the newest
+    # proposal wins and an older declaration survives a proposal that is
+    # silent about them.
+    for field in ("word_boundaries", "normalization"):
+        for document in ((existing or {}), addition):
+            if field in document:
+                result[field] = document[field]
     for slot in LEXICON_SLOTS:
         merged = list((existing or {}).get("slots", {}).get(slot, ()))
         seen = {canonical_key(item if isinstance(item, str) else str(item["token"])) for item in merged}

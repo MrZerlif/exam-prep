@@ -31,7 +31,9 @@ Materials use `ingest-materials` and `hydrate-source`, which create a
 SourceEvidenceEnvelope without network access. NotebookLM MCP is an optional
 agent host; it normalizes a SourceEvidenceEnvelope and never owns canonical learner state.
 If `ingest-materials` returns `unclassified`, map its repeated labels to slots
-and apply them with `apply-lexicon`.
+and apply them with `apply-lexicon`. For a language with no bundled lexicon,
+the overlay may also declare `word_boundaries` and `normalization`; where a
+bundled lexicon exists its rules win and the overlay only adds words.
 Use `validate-curriculum` and `apply-curriculum` for
 idempotent curriculum changes.
 
