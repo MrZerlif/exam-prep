@@ -16,6 +16,22 @@
     "finite_difference_tolerance": 0.0001,
     "sample_count": 5
   },
+  "extraction": {
+    "mode": "scored",
+    "weights": {
+      "solution_pair": 3.0,
+      "has_points": 1.5,
+      "has_options": 1.5,
+      "source_kind": 1.5,
+      "flat_label": 1.0,
+      "sibling_uniformity": 1.0,
+      "lexicon_hit": 1.0,
+      "dense_run": 0.5,
+      "heading_shape": -2.0,
+      "global_hierarchy": -2.0
+    },
+    "thresholds": {"accept": 3.0, "review": 1.0}
+  },
   "source_policy": {
     "priority_order": [
       "teacher_material",

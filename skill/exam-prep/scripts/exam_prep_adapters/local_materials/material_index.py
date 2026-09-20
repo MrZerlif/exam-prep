@@ -79,9 +79,10 @@ def hydrate_sources(
     *,
     authority_map: Mapping[str, str] | None = None,
     max_excerpt_chars: int = 1200,
+    extraction_mode: str = "scored",
 ) -> dict[str, Any]:
     sources = _source_ids(tuple(extract_sources(materials_dir)), set(source_ids or ()))
-    envelope = build_envelope(sources, authority_map=authority_map, max_excerpt_chars=max_excerpt_chars)
+    envelope = build_envelope(sources, authority_map=authority_map, max_excerpt_chars=max_excerpt_chars, extraction_mode=extraction_mode)
     result = ingest_source_evidence(store, envelope)
     return {**result.to_mapping(), "source_ids": [item.source_ref.source_id for item in envelope.evidence]}
 
@@ -96,6 +97,7 @@ def ingest_materials(
     max_excerpt_chars: int = 1200,
     max_file_bytes: int = MAX_FILE_BYTES,
     include_unclassified: bool = False,
+    extraction_mode: str = "scored",
 ) -> dict[str, Any]:
     if mode not in {"lightweight", "full"}:
         raise ValueError("mode must be lightweight or full")
@@ -111,6 +113,6 @@ def ingest_materials(
         if dry_run:
             result["appended"] = 0
         else:
-            hydrated = hydrate_sources(materials_dir, store, authority_map=authority_map, max_excerpt_chars=max_excerpt_chars)
+            hydrated = hydrate_sources(materials_dir, store, authority_map=authority_map, max_excerpt_chars=max_excerpt_chars, extraction_mode=extraction_mode)
             result.update({"appended": hydrated["appended"], "diagnostics": hydrated["diagnostics"]})
     return result

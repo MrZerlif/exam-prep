@@ -15,7 +15,7 @@ class MaterialIngestTests(unittest.TestCase):
         source = ExtractedSource(
             "ekzamen_2024.pdf",
             "exam",
-            (ExtractedPage(17, "Question text"),),
+            (ExtractedPage(17, "Question 1\nCompute x"),),
             "file-hash",
             "pypdf",
             "3.0",
@@ -27,6 +27,8 @@ class MaterialIngestTests(unittest.TestCase):
         self.assertEqual("general_reference", evidence["source_ref"]["authority"])
         self.assertIn("#p17", evidence["source_ref"]["source_id"])
         self.assertIn("configuration_hash", evidence["source_ref"]["location"])
+        self.assertEqual("scored", evidence["source_ref"]["location"]["extraction"]["mode"])
+        self.assertTrue(evidence["source_ref"]["location"]["extraction"]["candidates"])
         self.assertIn(evidence["source_ref"]["authority"], AUTHORITY_RANKS)
 
     def test_override_can_promote_an_exam_source(self):

@@ -17,6 +17,21 @@ EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING = 20
 EXTRACTION_QUESTIONS_PER_PAGE_GAP = 40
 EXTRACTION_HARD_QUESTION_CAP = 5000
 
+EXTRACTION_SCORE_WEIGHTS = {
+    "solution_pair": 3.0,
+    "has_points": 1.5,
+    "has_options": 1.5,
+    "source_kind": 1.5,
+    "flat_label": 1.0,
+    "sibling_uniformity": 1.0,
+    "lexicon_hit": 1.0,
+    "dense_run": 0.5,
+    "heading_shape": -2.0,
+    "global_hierarchy": -2.0,
+}
+EXTRACTION_SCORE_ACCEPT = 3.0
+EXTRACTION_SCORE_REVIEW = 1.0
+
 VERB_SLOT_TO_QTYPE = {
     "verb.definition": "definition",
     "verb.proof": "proof",

@@ -11,6 +11,9 @@ from exam_prep_lib.source_provider import SourceEvidence, SourceEvidenceEnvelope
 from exam_prep_lib.schema_validation import load_schema, validate_document
 
 from .extractor import EXTRACTOR_VERSION, ExtractedSource
+from .candidates import score
+from .labels import segment
+from exam_prep_lib.lexicon import load
 
 
 def _configuration_hash(max_excerpt_chars: int) -> str:
@@ -39,7 +42,11 @@ def build_envelope(
     provider_id: str = "local-materials",
     authority_map: Mapping[str, str] | None = None,
     max_excerpt_chars: int = 1200,
+    language: str = "ru",
+    extraction_mode: str = "scored",
 ) -> SourceEvidenceEnvelope:
+    if extraction_mode not in {"legacy", "scored"}:
+        raise ValueError("extraction_mode must be legacy or scored")
     materialized = tuple(sources)
     authority_map = dict(authority_map or {})
     configuration_hash = _configuration_hash(max_excerpt_chars)
@@ -74,6 +81,22 @@ def build_envelope(
                     "backend": source.backend,
                     "backend_version": source.backend_version,
                     "configuration_hash": configuration_hash,
+                    "extraction": {
+                        "mode": extraction_mode,
+                        "candidates": [
+                            {
+                                "label": candidate.segment.label.raw,
+                                "score": candidate.score,
+                                "bucket": candidate.bucket,
+                                "signals": candidate.signals,
+                            }
+                            for candidate in (
+                                score(segment(text), source=source, lexicon=load(language))
+                                if extraction_mode == "scored"
+                                else ()
+                            )
+                        ],
+                    },
                 },
             )
             evidence.append(SourceEvidence(source_ref=ref, excerpt=text[:max_excerpt_chars]))

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 import hashlib
 from pathlib import Path
 import re
@@ -23,7 +23,9 @@ from exam_prep_lib.semantics import best_slot
 from exam_prep_lib.text_normalize import canonical_key
 
 from .chapters import number_from_name
+from .candidates import score
 from .extractor import ExtractedPage, ExtractedSource
+from .labels import segment
 
 QUESTION_RE = re.compile(r"^\s*(?:№\s*)?([0-9]+(?:[.\-][0-9A-Za-z]+)*)?\s*[.:)]?\s*(.*)$", re.IGNORECASE)
 SOLUTION_RE = re.compile(r"^\s*(?:№\s*)?([0-9]+(?:[.\-][0-9A-Za-z]+)*)?\s*[.:)]?\s*(.*)$", re.IGNORECASE)
@@ -47,6 +49,7 @@ class ExtractedQuestion:
     prompt_assets: tuple[str, ...] = ()
     answer_assets: tuple[str, ...] = ()
     issues: tuple[IngestIssue, ...] = ()
+    signals: dict[str, float] = field(default_factory=dict)
 
     @property
     def expected_evidence(self) -> list[str]:
@@ -174,7 +177,7 @@ def _match_solution(label: str | None, solutions: dict[str | None, str]) -> str 
 
 
 def source_question_issues(source: ExtractedSource, language: str = "ru") -> tuple[IngestIssue, ...]:
-    blocks = [block for page in source.pages for block in _blocks(page.text, language=language)]
+    blocks = [candidate for page in source.pages for candidate in score(segment(page.text), source=source, lexicon=load(language))]
     question_count = len(blocks)
     nonempty_lines = sum(1 for page in source.pages for line in page.text.splitlines() if line.strip())
     page_count = max(1, len(source.pages))
@@ -223,13 +226,16 @@ def extract_questions(
     *,
     include_unclassified: bool = False,
     language: str = "ru",
+    extraction_mode: str = "scored",
 ) -> tuple[ExtractedQuestion, ...]:
+    if extraction_mode not in {"legacy", "scored"}:
+        raise ValueError("extraction_mode must be legacy or scored")
     materialized = tuple(sources)
     solutions_by_file: dict[str, dict[str | None, str]] = {}
     for source in materialized:
         if source.kind != "solution":
             continue
-        solutions = solutions_by_file.setdefault(_solution_file_key(source.relative_path), {})
+        solutions = solutions_by_file.setdefault(_solution_file_key(source.relative_path, language), {})
         for page in source.pages:
             for label, answer in _blocks(page.text, solution=True, language=language):
                 solutions[pair_key(label)] = _strip_shared_lines(answer)
@@ -244,7 +250,23 @@ def extract_questions(
         solutions = solutions_by_file.get(_solution_file_key(source.relative_path, language), {})
         source_issues = tuple(source.issues) + source_question_issues(source, language)
         for page in source.pages:
-            for label, raw_prompt in _blocks(page.text, language=language):
+            if extraction_mode == "legacy":
+                candidate_blocks = tuple(
+                    (label, raw_prompt, None)
+                    for label, raw_prompt in _blocks(page.text, language=language)
+                )
+            else:
+                candidate_blocks = tuple(
+                    (candidate.segment.label.raw, candidate.segment.body, candidate)
+                    for candidate in score(
+                        segment(page.text),
+                        source=source,
+                        lexicon=load(language),
+                        solutions_by_file=solutions,
+                    )
+                    if candidate.bucket in {"accept", "review"}
+                )
+            for label, raw_prompt, candidate in candidate_blocks:
                 prompt = _strip_shared_lines(raw_prompt)
                 prompt, points = _extract_points(prompt, language)
                 options, prompt = _options(prompt)
@@ -254,6 +276,8 @@ def extract_questions(
                 question_id = hashlib.sha256((source.relative_path + (label or "") + normalized).encode("utf-8")).hexdigest()[:16]
                 source_id = f"{source.relative_path}#p{page.number}"
                 issues = list(source_issues)
+                if candidate is not None and candidate.bucket == "review":
+                    issues.append(IngestIssue("low_confidence_question", source_id, f"candidate score={candidate.score:.4f}", "info"))
                 if not answer:
                     issues.append(IngestIssue("missing_answer", source_id, "no matching reference answer", "gap"))
                 result.append(
@@ -268,6 +292,7 @@ def extract_questions(
                         chapter_hint=_chapter_hint(label, source.relative_path, prompt, language),
                         source_ref={"source_id": source_id, "locator": f"{source.relative_path} p.{page.number}"},
                         issues=tuple(issues),
+                        signals=dict(candidate.signals) if candidate is not None else {},
                     )
                 )
     return tuple(result)
