@@ -15,7 +15,8 @@ from exam_prep_lib.defaults import (
 from exam_prep_lib.lexicon import Lexicon
 from exam_prep_lib.semantics import best_slot
 
-from .labels import Segment
+from .labels import Segment, option_run_quality
+from .points import extract as extract_points
 
 
 @dataclass(frozen=True)
@@ -27,7 +28,6 @@ class Candidate:
 
 
 _POINTS_SHAPE_RE = re.compile(r"\(\s*\d+\s+[^)]*\)", re.UNICODE)
-_OPTION_RE = re.compile(r"^\s*[A-ZА-Я]\s*[).:-]\s*.+$", re.IGNORECASE | re.UNICODE)
 
 
 def _source_kind(source: Any) -> str:
@@ -53,8 +53,8 @@ def _has_points(body: str, lexicon: Lexicon) -> bool:
     return any(best_slot("unit.points", match.group(0), lexicon) is not None for match in _POINTS_SHAPE_RE.finditer(body))
 
 
-def _has_options(body: str) -> bool:
-    return sum(1 for line in body.splitlines() if _OPTION_RE.match(line)) >= 2
+def _has_options(body: str) -> float:
+    return option_run_quality(body)
 
 
 def _global_hierarchy(segments: Sequence[Segment]) -> bool:
@@ -103,6 +103,8 @@ def question_candidate_score(
     index: int = 0,
     solutions_by_file: Mapping[str, Any] | None = None,
     global_hierarchy: bool | None = None,
+    points_token: str | None = None,
+    points_weight: float = 1.0,
 ) -> Candidate:
     active_weights = {**EXTRACTION_SCORE_WEIGHTS, **dict(weights or {})}
     all_segments = tuple(segments) or (segment,)
@@ -110,7 +112,7 @@ def question_candidate_score(
     label = segment.label
     raw_signals = {
         "solution_pair": bool(label and str(label.raw).casefold() in _solution_labels(source, solutions_by_file)),
-        "has_points": _has_points(segment.body, lexicon),
+        "has_points": (1.0 if _has_points(segment.body, lexicon) or extract_points(segment.body, token=points_token, lexicon=lexicon) is not None else 0.0) * points_weight,
         "has_options": _has_options(segment.body),
         "source_kind": _source_kind(source) in {"exam", "homework"},
         "flat_label": bool(label and len(label.parts) == 1),
@@ -121,7 +123,7 @@ def question_candidate_score(
         "global_hierarchy": _global_hierarchy(all_segments) if global_hierarchy is None else global_hierarchy,
     }
     signals = {
-        key: float(active_weights[key]) * (1.0 if value else 0.0)
+        key: float(active_weights[key]) * (float(value) if isinstance(value, (int, float)) else (1.0 if value else 0.0))
         for key, value in raw_signals.items()
     }
     total = round(sum(signals.values()), 4)
@@ -141,6 +143,8 @@ def score(
     lexicon: Lexicon,
     weights: Mapping[str, float] | None = None,
     solutions_by_file: Mapping[str, Any] | None = None,
+    points_token: str | None = None,
+    points_weight: float = 1.0,
 ) -> tuple[Candidate, ...]:
     materialized = tuple(segments)
     labeled = tuple(item for item in materialized if item.label is not None)
@@ -159,6 +163,8 @@ def score(
                 index=index,
                 solutions_by_file=solutions_by_file,
                 global_hierarchy=hierarchy,
+                points_token=points_token,
+                points_weight=points_weight,
             )
         )
     return tuple(result)
