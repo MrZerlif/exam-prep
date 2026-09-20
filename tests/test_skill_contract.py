@@ -244,7 +244,7 @@ class SkillContractTests(unittest.TestCase):
         # against a real status response, so a rename in the engine fails here
         # instead of sending the tutor after a key that does not exist.
         text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
-        sentence = re.search(r"read compact `status`:(.+?)\.\s", text, re.S)
+        sentence = re.search(r"read `status --compact`:(.+?)\.\s", text, re.S)
         self.assertIsNotNone(sentence, "SKILL.md no longer names the status payload")
         named = re.findall(r"`([a-z_*]+)`", sentence.group(1))
         self.assertTrue(

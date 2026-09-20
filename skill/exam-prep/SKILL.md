@@ -35,7 +35,7 @@ and apply them with `apply-lexicon`.
 Use `validate-curriculum` and `apply-curriculum` for
 idempotent curriculum changes.
 
-For continuation, read compact `status`: `course`, `session`,
+For continuation, read `status --compact`: `course`, `session`,
 `last_session_summary`, `targets`, `review_queue`, and `resume_point`. Use
 `roadmap` for full target metadata; close with `end-session`. `next
 --minutes` assumes 25 when omitted.
