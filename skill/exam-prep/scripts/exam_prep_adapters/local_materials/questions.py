@@ -34,6 +34,9 @@ POINTS_RE = re.compile(r"\(\s*\d+\s*[^)]*\)", re.IGNORECASE)
 OPTION_LINE_RE = re.compile(r"^\s*(?P<label>[^\W\d_]{1,3}|\d{1,2})\s*[).:：-]\s*(?P<body>.+)$", re.UNICODE)
 EXTRACTABLE_KINDS = frozenset({"exam", "homework"})
 OPT_IN_KINDS = frozenset({"other", "lecture", "notes"})
+# A file with no prose is a parser failure only where prose was expected. In a
+# problem set one line per task is the normal layout, not a symptom.
+PROSE_EXPECTED_KINDS = frozenset({"lecture", "notes", "other"})
 
 
 @dataclass(frozen=True)
@@ -195,12 +198,15 @@ def source_question_issues(source: ExtractedSource, language: str = "ru", *, lex
     semantic_lexicon = lexicon or load(language)
     blocks = [candidate for page in source.pages for candidate in score(segment(page.text), source=source, lexicon=semantic_lexicon)]
     question_count = len(blocks)
-    nonempty_lines = sum(1 for page in source.pages for line in page.text.splitlines() if line.strip())
+    segments_total = sum(len(segment(page.text)) for page in source.pages)
     page_count = max(1, len(source.pages))
     questions_per_page = question_count / page_count
-    accepted_fraction = question_count / max(1, nonempty_lines)
+    accepted_fraction = question_count / max(1, segments_total)
     blocking = (
-        accepted_fraction > EXTRACTION_ACCEPTED_FRACTION_BLOCKING
+        (
+            source.kind in PROSE_EXPECTED_KINDS
+            and accepted_fraction > EXTRACTION_ACCEPTED_FRACTION_BLOCKING
+        )
         or (source.kind in {"lecture", "notes"} and questions_per_page > EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING)
         or question_count > EXTRACTION_HARD_QUESTION_CAP
     )
