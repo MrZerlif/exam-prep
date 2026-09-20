@@ -100,6 +100,14 @@ creates nothing - it is a normal refusal, not a failure, and the repair is
 - `end-session` - close the session; produces a summary, and a
   per-question post-mortem when the session was an `exam`.
 - `rebuild` - recompute derived state from the canonical observation log.
+### Activity timing
+
+- `start-activity ACTIVITY_ID` - open an engine-owned activity timer. It returns `activity_started` (including an idempotent repeat), `activity_already_in_progress`, or `pending_activity_not_consumed`; exit code `0` means started/already-started and `1` means conflict or invalid activity state.
+- `finish-activity` - close the active timer into a pending elapsed duration. It returns `activity_finished`, `activity_already_finished`, or `no_activity_in_progress`; exit code `0` means finished/already-finished and `1` means there was no active activity or the state was invalid.
+- `discard-activity` - clear active, pending, or invalid activity state without measuring open time. It returns `activity_discarded` or `no_activity`; exit code is always `0`.
+- `activity-status` - inspect the current `idle`, `active`, or `pending` state; an unreadable or contradictory snapshot returns `invalid_activity_state` with exit code `1`, otherwise exit code is `0`.
+
+Timing is engine-owned. Only a v2 `record-observation` proposal whose `activity_id` matches the current activity receives `elapsed_seconds`; v1 proposals never consume activity timing. `expected_seconds` is not measured in this release and remains `None`.
 - `verify <path>` - derivative/antiderivative answer check
   (`references/verification.md`); unsupported kinds return `unavailable`.
 
