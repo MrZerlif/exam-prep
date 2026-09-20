@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "ru",
+  "word_boundaries": true,
+  "normalization": {"fold": {}, "strip_marks": true},
+  "stopwords": ["и", "в", "во", "не", "что", "он", "на", "я", "с", "как"],
+  "slots": {
+    "kind.solution": ["решение", "решения", "ответ", "ответы", "отв", "указание", {"token": "доказательство", "weight": 1.0}, "solution", "answer", "key", "reshenie", "resheniya", "otvet", "otvety"],
+    "kind.homework": ["задача", "задачи", "упражнение", "упражнения", "пример", "примеры", "вопрос", "вопросы", "question", "exercise", "problem", "homework", "dz", "zadacha", "домашн", "семинар", "seminar", "praktik", "praktikum", "lab"],
+    "kind.exam": ["экзамен", "экзам", "зачет", "зачёт", "билет", "билеты", "коллоквиум", "exam", "test", "ekzamen", "ekz", "zachet", "zach", "bilet", "bilety", "kollokvium", "kontrol", "контрольн", "variant", "вариант"],
+    "kind.lecture": [{"token": "лекция", "weight": 1.0}, "лекции", "лекц", {"token": "lecture", "weight": 1.0}, "lekci", "lekciya", "lekts", "методич", "metodich"],
+    "kind.notes": ["конспект", "конспекты", "konspekt", "notes", "summary"],
+    "struct.chapter": ["глава", "тема", {"token": "лекция", "weight": 0.5}, "раздел", "занятие", "chapter", "topic", {"token": "lecture", "weight": 0.5}, "section"],
+    "verb.definition": ["определение", "определите", "определить", "define", "definition"],
+    "verb.proof": ["докажите", "доказать", {"token": "доказательство", "weight": 0.5}, "prove", "proof"],
+    "verb.calculation": ["вычислите", "вычислить", "вычисление", "compute", "calculate"],
+    "unit.points": ["балл", "балла", "баллов", "point", "points"]
+  }
+}

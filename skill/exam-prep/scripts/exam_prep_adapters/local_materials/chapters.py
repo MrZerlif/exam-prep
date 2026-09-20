@@ -8,11 +8,10 @@ from dataclasses import dataclass
 import re
 from typing import Iterable, Any
 
+from exam_prep_lib.lexicon import load
+from exam_prep_lib.semantics import match
 
-_HEADING_RE = re.compile(
-    r"(?:глава|тема|лекция|раздел|занятие|chapter|topic|lecture|section)\s*\.?\s*([0-9]{1,3}|[IVXLCDM]+)",
-    re.IGNORECASE,
-)
+_CHAPTER_NUMBER_RE = re.compile(r"(?<!\w)([0-9]{1,3}|[IVXLCDM]+)(?!\w)", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -39,11 +38,18 @@ def _roman(value: str) -> int | None:
     return total or None
 
 
-def number_from_name(value: str) -> int | None:
-    match = _HEADING_RE.search(value)
-    if not match:
+def number_from_name(value: str, language: str = "ru") -> int | None:
+    found = match("struct.chapter", value, load(language))
+    if found is None:
         return None
-    token = match.group(1)
+    normalized = value.casefold()
+    token = found.token.casefold()
+    start = normalized.find(token)
+    suffix = normalized[start + len(token):] if start >= 0 else normalized
+    number_match = _CHAPTER_NUMBER_RE.search(suffix)
+    if number_match is None:
+        return None
+    token = number_match.group(1)
     return int(token) if token.isdigit() else _roman(token)
 
 
@@ -52,19 +58,19 @@ def guess_title(value: str) -> str:
     return first.lstrip("# ")[:200] or "Untitled"
 
 
-def build_chapters(items: Iterable[Any]) -> tuple[Chapter, ...]:
+def build_chapters(items: Iterable[Any], language: str = "ru") -> tuple[Chapter, ...]:
     grouped: dict[int, dict[str, Any]] = {}
     for item in items:
         if isinstance(item, tuple) and len(item) == 2:
             source_id, page = item
             text = getattr(page, "text", str(page))
-            number = number_from_name(text) or number_from_name(str(source_id))
+            number = number_from_name(text, language) or number_from_name(str(source_id), language)
             page_number = getattr(page, "number", None)
         else:
             source_id = getattr(item, "relative_path", "")
             pages = getattr(item, "pages", ())
             text = "\n".join(getattr(page, "text", "") for page in pages)
-            number = number_from_name(text) or number_from_name(str(source_id))
+            number = number_from_name(text, language) or number_from_name(str(source_id), language)
             page_number = getattr(pages[0], "number", None) if pages else None
         if number is None:
             continue

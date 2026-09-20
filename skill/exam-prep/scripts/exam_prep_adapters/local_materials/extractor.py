@@ -10,10 +10,13 @@ from pathlib import Path
 import re
 import zipfile
 from dataclasses import dataclass
+from dataclasses import replace
 from typing import Iterable
 import xml.etree.ElementTree as ET
 
 from exam_prep_lib.ingest_issues import IngestIssue
+from exam_prep_lib.lexicon import load
+from exam_prep_lib.semantics import best_slot
 
 from .pdf_backend import PdfSupportMissing, pdf_backend, read_pdf as _read_pdf
 
@@ -46,30 +49,34 @@ def natural_key(value: str | Path) -> tuple[object, ...]:
     return tuple(int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", str(value)))
 
 
-def _content_kind(content: str) -> str:
-    sample = content[:12000].casefold()
-    if re.search(r"(?m)^\s*(?:решение|ответ|отв\.?|solution|answer|key|reshenie|resheniya|otvet|otvety)\b", sample):
-        return "solution"
-    if re.search(r"(?m)^\s*(?:экзамен|экзам|зачёт|зачет|билет|билеты|коллоквиум|exam|test|ekzamen|zachet|bilet|bilety|kollokvium|variant|вариант)\b", sample):
-        return "exam"
-    if re.search(r"(?m)^\s*(?:задача|упражнение|пример|вопрос|№|question|exercise|problem|dz|zadacha)\b", sample):
-        return "homework"
+def _slot_kind(text: str, language: str, *, name: bool = False) -> str | None:
+    lexicon = load(language)
+    if name:
+        lexicon = replace(lexicon, word_boundaries=False)
+    found = best_slot("kind.", text, lexicon)
+    if found is None:
+        return None
+    return found.slot.split(".", 1)[1]
+
+
+def _content_kind(content: str, language: str = "ru") -> str:
+    lexicon = load(language)
+    for raw_line in content[:12000].splitlines():
+        line = raw_line.strip()
+        if not line:
+            continue
+        first_word = line.split(maxsplit=1)[0].strip("#.,:;()[]{}")
+        found = best_slot("kind.", first_word, lexicon)
+        if found is not None:
+            return found.slot.split(".", 1)[1]
     return "other"
 
 
-def classify(path: str | Path, content: str | None = None) -> str:
-    name = Path(path).stem.casefold()
-    if any(token in name for token in ("реш", "ответ", "solution", "solutions", "answer", "answers", "key", "keys", "resh", "reshenie", "resheniya", "otvet", "otvety", "otv")):
-        return "solution"
-    if any(token in name for token in ("дз", "домашн", "homework", "hw", "dz", "d_z", "семинар", "seminar", "praktik", "praktikum", "lab", "zadach", "упражн")):
-        return "homework"
-    if any(token in name for token in ("экзамен", "экзам", "зачёт", "зачет", "zachet", "zach", "ekzamen", "ekz", "билет", "билеты", "bilet", "bilety", "коллоквиум", "kollokvium", "kontrol", "контрольн", "exam", "test", "variant", "вариант")):
-        return "exam"
-    if any(token in name for token in ("конспект", "konspekt", "notes", "summary")):
-        return "notes"
-    if any(token in name for token in ("лекц", "лекци", "lecture", "lekci", "lekts", "metodich", "методич")):
-        return "lecture"
-    return _content_kind(content) if content else "other"
+def classify(path: str | Path, content: str | None = None, language: str = "ru") -> str:
+    kind = _slot_kind(Path(path).stem, language, name=True)
+    if kind is not None:
+        return kind
+    return _content_kind(content, language) if content else "other"
 
 
 def _xml_text(element: ET.Element) -> str:
