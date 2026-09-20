@@ -640,6 +640,7 @@ def main(argv: list[str] | None = None) -> int:
             include_unclassified=args.include_unclassified,
             language=draft_language,
             extraction_mode=args.extraction_mode,
+            expected_total_points=(draft_course.get("exam") or {}).get("expected_total_points"),
             lexicon=draft_lexicon,
             lexicon_by_source=source_lexicons,
         )

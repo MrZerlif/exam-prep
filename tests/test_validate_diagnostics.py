@@ -141,5 +141,61 @@ class ValidateDiagnosticsTests(unittest.TestCase):
         self.assertEqual(names["capability_dimensions"]["status"], "error")
         self.assertIn("unknown affected dimension", names["capability_dimensions"]["detail"])
 
+class ExpectedTotalPointsDiagnosticTests(unittest.TestCase):
+    """Workspaces still carrying the template 100 get a nudge, never a failure."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def cli(self, *args):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = main(["--workspace", str(self.root), *args])
+        return json.loads(output.getvalue())
+
+    def workspace(self, expected_total, points):
+        materials = self.root / "materials"
+        materials.mkdir(exist_ok=True)
+        (materials / "klausur.txt").write_text(
+            "\n".join(
+                f"Aufgabe {index}) Berechnen Sie den Grenzwert. ({value} Punkte)"
+                for index, value in enumerate(points, start=1)
+            ),
+            encoding="utf-8",
+        )
+        self.cli("init", "--language", "de")
+        course_path = self.root / ".exam-prep" / "course.json"
+        course = json.loads(course_path.read_text(encoding="utf-8"))
+        course["exam"]["expected_total_points"] = expected_total
+        course_path.write_text(json.dumps(course), encoding="utf-8")
+        self.cli("ingest-materials", str(materials))
+        return {check["name"]: check for check in self.cli("validate")["checks"]}
+
+    def test_template_total_against_other_points_is_info_only(self):
+        checks = self.workspace(100, (10, 10, 15, 25))
+        check = checks["expected_total_points"]
+        self.assertEqual("info", check["status"])
+        self.assertIn("60", check["detail"])
+
+    def test_info_does_not_make_the_workspace_invalid(self):
+        checks = self.workspace(100, (10, 10, 15, 25))
+        report = self.cli("validate")
+        self.assertTrue(report["valid"])
+        self.assertEqual(0, report["error_count"])
+        self.assertNotIn(checks["expected_total_points"]["status"], {"error", "warning"})
+
+    def test_matching_total_is_not_flagged(self):
+        checks = self.workspace(100, (40, 60))
+        self.assertEqual("ok", checks["expected_total_points"]["status"])
+
+    def test_cleared_total_is_not_flagged(self):
+        checks = self.workspace(None, (10, 10, 15, 25))
+        self.assertEqual("ok", checks["expected_total_points"]["status"])
+
+
 if __name__ == "__main__":
     unittest.main()

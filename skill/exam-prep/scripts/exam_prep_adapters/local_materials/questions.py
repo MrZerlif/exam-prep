@@ -249,7 +249,7 @@ def extract_questions(
     include_unclassified: bool = False,
     language: str = "ru",
     extraction_mode: str = "scored",
-    expected_total_points: float | int | None = 100,
+    expected_total_points: float | int | None = None,
     lexicon: Lexicon | None = None,
     lexicon_by_source: Mapping[str, Lexicon] | None = None,
 ) -> tuple[ExtractedQuestion, ...]:

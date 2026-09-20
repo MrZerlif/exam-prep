@@ -98,5 +98,47 @@ class ExtractionAnomalyScopeTests(unittest.TestCase):
         )
 
 
+class ExpectedTotalPointsTests(unittest.TestCase):
+    """Point totals are only verified against a total the course actually set."""
+
+    def exam(self) -> ExtractedSource:
+        return source(
+            "exam.md",
+            "exam",
+            "\n".join(
+                f"{index}) Berechnen Sie. ({points} Punkte)"
+                for index, points in zip(range(1, 5), (10, 10, 15, 25))
+            ),
+        )
+
+    def points_issues(self, **kwargs) -> list[str]:
+        questions = extract_questions((self.exam(),), language="de", **kwargs)
+        return [
+            issue.detail
+            for question in questions
+            for issue in question.issues
+            if issue.kind == "low_confidence_question"
+        ]
+
+    def test_points_without_expected_total_are_not_penalised(self):
+        self.assertEqual([], self.points_issues())
+
+    def test_points_matching_expected_total_get_full_weight(self):
+        self.assertEqual([], self.points_issues(expected_total_points=60))
+
+    def test_points_mismatch_is_info_only(self):
+        questions = extract_questions(
+            (self.exam(),), language="de", expected_total_points=100
+        )
+        mismatches = [
+            issue
+            for question in questions
+            for issue in question.issues
+            if issue.kind == "low_confidence_question"
+        ]
+        self.assertTrue(mismatches)
+        self.assertEqual({"info"}, {issue.severity for issue in mismatches})
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -55,7 +55,7 @@ _DEFAULT_COURSE = {
         "date": None,
         "timezone": "UTC",
         "format": "mixed",
-        "expected_total_points": 100,
+        "expected_total_points": None,
         "revision": 1,
     },
     "time_budget": {"default_minutes": 25, "available_minutes_by_day": {}},
