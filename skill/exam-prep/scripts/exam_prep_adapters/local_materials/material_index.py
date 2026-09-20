@@ -47,7 +47,7 @@ _UNCLASSIFIED_TEXT_LIMIT = 160
 def _unclassified_summary(
     sources: tuple[ExtractedSource, ...],
     *,
-    language_metadata: Mapping[str, Any] | None,
+    source_languages: Mapping[str, Mapping[str, Any]] | None,
 ) -> dict[str, Any] | None:
     unclassified = tuple(source for source in sources if source.kind == "other")
     if not unclassified:
@@ -71,8 +71,14 @@ def _unclassified_summary(
     slots_needed = ["kind.exam", "kind.solution"]
     if unit_candidates:
         slots_needed.append("unit.points")
+    languages = {
+        metadata.get("language")
+        for source in unclassified
+        for metadata in ((source_languages or {}).get(source.relative_path, {}),)
+        if metadata.get("language")
+    }
     return {
-        "language": (language_metadata or {}).get("value"),
+        "language": next(iter(languages)) if len(languages) == 1 else None,
         "file_stems": file_stems[:_UNCLASSIFIED_LIMIT],
         "repeated_heads": repeated_heads,
         "unit_candidates": unit_candidates,
@@ -133,6 +139,37 @@ def _localized_sources(
     return tuple(localized), source_languages, source_lexicons
 
 
+def localize_materials(
+    materials_dir: str | Path,
+    *,
+    default_language: str,
+    default_lexicon: Lexicon,
+    default_metadata: Mapping[str, Any] | None,
+    lexicons: Mapping[str, Lexicon],
+    max_file_bytes: int = MAX_FILE_BYTES,
+) -> tuple[tuple[ExtractedSource, ...], dict[str, dict[str, Any]], dict[str, Lexicon]]:
+    """Extract materials and attach the language/lexicon selected per source."""
+
+    return _localized_sources(
+        materials_dir,
+        default_language=default_language,
+        default_lexicon=default_lexicon,
+        default_metadata=default_metadata,
+        lexicons=lexicons,
+        max_file_bytes=max_file_bytes,
+    )
+
+
+def workspace_lexicons(workspace: str | Path) -> dict[str, Lexicon]:
+    """Load bundled and learned lexicons available to a workspace."""
+
+    languages = sorted(set(available()) | set(learned_languages(workspace)))
+    return {
+        language: load(language, extra=load_learned(language, workspace))
+        for language in languages
+    }
+
+
 def build_material_index(
     materials_dir: str | Path,
     *,
@@ -191,7 +228,7 @@ def build_material_index(
         "configuration_hash": configuration_hash,
         "entries": entries,
     }
-    unclassified = _unclassified_summary(sources, language_metadata=language_metadata)
+    unclassified = _unclassified_summary(sources, source_languages=source_languages)
     if unclassified is not None:
         result["unclassified"] = unclassified
     return result
@@ -218,6 +255,8 @@ def _course_language(
     materials_dir: str | Path,
     store: StudyStore,
     requested: str | None,
+    *,
+    persist: bool = True,
 ) -> tuple[str, dict[str, object], IngestIssue | None]:
     if requested:
         if requested not in available() and requested not in learned_languages(store.state_path):
@@ -254,7 +293,8 @@ def _course_language(
         updated.update({"language": language, "language_source": "detected", "language_confidence": confidence})
         metadata = {"value": language, "source": "detected", "confidence": confidence}
         active = language
-    _write_json(course_path, updated)
+    if persist:
+        _write_json(course_path, updated)
     return active, metadata, issue
 
 
@@ -266,13 +306,23 @@ def hydrate_sources(
     authority_map: Mapping[str, str] | None = None,
     max_excerpt_chars: int = 1200,
     extraction_mode: str = "scored",
-    language: str = "ru",
+    language: str | None = None,
     language_metadata: Mapping[str, Any] | None = None,
     lexicon: Lexicon | None = None,
     lexicons: Mapping[str, Lexicon] | None = None,
 ) -> dict[str, Any]:
-    semantic_lexicon = lexicon or load(language)
-    available_lexicons = dict(lexicons or {language: semantic_lexicon})
+    if language is None:
+        language, detected_metadata, _language_issue = _course_language(
+            materials_dir,
+            store,
+            None,
+            persist=False,
+        )
+        language_metadata = language_metadata or detected_metadata
+    available_lexicons = dict(lexicons or workspace_lexicons(store.state_path))
+    semantic_lexicon = lexicon or available_lexicons.get(language)
+    if semantic_lexicon is None:
+        semantic_lexicon = load(language, extra=load_learned(language, store.state_path))
     available_lexicons.setdefault(language, semantic_lexicon)
     localized, source_languages, source_lexicons = _localized_sources(
         materials_dir,
@@ -311,12 +361,13 @@ def ingest_materials(
 ) -> dict[str, Any]:
     if mode not in {"lightweight", "full"}:
         raise ValueError("mode must be lightweight or full")
-    active_language, language_metadata, language_issue = _course_language(materials_dir, store, language)
-    lexicon_languages = sorted(set(available()) | set(learned_languages(store.state_path)))
-    lexicons = {
-        code: load(code, extra=load_learned(code, store.state_path))
-        for code in lexicon_languages
-    }
+    active_language, language_metadata, language_issue = _course_language(
+        materials_dir,
+        store,
+        language,
+        persist=not dry_run,
+    )
+    lexicons = workspace_lexicons(store.state_path)
     semantic_lexicon = lexicons[active_language]
     index = build_material_index(
         materials_dir,

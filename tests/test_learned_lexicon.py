@@ -113,6 +113,21 @@ class LearnedLexiconTests(unittest.TestCase):
         self.run_cli("rebuild")
         self.assertEqual(learned_before, learned_path.read_bytes())
 
+        draft_path = self.root / "draft.json"
+        self.run_cli(
+            "draft-assessments",
+            str(self.materials),
+            "--out",
+            str(draft_path),
+        )
+        draft = json.loads(draft_path.read_text(encoding="utf-8"))
+        self.assertEqual(1, len(draft["assessments"]))
+
+        self.run_cli("hydrate-source", "tentamen-2024.txt", "--materials-dir", str(self.materials))
+        evidence_path = self.root / ".exam-prep" / "source_evidence.jsonl"
+        evidence = [json.loads(line) for line in evidence_path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual("nl", evidence[-1]["source_ref"]["location"]["language"])
+
     def test_validate_reports_learned_overlay(self):
         self.run_cli("init")
         self.write_proposal({"schema_version": 1, "language": "nl", "slots": {"kind.exam": ["tentamen"]}})

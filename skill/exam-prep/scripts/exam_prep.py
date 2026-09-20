@@ -45,8 +45,12 @@ from exam_prep_lib.verifier_registry import VerifierRegistry, verify_request
 from exam_prep_lib.workspace import discover_git_root, resolve_workspace
 from exam_prep_lib.readiness import build_readiness
 from exam_prep_lib.planner import build_cheatsheet, forecast_plan, last_minute_review
-from exam_prep_adapters.local_materials.material_index import hydrate_sources, ingest_materials
-from exam_prep_adapters.local_materials.extractor import extract_sources
+from exam_prep_adapters.local_materials.material_index import (
+    hydrate_sources,
+    ingest_materials,
+    localize_materials,
+    workspace_lexicons,
+)
 from exam_prep_adapters.local_materials.questions import extract_questions
 from exam_prep_adapters.local_materials.figures import extract_figures
 from exam_prep_lib.assessment_draft import build_draft, finalize_draft
@@ -613,13 +617,31 @@ def main(argv: list[str] | None = None) -> int:
         draft_store = _store(args.workspace)
         draft_course = _read_json(draft_store.state_path / "course.json", default_course())
         draft_language = str(draft_course.get("language") or "ru")
-        draft_lexicon = load(draft_language, extra=load_learned(draft_language, draft_store.state_path))
+        draft_lexicons = workspace_lexicons(draft_store.state_path)
+        draft_lexicon = draft_lexicons.get(draft_language)
+        if draft_lexicon is None:
+            draft_lexicon = load(draft_language, extra=load_learned(draft_language, draft_store.state_path))
+        draft_metadata = None
+        if draft_course.get("language"):
+            draft_metadata = {
+                "value": draft_course.get("language"),
+                "source": draft_course.get("language_source", "configured"),
+                "confidence": draft_course.get("language_confidence"),
+            }
+        localized, _source_languages, source_lexicons = localize_materials(
+            args.materials_dir,
+            default_language=draft_language,
+            default_lexicon=draft_lexicon,
+            default_metadata=draft_metadata,
+            lexicons=draft_lexicons,
+        )
         questions = extract_questions(
-            extract_sources(args.materials_dir, language=draft_language, lexicon=draft_lexicon),
+            localized,
             include_unclassified=args.include_unclassified,
             language=draft_language,
             extraction_mode=args.extraction_mode,
             lexicon=draft_lexicon,
+            lexicon_by_source=source_lexicons,
         )
         draft = build_draft(
             questions,
@@ -627,6 +649,7 @@ def main(argv: list[str] | None = None) -> int:
             holdout_ratio=args.holdout_ratio,
             language=draft_language,
             lexicon=draft_lexicon,
+            lexicon_by_source=source_lexicons,
         )
         _write_json(Path(args.out), draft)
         return _result({"status": "draft_written", "out": str(Path(args.out).resolve()), "count": len(draft["assessments"])})
