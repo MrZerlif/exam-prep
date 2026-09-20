@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "ja",
+  "word_boundaries": false,
+  "normalization": {"fold": {}, "strip_marks": false},
+  "stopwords": ["の", "に", "は", "を", "が", "と", "で", "も", "です", "ます"],
+  "slots": {
+    "kind.solution": ["解答", "答え", "solution", "solutions"],
+    "kind.homework": ["問題", "課題", "演習"],
+    "kind.exam": ["試験", "入試", "テスト"],
+    "kind.lecture": ["講義", "授業"],
+    "kind.notes": ["ノート", "まとめ"],
+    "struct.chapter": ["章", "テーマ", "節"],
+    "verb.definition": ["定義"],
+    "verb.proof": ["証明"],
+    "verb.calculation": ["計算"],
+    "unit.points": ["点", "得点"]
+  }
+}

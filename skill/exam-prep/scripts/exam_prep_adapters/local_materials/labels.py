@@ -76,6 +76,8 @@ def _cjk(value: str) -> int:
 
 
 def _label_match(line: str) -> tuple[Label, str, int] | None:
+    if re.match(r"^\s*\(\s*\d+\s+[^)]*\)\s*$", line, re.UNICODE):
+        return None
     for pattern, kind in ((_ARABIC_RE, "arabic"), (_ROMAN_RE, "roman"), (_LETTER_RE, "letter"), (_CJK_RE, "cjk")):
         found = pattern.match(line)
         if not found:

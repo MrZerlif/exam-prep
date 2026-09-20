@@ -6,6 +6,10 @@
     "schema_version": {"type": "integer", "enum": [1, 2]},
     "course_id": {"type": "string"},
     "title": {"type": "string"},
+    "language": {"type": ["string", "null"], "minLength": 2},
+    "language_source": {"type": "string", "enum": ["configured", "detected", "unknown"]},
+    "language_confidence": {"type": ["number", "null"], "minimum": 0, "maximum": 1},
+    "language_detection_attempted": {"type": "boolean"},
     "exam": {
       "type": "object",
       "additionalProperties": false,

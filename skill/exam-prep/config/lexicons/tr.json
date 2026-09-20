@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "tr",
+  "word_boundaries": true,
+  "normalization": {"fold": {"ı": "i", "İ": "i"}, "strip_marks": true},
+  "stopwords": ["ve", "bir", "bu", "için", "ile", "de", "da", "ne", "olan", "dır"],
+  "slots": {
+    "kind.solution": ["çözüm", "cevap", "yanıt", "solution", "solutions"],
+    "kind.homework": ["soru", "ödev", "problem", "alıştırma"],
+    "kind.exam": ["sınav", "vize", "final", "test"],
+    "kind.lecture": ["ders", "konu anlatımı"],
+    "kind.notes": ["notlar", "özet"],
+    "struct.chapter": ["bölüm", "konu", "kısım"],
+    "verb.definition": ["tanımla", "tanım"],
+    "verb.proof": ["kanıtla", "ispat"],
+    "verb.calculation": ["hesapla", "hesaplama"],
+    "unit.points": ["puan", "puanı"]
+  }
+}

@@ -201,14 +201,14 @@ def _read_pages(path: Path) -> tuple[tuple[ExtractedPage, ...], str | None, str 
     return (), None, None, (IngestIssue("unsupported_page", path.name, f"unsupported format: {suffix or 'none'}", "info"),)
 
 
-def extract_source(root: str | Path, path: str | Path, *, max_file_bytes: int = MAX_FILE_BYTES) -> ExtractedSource:
+def extract_source(root: str | Path, path: str | Path, *, max_file_bytes: int = MAX_FILE_BYTES, language: str = "ru") -> ExtractedSource:
     base = Path(root).resolve()
     source = Path(path).resolve()
     relative = source.relative_to(base).as_posix()
     raw = source.read_bytes()
     if len(raw) > max_file_bytes:
         issue = IngestIssue("unsupported_page", relative, f"file exceeds {max_file_bytes} bytes", "blocking")
-        return ExtractedSource(relative, classify(source), (), hashlib.sha256(raw).hexdigest(), None, None, (issue,))
+        return ExtractedSource(relative, classify(source, language=language), (), hashlib.sha256(raw).hexdigest(), None, None, (issue,))
     issues: list[IngestIssue] = []
     try:
         pages, backend, backend_version, read_issues = _read_pages(source)
@@ -220,11 +220,11 @@ def extract_source(root: str | Path, path: str | Path, *, max_file_bytes: int = 
         pages, backend, backend_version = (), None, None
         issues.append(IngestIssue("bad_pdf_extraction", relative, str(exc), "gap"))
     pages = strip_repeated_lines(pages)
-    kind = classify(source, "\n".join(page.text for page in pages))
+    kind = classify(source, "\n".join(page.text for page in pages), language)
     if not pages:
         issues.append(IngestIssue("unsupported_page", relative, "no pages were extracted", "gap"))
     return ExtractedSource(relative, kind, tuple(pages), hashlib.sha256(raw).hexdigest(), backend, backend_version, tuple(issues))
 
 
-def extract_sources(root: str | Path, *, max_file_bytes: int = MAX_FILE_BYTES) -> tuple[ExtractedSource, ...]:
-    return tuple(extract_source(root, path, max_file_bytes=max_file_bytes) for path in list_files(root))
+def extract_sources(root: str | Path, *, max_file_bytes: int = MAX_FILE_BYTES, language: str = "ru") -> tuple[ExtractedSource, ...]:
+    return tuple(extract_source(root, path, max_file_bytes=max_file_bytes, language=language) for path in list_files(root))

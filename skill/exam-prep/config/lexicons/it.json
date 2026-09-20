@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "it",
+  "word_boundaries": true,
+  "normalization": {"fold": {}, "strip_marks": true},
+  "stopwords": ["il", "lo", "la", "gli", "le", "di", "e", "un", "una", "in", "per", "è", "sono"],
+  "slots": {
+    "kind.solution": ["soluzione", "risposta", "solution", "solutions"],
+    "kind.homework": ["esercizio", "problema", "domanda", "compito"],
+    "kind.exam": ["esame", "prova", "test", "variante"],
+    "kind.lecture": ["lezione", "corso"],
+    "kind.notes": ["appunti", "riassunto"],
+    "struct.chapter": ["capitolo", "argomento", "sezione"],
+    "verb.definition": ["definire", "definizione"],
+    "verb.proof": ["dimostrare", "dimostrazione"],
+    "verb.calculation": ["calcolare", "calcolo"],
+    "unit.points": ["punto", "punti"]
+  }
+}

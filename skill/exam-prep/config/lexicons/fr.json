@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "fr",
+  "word_boundaries": true,
+  "normalization": {"fold": {}, "strip_marks": true},
+  "stopwords": ["le", "la", "les", "de", "des", "et", "un", "une", "dans", "pour", "est", "sont"],
+  "slots": {
+    "kind.solution": ["solution", "solutions", "réponse", "corrigé"],
+    "kind.homework": ["exercice", "problème", "question", "devoir"],
+    "kind.exam": ["examen", "épreuve", "test", "variante"],
+    "kind.lecture": ["cours", "conférence"],
+    "kind.notes": ["notes", "résumé"],
+    "struct.chapter": ["chapitre", "thème", "section"],
+    "verb.definition": ["définir", "définition"],
+    "verb.proof": ["prouver", "preuve"],
+    "verb.calculation": ["calculer", "calcul"],
+    "unit.points": ["point", "points"]
+  }
+}
