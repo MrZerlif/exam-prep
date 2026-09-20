@@ -79,5 +79,49 @@ class AssessmentDraftCliTests(unittest.TestCase):
             )
 
 
+class DraftExpectedTotalPointsTests(unittest.TestCase):
+    """The course's own point total is what extraction verifies against."""
+
+    def draft_with_expected_total(self, expected_total):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            materials = root / "materials"
+            materials.mkdir()
+            (materials / "klausur.txt").write_text(
+                "\n".join(
+                    f"Aufgabe {index}) Berechnen Sie den Grenzwert. ({points} Punkte)"
+                    for index, points in zip(range(1, 5), (10, 10, 15, 25))
+                ),
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(0, main(["--workspace", str(root), "init", "--language", "de"]))
+                course_path = root / ".exam-prep" / "course.json"
+                course = json.loads(course_path.read_text(encoding="utf-8"))
+                course["exam"]["expected_total_points"] = expected_total
+                course_path.write_text(json.dumps(course), encoding="utf-8")
+                self.assertEqual(
+                    0,
+                    main([
+                        "--workspace", str(root), "draft-assessments", str(materials),
+                        "--out", str(root / "draft.json"),
+                    ]),
+                )
+            draft = json.loads((root / "draft.json").read_text(encoding="utf-8"))
+            return [
+                issue
+                for item in draft["assessments"]
+                for issue in item["issues"]
+                if issue["kind"] == "low_confidence_question"
+            ]
+
+    def test_matching_course_total_leaves_points_unflagged(self):
+        self.assertEqual([], self.draft_with_expected_total(60))
+
+    def test_mismatched_course_total_is_flagged(self):
+        self.assertTrue(self.draft_with_expected_total(100))
+
+
 if __name__ == "__main__":
     unittest.main()

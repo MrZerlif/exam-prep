@@ -20,6 +20,8 @@ from exam_prep_lib.lexicon import available, learned_languages, load, load_learn
 from .chapters import number_from_name
 from .extractor import EXTRACTOR_VERSION, MAX_FILE_BYTES, ExtractedSource, classify, extract_sources
 from .ingest import build_envelope
+from .labels import segment
+from .points import extract as extract_points, infer_token
 from .questions import source_question_issues
 
 
@@ -42,6 +44,37 @@ def _configuration_hash(max_file_bytes: int, language: str) -> str:
 _UNIT_CANDIDATE_RE = re.compile(r"\(\s*\d+\s+([^)]*)\)", re.UNICODE)
 _UNCLASSIFIED_LIMIT = 20
 _UNCLASSIFIED_TEXT_LIMIT = 160
+
+
+def _points_summary(
+    sources: tuple[ExtractedSource, ...],
+    source_lexicons: Mapping[str, Lexicon],
+    default_lexicon: Lexicon,
+) -> dict[str, Any]:
+    """Record the point total each graded source declares.
+
+    `validate` has no access to the materials directory, so the inferred
+    total has to be written down here if it is ever to be compared against
+    the course's expected_total_points.
+    """
+
+    summary: dict[str, Any] = {}
+    for source in sources:
+        if source.kind not in {"exam", "homework"}:
+            continue
+        lexicon = source_lexicons.get(source.relative_path, default_lexicon)
+        token = infer_token(source.pages, lexicon=lexicon)
+        if token is None:
+            continue
+        values = [
+            extract_points(block.body, token=token, lexicon=lexicon)
+            for page in source.pages
+            for block in segment(page.text)
+        ]
+        found = [value for value in values if value is not None]
+        if found:
+            summary[source.relative_path] = {"token": token, "total": sum(found)}
+    return summary
 
 
 def _unclassified_summary(
@@ -228,6 +261,9 @@ def build_material_index(
         "configuration_hash": configuration_hash,
         "entries": entries,
     }
+    points = _points_summary(sources, source_lexicons, semantic_lexicon)
+    if points:
+        result["points"] = points
     unclassified = _unclassified_summary(sources, source_languages=source_languages)
     if unclassified is not None:
         result["unclassified"] = unclassified

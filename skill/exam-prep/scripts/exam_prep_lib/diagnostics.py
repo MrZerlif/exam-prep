@@ -27,6 +27,10 @@ from .provenance import source_ref_from_mapping
 from .scheduler import _exam_time
 from .lexicon import available as available_languages, learned_languages, validate_learned
 
+# The value init used to write into every course.json. A workspace still
+# carrying it almost certainly never chose it.
+_TEMPLATE_TOTAL_POINTS = 100
+
 
 def blueprint_revision_diagnostics(
     course: dict[str, Any], events: Iterable[dict[str, Any]]
@@ -309,6 +313,34 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         return None
 
     add("course_language", check_language, path=str(course_path))
+
+    def check_expected_total_points():
+        """Nudge workspaces still carrying the template's 100.
+
+        An existing course.json cannot tell a deliberate 100 from the value
+        init wrote, so this stays informational: the point weight is already
+        only halved on a mismatch, and old courses must keep working.
+        """
+        if course_issue:
+            return None
+        if (course.get("exam") or {}).get("expected_total_points") != _TEMPLATE_TOTAL_POINTS:
+            return None
+        index, _issue = _safe_read_canonical_json(store.state_path / "material_index.json")
+        totals = {
+            path: entry.get("total")
+            for path, entry in (index.get("points") or {}).items()
+            if isinstance(entry, Mapping) and entry.get("total") is not None
+        }
+        mismatched = {path: total for path, total in totals.items() if total != _TEMPLATE_TOTAL_POINTS}
+        if not mismatched:
+            return None
+        path, total = sorted(mismatched.items())[0]
+        return "info", (
+            f"expected_total_points is the template's {_TEMPLATE_TOTAL_POINTS}, but {path} "
+            f"declares {total} point(s); set the real total or clear the field"
+        )
+
+    add("expected_total_points", check_expected_total_points, path=str(course_path))
 
     learned_root = store.state_path / "lexicons"
 
