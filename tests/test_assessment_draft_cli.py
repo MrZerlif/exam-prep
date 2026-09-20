@@ -34,6 +34,50 @@ class AssessmentDraftCliTests(unittest.TestCase):
             package = json.loads(final_path.read_text(encoding="utf-8"))
             self.assertEqual("target-x", package["assessments"][0]["target_id"])
 
+    def test_draft_detects_and_extracts_mixed_language_sources(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            materials = root / "materials"
+            materials.mkdir()
+            (materials / "german.txt").write_text(
+                "Aufgabe 1\nDie Aufgabe ist zu berechnen.\n",
+                encoding="utf-8",
+            )
+            (materials / "german_lösung.txt").write_text(
+                "Lösung 1\nDie Lösung ist x=2.\n",
+                encoding="utf-8",
+            )
+            (materials / "english.txt").write_text(
+                "Task 1\nThe task is to compute.\n",
+                encoding="utf-8",
+            )
+            (materials / "english_solution.txt").write_text(
+                "Solution 1\nThe solution is x=2.\n",
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(0, main(["--workspace", str(root), "init", "--language", "ru"]))
+                self.assertEqual(
+                    0,
+                    main(
+                        [
+                            "--workspace",
+                            str(root),
+                            "draft-assessments",
+                            str(materials),
+                            "--out",
+                            str(root / "draft.json"),
+                        ]
+                    ),
+                )
+            draft = json.loads((root / "draft.json").read_text(encoding="utf-8"))
+            self.assertEqual(2, len(draft["assessments"]))
+            self.assertEqual(
+                {"Die Lösung ist x=2.", "The solution is x=2."},
+                {item["rubric"]["reference_answer"] for item in draft["assessments"]},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

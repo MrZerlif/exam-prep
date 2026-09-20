@@ -8,7 +8,7 @@ from dataclasses import dataclass, field, replace
 import hashlib
 from pathlib import Path
 import re
-from typing import Iterable, Sequence
+from typing import Iterable, Mapping, Sequence
 
 from exam_prep_lib.ingest_issues import IngestIssue
 from exam_prep_lib.defaults import (
@@ -245,18 +245,39 @@ def extract_questions(
     extraction_mode: str = "scored",
     expected_total_points: float | int | None = 100,
     lexicon: Lexicon | None = None,
+    lexicon_by_source: Mapping[str, Lexicon] | None = None,
 ) -> tuple[ExtractedQuestion, ...]:
     if extraction_mode not in {"legacy", "scored"}:
         raise ValueError("extraction_mode must be legacy or scored")
     materialized = tuple(sources)
     semantic_lexicon = lexicon or load(language)
-    solutions_by_file: dict[str, dict[str | None, str]] = {}
+    solutions_by_file: dict[tuple[str, str], dict[str | None, str]] = {}
+
+    def source_lexicon(source: ExtractedSource) -> Lexicon:
+        return (lexicon_by_source or {}).get(source.relative_path, semantic_lexicon)
+
+    def solution_key(source: ExtractedSource, source_semantics: Lexicon) -> tuple[str, str]:
+        return (
+            source_semantics.language,
+            _solution_file_key(
+                source.relative_path,
+                source_semantics.language,
+                lexicon=source_semantics,
+            ),
+        )
+
     for source in materialized:
         if source.kind != "solution":
             continue
-        solutions = solutions_by_file.setdefault(_solution_file_key(source.relative_path, language), {})
+        source_semantics = source_lexicon(source)
+        solutions = solutions_by_file.setdefault(solution_key(source, source_semantics), {})
         for page in source.pages:
-            for label, answer in _blocks(page.text, solution=True, language=language, lexicon=semantic_lexicon):
+            for label, answer in _blocks(
+                page.text,
+                solution=True,
+                language=source_semantics.language,
+                lexicon=source_semantics,
+            ):
                 solutions[pair_key(label)] = _strip_shared_lines(answer)
 
     result: list[ExtractedQuestion] = []
@@ -265,21 +286,22 @@ def extract_questions(
             continue
         if source.kind not in EXTRACTABLE_KINDS and not (include_unclassified and source.kind == "other"):
             continue
+        source_semantics = source_lexicon(source)
         kind = "exam" if source.kind == "exam" else "homework"
-        solutions = solutions_by_file.get(_solution_file_key(source.relative_path, language, lexicon=semantic_lexicon), {})
-        point_token = infer_token(source.pages, lexicon=semantic_lexicon)
+        solutions = solutions_by_file.get(solution_key(source, source_semantics), {})
+        point_token = infer_token(source.pages, lexicon=source_semantics)
         candidate_pages = {
             page.number: score(
                 segment(page.text),
                 source=source,
-                lexicon=semantic_lexicon,
+                lexicon=source_semantics,
                 solutions_by_file=solutions,
                 points_token=point_token,
             )
             for page in source.pages
         }
         point_values = [
-            extract_points(candidate.segment.body, token=point_token, lexicon=semantic_lexicon)
+            extract_points(candidate.segment.body, token=point_token, lexicon=source_semantics)
             for candidates in candidate_pages.values()
             for candidate in candidates
             if candidate.bucket in {"accept", "review"}
@@ -288,24 +310,31 @@ def extract_questions(
         points_weight = 0.5 if points_verified is False else 1.0
         if points_weight != 1.0:
             candidate_pages = {
-                page.number: score(
-                    segment(page.text),
-                    source=source,
-                    lexicon=semantic_lexicon,
+                    page.number: score(
+                        segment(page.text),
+                        source=source,
+                        lexicon=source_semantics,
                     solutions_by_file=solutions,
                     points_token=point_token,
                     points_weight=points_weight,
                 )
                 for page in source.pages
             }
-        source_issues = list(tuple(source.issues) + source_question_issues(source, language, lexicon=semantic_lexicon))
+        source_issues = list(
+            tuple(source.issues)
+            + source_question_issues(source, source_semantics.language, lexicon=source_semantics)
+        )
         if points_verified is False:
             source_issues.append(IngestIssue("low_confidence_question", source.relative_path, "inferred point total does not match expected_total_points", "info"))
         for page in source.pages:
             if extraction_mode == "legacy":
                 candidate_blocks = tuple(
                     (label, raw_prompt, None)
-                    for label, raw_prompt in _blocks(page.text, language=language, lexicon=semantic_lexicon)
+                    for label, raw_prompt in _blocks(
+                        page.text,
+                        language=source_semantics.language,
+                        lexicon=source_semantics,
+                    )
                 )
             else:
                 candidate_blocks = tuple(
@@ -315,9 +344,18 @@ def extract_questions(
                 )
             for label, raw_prompt, candidate in candidate_blocks:
                 prompt = _strip_shared_lines(raw_prompt)
-                prompt, points = _extract_points(prompt, language, point_token, lexicon=semantic_lexicon)
+                prompt, points = _extract_points(
+                    prompt,
+                    source_semantics.language,
+                    point_token,
+                    lexicon=source_semantics,
+                )
                 options, prompt = _options(prompt)
-                prompt, embedded_answer = _split_answer(prompt, language, lexicon=semantic_lexicon)
+                prompt, embedded_answer = _split_answer(
+                    prompt,
+                    source_semantics.language,
+                    lexicon=source_semantics,
+                )
                 answer = _match_solution(label, solutions) or embedded_answer
                 normalized = " ".join(prompt.split())
                 question_id = hashlib.sha256((source.relative_path + (label or "") + normalized).encode("utf-8")).hexdigest()[:16]
@@ -336,7 +374,13 @@ def extract_questions(
                         kind=kind,
                         options=options,
                         points=points,
-                        chapter_hint=_chapter_hint(label, source.relative_path, prompt, language, lexicon=semantic_lexicon),
+                        chapter_hint=_chapter_hint(
+                            label,
+                            source.relative_path,
+                            prompt,
+                            source_semantics.language,
+                            lexicon=source_semantics,
+                        ),
                         source_ref={"source_id": source_id, "locator": f"{source.relative_path} p.{page.number}"},
                         issues=tuple(issues),
                         signals=dict(candidate.signals) if candidate is not None else {},

@@ -43,6 +43,7 @@ def build_draft(
     origin: str = "extracted",
     language: str = "ru",
     lexicon: Lexicon | None = None,
+    lexicon_by_source: Mapping[str, Lexicon] | None = None,
 ) -> dict[str, Any]:
     if origin not in {"extracted", "authored", "model_generated"}:
         raise DraftValidationError(f"unknown origin: {origin!r}")
@@ -58,10 +59,12 @@ def build_draft(
     assessments: list[dict[str, Any]] = []
     for question in materialized:
         source_refs = [dict(question.source_ref)]
+        question_source = _source_path(str(question.source_ref.get("source_id", "")))
+        question_lexicon = (lexicon_by_source or {}).get(question_source, lexicon)
         draft = {
             "question_id": question.question_id,
             "target_id": (target_map or {}).get(question.question_id),
-            "capability_id": _capability(question, language, lexicon=lexicon),
+            "capability_id": _capability(question, language, lexicon=question_lexicon),
             "prompt": question.prompt,
             "rubric": {"reference_answer": question.reference_answer} if question.reference_answer else {},
             "expected_evidence": question.expected_evidence,

@@ -66,6 +66,50 @@ class LanguageCliTests(unittest.TestCase):
         status = self.run_cli("status")
         self.assertEqual({"de": 1, "en": 1}, status["course"]["source_languages"])
 
+    def test_hydrate_source_uses_course_and_per_source_language(self):
+        german = self.materials / "german.txt"
+        english = self.materials / "english.txt"
+        german.write_text("Die Aufgabe 1\nDer Beweis folgt hier.\n", encoding="utf-8")
+        english.write_text("The task 1\nThe proof follows here.\n", encoding="utf-8")
+        self.run_cli("init", "--language", "ru")
+
+        self.run_cli(
+            "hydrate-source",
+            "german.txt",
+            "--materials-dir",
+            str(self.materials),
+        )
+        evidence_path = self.root / ".exam-prep" / "source_evidence.jsonl"
+        evidence = [json.loads(line) for line in evidence_path.read_text(encoding="utf-8").splitlines()]
+        self.assertEqual("de", evidence[0]["source_ref"]["location"]["language"])
+
+    def test_dry_run_does_not_persist_auto_detected_course_language(self):
+        (self.materials / "questions.txt").write_text(
+            "Die Aufgabe und der Beweis sind in diesem Kapitel.\n",
+            encoding="utf-8",
+        )
+        self.run_cli("init")
+        course_path = self.root / ".exam-prep" / "course.json"
+        before = course_path.read_bytes()
+
+        result = self.run_cli("ingest-materials", str(self.materials), "--dry-run")
+
+        self.assertEqual("de", result["language"]["value"])
+        self.assertEqual(before, course_path.read_bytes())
+        course = json.loads(course_path.read_text(encoding="utf-8"))
+        self.assertFalse(course["language_detection_attempted"])
+
+    def test_unclassified_summary_uses_the_source_language(self):
+        (self.materials / "unknown.txt").write_text(
+            "Die unbekannte Darstellung bleibt ohne bekannte Überschrift.\n",
+            encoding="utf-8",
+        )
+        self.run_cli("init", "--language", "ru")
+
+        result = self.run_cli("ingest-materials", str(self.materials))
+
+        self.assertEqual("de", result["index"]["unclassified"]["language"])
+
 
 if __name__ == "__main__":
     unittest.main()
