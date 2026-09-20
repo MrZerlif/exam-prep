@@ -73,6 +73,12 @@ creates nothing - it is a normal refusal, not a failure, and the repair is
   never in the mock pool.
 - `finalize-assessment-draft <draft> --target-map <path> --out <path>` -
   require a complete question-to-target map before minting.
+- `apply-lexicon <path> [--dry-run]` - merge a learned lexicon overlay into
+  the workspace. Besides `slots`, an overlay may declare `word_boundaries`
+  and `normalization`, which is how a language with no bundled lexicon - Thai,
+  Khmer, Lao - says it is written without spaces between words. Where a
+  bundled lexicon exists, its own rules win and the overlay contributes only
+  words; across merges the newest declaration wins.
 - `extract-figures <materials-dir> [--pages <relative-path>:<page>]
   [--scale 2.0]` / `figure <relative-path> <page> [--crop x0,y0,x1,y1]
   [--out <path>]` - derive hash-named prompt, answer, and reference assets.
