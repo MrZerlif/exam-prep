@@ -15,7 +15,7 @@ from typing import Iterable
 import xml.etree.ElementTree as ET
 
 from exam_prep_lib.ingest_issues import IngestIssue
-from exam_prep_lib.lexicon import load
+from exam_prep_lib.lexicon import Lexicon, load
 from exam_prep_lib.semantics import best_slot
 
 from .pdf_backend import PdfSupportMissing, pdf_backend, read_pdf as _read_pdf
@@ -49,8 +49,8 @@ def natural_key(value: str | Path) -> tuple[object, ...]:
     return tuple(int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", str(value)))
 
 
-def _slot_kind(text: str, language: str, *, name: bool = False) -> str | None:
-    lexicon = load(language)
+def _slot_kind(text: str, language: str, *, name: bool = False, lexicon: Lexicon | None = None) -> str | None:
+    lexicon = lexicon or load(language)
     if name:
         lexicon = replace(lexicon, word_boundaries=False)
     found = best_slot("kind.", text, lexicon)
@@ -59,8 +59,8 @@ def _slot_kind(text: str, language: str, *, name: bool = False) -> str | None:
     return found.slot.split(".", 1)[1]
 
 
-def _content_kind(content: str, language: str = "ru") -> str:
-    lexicon = load(language)
+def _content_kind(content: str, language: str = "ru", *, lexicon: Lexicon | None = None) -> str:
+    lexicon = lexicon or load(language)
     for raw_line in content[:12000].splitlines():
         line = raw_line.strip()
         if not line:
@@ -72,11 +72,11 @@ def _content_kind(content: str, language: str = "ru") -> str:
     return "other"
 
 
-def classify(path: str | Path, content: str | None = None, language: str = "ru") -> str:
-    kind = _slot_kind(Path(path).stem, language, name=True)
+def classify(path: str | Path, content: str | None = None, language: str = "ru", *, lexicon: Lexicon | None = None) -> str:
+    kind = _slot_kind(Path(path).stem, language, name=True, lexicon=lexicon)
     if kind is not None:
         return kind
-    return _content_kind(content, language) if content else "other"
+    return _content_kind(content, language, lexicon=lexicon) if content else "other"
 
 
 def _xml_text(element: ET.Element) -> str:
@@ -201,14 +201,21 @@ def _read_pages(path: Path) -> tuple[tuple[ExtractedPage, ...], str | None, str 
     return (), None, None, (IngestIssue("unsupported_page", path.name, f"unsupported format: {suffix or 'none'}", "info"),)
 
 
-def extract_source(root: str | Path, path: str | Path, *, max_file_bytes: int = MAX_FILE_BYTES, language: str = "ru") -> ExtractedSource:
+def extract_source(
+    root: str | Path,
+    path: str | Path,
+    *,
+    max_file_bytes: int = MAX_FILE_BYTES,
+    language: str = "ru",
+    lexicon: Lexicon | None = None,
+) -> ExtractedSource:
     base = Path(root).resolve()
     source = Path(path).resolve()
     relative = source.relative_to(base).as_posix()
     raw = source.read_bytes()
     if len(raw) > max_file_bytes:
         issue = IngestIssue("unsupported_page", relative, f"file exceeds {max_file_bytes} bytes", "blocking")
-        return ExtractedSource(relative, classify(source, language=language), (), hashlib.sha256(raw).hexdigest(), None, None, (issue,))
+        return ExtractedSource(relative, classify(source, language=language, lexicon=lexicon), (), hashlib.sha256(raw).hexdigest(), None, None, (issue,))
     issues: list[IngestIssue] = []
     try:
         pages, backend, backend_version, read_issues = _read_pages(source)
@@ -220,11 +227,20 @@ def extract_source(root: str | Path, path: str | Path, *, max_file_bytes: int = 
         pages, backend, backend_version = (), None, None
         issues.append(IngestIssue("bad_pdf_extraction", relative, str(exc), "gap"))
     pages = strip_repeated_lines(pages)
-    kind = classify(source, "\n".join(page.text for page in pages), language)
+    kind = classify(source, "\n".join(page.text for page in pages), language, lexicon=lexicon)
     if not pages:
         issues.append(IngestIssue("unsupported_page", relative, "no pages were extracted", "gap"))
     return ExtractedSource(relative, kind, tuple(pages), hashlib.sha256(raw).hexdigest(), backend, backend_version, tuple(issues))
 
 
-def extract_sources(root: str | Path, *, max_file_bytes: int = MAX_FILE_BYTES, language: str = "ru") -> tuple[ExtractedSource, ...]:
-    return tuple(extract_source(root, path, max_file_bytes=max_file_bytes, language=language) for path in list_files(root))
+def extract_sources(
+    root: str | Path,
+    *,
+    max_file_bytes: int = MAX_FILE_BYTES,
+    language: str = "ru",
+    lexicon: Lexicon | None = None,
+) -> tuple[ExtractedSource, ...]:
+    return tuple(
+        extract_source(root, path, max_file_bytes=max_file_bytes, language=language, lexicon=lexicon)
+        for path in list_files(root)
+    )

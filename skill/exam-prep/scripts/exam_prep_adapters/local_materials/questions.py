@@ -18,7 +18,7 @@ from exam_prep_lib.defaults import (
     EXTRACTION_QUESTIONS_PER_PAGE_GAP,
     VERB_SLOT_TO_QTYPE,
 )
-from exam_prep_lib.lexicon import load
+from exam_prep_lib.lexicon import Lexicon, load
 from exam_prep_lib.semantics import best_slot
 from exam_prep_lib.text_normalize import canonical_key
 
@@ -61,9 +61,9 @@ def pair_key(label: str | None) -> str | None:
     return label.casefold() if label else None
 
 
-def _solution_file_key(path: str, language: str = "ru") -> str:
+def _solution_file_key(path: str, language: str = "ru", *, lexicon: Lexicon | None = None) -> str:
     stem = canonical_key(Path(path).stem)
-    for entry in load(language).by_slot["kind.solution"]:
+    for entry in (lexicon or load(language)).by_slot["kind.solution"]:
         for separator in ("_", "-", " "):
             suffix = f"{separator}{entry.canonical}"
             if stem.endswith(suffix):
@@ -71,7 +71,7 @@ def _solution_file_key(path: str, language: str = "ru") -> str:
     return stem
 
 
-def _marker(line: str, *, solution: bool, language: str) -> tuple[str | None, str] | None:
+def _marker(line: str, *, solution: bool, language: str, lexicon: Lexicon | None = None) -> tuple[str | None, str] | None:
     stripped = line.strip()
     if not stripped:
         return None
@@ -82,7 +82,7 @@ def _marker(line: str, *, solution: bool, language: str) -> tuple[str | None, st
             return None
         rest = stripped[1:].lstrip()
     else:
-        found = best_slot("kind.", first, load(language))
+        found = best_slot("kind.", first, lexicon or load(language))
         if found is None:
             return None
         if solution and found.slot != "kind.solution":
@@ -100,11 +100,17 @@ def _marker(line: str, *, solution: bool, language: str) -> tuple[str | None, st
     return label, payload
 
 
-def _blocks(text: str, *, solution: bool = False, language: str = "ru") -> list[tuple[str | None, str]]:
+def _blocks(
+    text: str,
+    *,
+    solution: bool = False,
+    language: str = "ru",
+    lexicon: Lexicon | None = None,
+) -> list[tuple[str | None, str]]:
     blocks: list[tuple[str | None, list[str]]] = []
     current: tuple[str | None, list[str]] | None = None
     for raw_line in text.splitlines():
-        match = _marker(raw_line, solution=solution, language=language)
+        match = _marker(raw_line, solution=solution, language=language, lexicon=lexicon)
         if match:
             if current is not None:
                 blocks.append((current[0], "\n".join(current[1]).strip()))
@@ -117,19 +123,19 @@ def _blocks(text: str, *, solution: bool = False, language: str = "ru") -> list[
     return blocks
 
 
-def _blocks_with(text: str, marker: re.Pattern[str], language: str = "ru") -> list[tuple[str | None, str]]:
-    return _blocks(text, solution=marker is SOLUTION_RE, language=language)
+def _blocks_with(text: str, marker: re.Pattern[str], language: str = "ru", *, lexicon: Lexicon | None = None) -> list[tuple[str | None, str]]:
+    return _blocks(text, solution=marker is SOLUTION_RE, language=language, lexicon=lexicon)
 
 
-def heads(text: str, language: str = "ru") -> list[str]:
-    return [line.strip() for line in text.splitlines() if _marker(line, solution=False, language=language)]
+def heads(text: str, language: str = "ru", *, lexicon: Lexicon | None = None) -> list[str]:
+    return [line.strip() for line in text.splitlines() if _marker(line, solution=False, language=language, lexicon=lexicon)]
 
 
-def _split_answer(text: str, language: str = "ru") -> tuple[str, str | None]:
+def _split_answer(text: str, language: str = "ru", *, lexicon: Lexicon | None = None) -> tuple[str, str | None]:
     offset = 0
     for line in text.splitlines(keepends=True):
-        if _marker(line, solution=True, language=language):
-            payload = _marker(line, solution=True, language=language)[1]
+        if _marker(line, solution=True, language=language, lexicon=lexicon):
+            payload = _marker(line, solution=True, language=language, lexicon=lexicon)[1]
             tail = text[offset + len(line):]
             answer = "\n".join(part for part in (payload, tail) if part).strip() or None
             return text[:offset].strip(), answer
@@ -157,8 +163,8 @@ def _options(prompt: str) -> tuple[tuple[str, ...], str]:
     return tuple(options), "\n".join(kept).strip()
 
 
-def _extract_points(prompt: str, language: str = "ru", token: str | None = None) -> tuple[str, int | None]:
-    lexicon = load(language)
+def _extract_points(prompt: str, language: str = "ru", token: str | None = None, *, lexicon: Lexicon | None = None) -> tuple[str, int | None]:
+    lexicon = lexicon or load(language)
     for candidate in POINTS_RE.finditer(prompt):
         if extract_points(candidate.group(0), token=token, lexicon=lexicon) is None:
             continue
@@ -170,23 +176,24 @@ def _extract_points(prompt: str, language: str = "ru", token: str | None = None)
     return prompt, None
 
 
-def _qtype(prompt: str, language: str = "ru") -> str:
-    found = best_slot("verb.", prompt, load(language))
+def _qtype(prompt: str, language: str = "ru", *, lexicon: Lexicon | None = None) -> str:
+    found = best_slot("verb.", prompt, lexicon or load(language))
     return VERB_SLOT_TO_QTYPE.get(found.slot, "problem") if found else "problem"
 
 
-def _chapter_hint(label: str | None, source_path: str, prompt: str, language: str = "ru") -> int | None:
+def _chapter_hint(label: str | None, source_path: str, prompt: str, language: str = "ru", *, lexicon: Lexicon | None = None) -> int | None:
     if label and label.split(".")[0].isdigit():
         return int(label.split(".")[0])
-    return number_from_name(source_path, language) or number_from_name(prompt, language)
+    return number_from_name(source_path, language, lexicon=lexicon) or number_from_name(prompt, language, lexicon=lexicon)
 
 
 def _match_solution(label: str | None, solutions: dict[str | None, str]) -> str | None:
     return solutions.get(pair_key(label))
 
 
-def source_question_issues(source: ExtractedSource, language: str = "ru") -> tuple[IngestIssue, ...]:
-    blocks = [candidate for page in source.pages for candidate in score(segment(page.text), source=source, lexicon=load(language))]
+def source_question_issues(source: ExtractedSource, language: str = "ru", *, lexicon: Lexicon | None = None) -> tuple[IngestIssue, ...]:
+    semantic_lexicon = lexicon or load(language)
+    blocks = [candidate for page in source.pages for candidate in score(segment(page.text), source=source, lexicon=semantic_lexicon)]
     question_count = len(blocks)
     nonempty_lines = sum(1 for page in source.pages for line in page.text.splitlines() if line.strip())
     page_count = max(1, len(source.pages))
@@ -237,17 +244,19 @@ def extract_questions(
     language: str = "ru",
     extraction_mode: str = "scored",
     expected_total_points: float | int | None = 100,
+    lexicon: Lexicon | None = None,
 ) -> tuple[ExtractedQuestion, ...]:
     if extraction_mode not in {"legacy", "scored"}:
         raise ValueError("extraction_mode must be legacy or scored")
     materialized = tuple(sources)
+    semantic_lexicon = lexicon or load(language)
     solutions_by_file: dict[str, dict[str | None, str]] = {}
     for source in materialized:
         if source.kind != "solution":
             continue
         solutions = solutions_by_file.setdefault(_solution_file_key(source.relative_path, language), {})
         for page in source.pages:
-            for label, answer in _blocks(page.text, solution=True, language=language):
+            for label, answer in _blocks(page.text, solution=True, language=language, lexicon=semantic_lexicon):
                 solutions[pair_key(label)] = _strip_shared_lines(answer)
 
     result: list[ExtractedQuestion] = []
@@ -257,20 +266,20 @@ def extract_questions(
         if source.kind not in EXTRACTABLE_KINDS and not (include_unclassified and source.kind == "other"):
             continue
         kind = "exam" if source.kind == "exam" else "homework"
-        solutions = solutions_by_file.get(_solution_file_key(source.relative_path, language), {})
-        point_token = infer_token(source.pages, lexicon=load(language))
+        solutions = solutions_by_file.get(_solution_file_key(source.relative_path, language, lexicon=semantic_lexicon), {})
+        point_token = infer_token(source.pages, lexicon=semantic_lexicon)
         candidate_pages = {
             page.number: score(
                 segment(page.text),
                 source=source,
-                lexicon=load(language),
+                lexicon=semantic_lexicon,
                 solutions_by_file=solutions,
                 points_token=point_token,
             )
             for page in source.pages
         }
         point_values = [
-            extract_points(candidate.segment.body, token=point_token, lexicon=load(language))
+            extract_points(candidate.segment.body, token=point_token, lexicon=semantic_lexicon)
             for candidates in candidate_pages.values()
             for candidate in candidates
             if candidate.bucket in {"accept", "review"}
@@ -282,21 +291,21 @@ def extract_questions(
                 page.number: score(
                     segment(page.text),
                     source=source,
-                    lexicon=load(language),
+                    lexicon=semantic_lexicon,
                     solutions_by_file=solutions,
                     points_token=point_token,
                     points_weight=points_weight,
                 )
                 for page in source.pages
             }
-        source_issues = list(tuple(source.issues) + source_question_issues(source, language))
+        source_issues = list(tuple(source.issues) + source_question_issues(source, language, lexicon=semantic_lexicon))
         if points_verified is False:
             source_issues.append(IngestIssue("low_confidence_question", source.relative_path, "inferred point total does not match expected_total_points", "info"))
         for page in source.pages:
             if extraction_mode == "legacy":
                 candidate_blocks = tuple(
                     (label, raw_prompt, None)
-                    for label, raw_prompt in _blocks(page.text, language=language)
+                    for label, raw_prompt in _blocks(page.text, language=language, lexicon=semantic_lexicon)
                 )
             else:
                 candidate_blocks = tuple(
@@ -306,9 +315,9 @@ def extract_questions(
                 )
             for label, raw_prompt, candidate in candidate_blocks:
                 prompt = _strip_shared_lines(raw_prompt)
-                prompt, points = _extract_points(prompt, language, point_token)
+                prompt, points = _extract_points(prompt, language, point_token, lexicon=semantic_lexicon)
                 options, prompt = _options(prompt)
-                prompt, embedded_answer = _split_answer(prompt, language)
+                prompt, embedded_answer = _split_answer(prompt, language, lexicon=semantic_lexicon)
                 answer = _match_solution(label, solutions) or embedded_answer
                 normalized = " ".join(prompt.split())
                 question_id = hashlib.sha256((source.relative_path + (label or "") + normalized).encode("utf-8")).hexdigest()[:16]
@@ -327,7 +336,7 @@ def extract_questions(
                         kind=kind,
                         options=options,
                         points=points,
-                        chapter_hint=_chapter_hint(label, source.relative_path, prompt, language),
+                        chapter_hint=_chapter_hint(label, source.relative_path, prompt, language, lexicon=semantic_lexicon),
                         source_ref={"source_id": source_id, "locator": f"{source.relative_path} p.{page.number}"},
                         issues=tuple(issues),
                         signals=dict(candidate.signals) if candidate is not None else {},
@@ -336,9 +345,9 @@ def extract_questions(
     return tuple(result)
 
 
-def assign_chapters(questions: Sequence[ExtractedQuestion], sources: Iterable[ExtractedSource] = (), language: str = "ru") -> tuple[ExtractedQuestion, ...]:
+def assign_chapters(questions: Sequence[ExtractedQuestion], sources: Iterable[ExtractedSource] = (), language: str = "ru", *, lexicon: Lexicon | None = None) -> tuple[ExtractedQuestion, ...]:
     by_source = {
-        source.relative_path: number_from_name(source.relative_path, language)
+        source.relative_path: number_from_name(source.relative_path, language, lexicon=lexicon)
         for source in sources
     }
     result: list[ExtractedQuestion] = []

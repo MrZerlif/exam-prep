@@ -25,7 +25,7 @@ from .target_normalization import normalize_event, normalize_syllabus
 from .assessment import FrozenAssessment
 from .provenance import source_ref_from_mapping
 from .scheduler import _exam_time
-from .lexicon import available as available_languages
+from .lexicon import available as available_languages, learned_languages, validate_learned
 
 
 def blueprint_revision_diagnostics(
@@ -302,13 +302,51 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         if course_issue:
             return "warning", "skipped: course.json could not be parsed"
         language = course.get("language")
-        if language is not None and language not in available_languages():
+        if language is not None and language not in available_languages() and language not in learned_languages(store.state_path):
             return "error", f"unsupported_language: no lexicon is available for {language!r}"
         if language is None and course.get("language_detection_attempted"):
             return "warning", "unsupported_language: language detection confidence was below 0.6"
         return None
 
     add("course_language", check_language, path=str(course_path))
+
+    learned_root = store.state_path / "lexicons"
+
+    def check_learned_lexicons():
+        problems: list[str] = []
+        for path in sorted(learned_root.glob("learned-*.json")):
+            try:
+                raw = json.loads(path.read_text(encoding="utf-8"))
+                validate_learned(raw)
+                expected = path.stem.removeprefix("learned-")
+                if raw.get("language") != expected:
+                    problems.append(f"{path.name}: filename language does not match document")
+            except Exception as exc:  # noqa: BLE001 - validate reports corrupt overlays
+                problems.append(f"{path.name}: {exc}")
+        return ("error", "; ".join(problems)) if problems else None
+
+    add("learned_lexicons", check_learned_lexicons, path=str(learned_root))
+
+    material_index_path = store.state_path / "material_index.json"
+
+    def check_material_languages():
+        if not material_index_path.exists():
+            return None
+        raw, issue = _safe_read_canonical_json(material_index_path)
+        if issue:
+            return "warning", f"skipped: {issue}"
+        lines: list[str] = []
+        for entry in raw.get("entries", []):
+            source = str(entry.get("language_source", "unknown"))
+            if source == "configured":
+                continue
+            language = entry.get("language") or "unknown"
+            confidence = entry.get("language_confidence")
+            suffix = f", {float(confidence):.2f}" if isinstance(confidence, (int, float)) else ""
+            lines.append(f"{entry.get('relative_path', '<unknown>')}: {language} ({source}{suffix})")
+        return ("warning", "; ".join(lines)) if lines else None
+
+    add("material_languages", check_material_languages, path=str(material_index_path))
 
     def check_syllabus_schema():
         if syllabus_issue:
@@ -689,5 +727,8 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
             "source": course.get("language_source", "unknown"),
             "confidence": course.get("language_confidence"),
         },
+        "learned_lexicons": sorted(
+            path.stem.removeprefix("learned-") for path in (store.state_path / "lexicons").glob("learned-*.json")
+        ),
     }
 

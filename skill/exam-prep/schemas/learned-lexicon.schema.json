@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Workspace learned lexicon overlay",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "language", "slots"],
+  "properties": {
+    "schema_version": {"type": "integer", "enum": [1]},
+    "language": {"type": "string", "minLength": 2, "pattern": "^[a-z]{2,8}$"},
+    "slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "kind.solution": {"$ref": "#/$defs/entries"},
+        "kind.homework": {"$ref": "#/$defs/entries"},
+        "kind.exam": {"$ref": "#/$defs/entries"},
+        "kind.lecture": {"$ref": "#/$defs/entries"},
+        "kind.notes": {"$ref": "#/$defs/entries"},
+        "struct.chapter": {"$ref": "#/$defs/entries"},
+        "verb.definition": {"$ref": "#/$defs/entries"},
+        "verb.proof": {"$ref": "#/$defs/entries"},
+        "verb.calculation": {"$ref": "#/$defs/entries"},
+        "unit.points": {"$ref": "#/$defs/entries"}
+      }
+    }
+  },
+  "$defs": {
+    "entries": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {"type": "string", "minLength": 1},
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["token"],
+            "properties": {
+              "token": {"type": "string", "minLength": 1},
+              "weight": {"type": "number", "minimum": 0}
+            }
+          }
+        ]
+      }
+    }
+  }
+}

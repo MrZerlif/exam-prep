@@ -9,7 +9,7 @@ from typing import Any, Iterable, Mapping, Sequence
 from .assessment import question_content_hash
 from .capabilities import CapabilityRegistry
 from .defaults import VERB_SLOT_TO_CAPABILITY
-from .lexicon import load
+from .lexicon import Lexicon, load
 from .semantics import best_slot
 
 
@@ -21,10 +21,10 @@ def _source_path(source_id: str) -> str:
     return source_id.split("#", 1)[0]
 
 
-def _capability(question: Any, language: str = "ru") -> str:
+def _capability(question: Any, language: str = "ru", *, lexicon: Lexicon | None = None) -> str:
     if question.kind == "exam":
         return "exam_problem"
-    found = best_slot("verb.", question.prompt, load(language))
+    found = best_slot("verb.", question.prompt, lexicon or load(language))
     return VERB_SLOT_TO_CAPABILITY.get(found.slot, "independent_problem") if found else "independent_problem"
 
 
@@ -42,6 +42,7 @@ def build_draft(
     holdout_ratio: float = 0.2,
     origin: str = "extracted",
     language: str = "ru",
+    lexicon: Lexicon | None = None,
 ) -> dict[str, Any]:
     if origin not in {"extracted", "authored", "model_generated"}:
         raise DraftValidationError(f"unknown origin: {origin!r}")
@@ -60,7 +61,7 @@ def build_draft(
         draft = {
             "question_id": question.question_id,
             "target_id": (target_map or {}).get(question.question_id),
-            "capability_id": _capability(question, language),
+            "capability_id": _capability(question, language, lexicon=lexicon),
             "prompt": question.prompt,
             "rubric": {"reference_answer": question.reference_answer} if question.reference_answer else {},
             "expected_evidence": question.expected_evidence,

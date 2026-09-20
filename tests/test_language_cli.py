@@ -52,6 +52,20 @@ class LanguageCliTests(unittest.TestCase):
         self.assertEqual(first["language"], second["language"])
         self.assertEqual(first["language_source"], second["language_source"])
 
+    def test_each_source_keeps_its_own_detected_language(self):
+        german = self.materials / "german.txt"
+        english = self.materials / "english.txt"
+        german.write_text("Die Aufgabe und der Beweis sind in diesem Kapitel.\n", encoding="utf-8")
+        english.write_text("The task and the proof are in this chapter.\n", encoding="utf-8")
+        self.run_cli("init", "--language", "ru")
+        result = self.run_cli("ingest-materials", str(self.materials))
+        by_path = {entry["relative_path"]: entry for entry in result["index"]["entries"]}
+        self.assertEqual("de", by_path["german.txt"]["language"])
+        self.assertEqual("en", by_path["english.txt"]["language"])
+        self.assertEqual("detected", by_path["german.txt"]["language_source"])
+        status = self.run_cli("status")
+        self.assertEqual({"de": 1, "en": 1}, status["course"]["source_languages"])
+
 
 if __name__ == "__main__":
     unittest.main()

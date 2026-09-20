@@ -13,7 +13,7 @@ from exam_prep_lib.schema_validation import load_schema, validate_document
 from .extractor import EXTRACTOR_VERSION, ExtractedSource
 from .candidates import score
 from .labels import segment
-from exam_prep_lib.lexicon import load
+from exam_prep_lib.lexicon import Lexicon, load
 
 
 def _configuration_hash(max_excerpt_chars: int, extraction_mode: str, language: str) -> str:
@@ -49,15 +49,21 @@ def build_envelope(
     max_excerpt_chars: int = 1200,
     extraction_mode: str = "scored",
     language: str = "ru",
+    lexicon: Lexicon | None = None,
+    lexicon_by_source: Mapping[str, Lexicon] | None = None,
+    language_by_source: Mapping[str, Mapping[str, object]] | None = None,
 ) -> SourceEvidenceEnvelope:
     if extraction_mode not in {"legacy", "scored"}:
         raise ValueError("extraction_mode must be legacy or scored")
     materialized = tuple(sources)
+    semantic_lexicon = lexicon or load(language)
     authority_map = dict(authority_map or {})
     configuration_hash = _configuration_hash(max_excerpt_chars, extraction_mode, language)
     evidence: list[SourceEvidence] = []
     diagnostics: list[str] = []
     for source in materialized:
+        source_lexicon = (lexicon_by_source or {}).get(source.relative_path, semantic_lexicon)
+        source_language = str((language_by_source or {}).get(source.relative_path, {}).get("language") or language)
         diagnostics.extend(f"{issue.kind}: {issue.detail}" for issue in source.issues)
         authority = authority_map.get(source.relative_path, _default_authority(source.kind))
         if authority not in AUTHORITY_RANKS:
@@ -86,6 +92,9 @@ def build_envelope(
                     "backend": source.backend,
                     "backend_version": source.backend_version,
                     "configuration_hash": configuration_hash,
+                    "language": source_language,
+                    "language_source": (language_by_source or {}).get(source.relative_path, {}).get("language_source"),
+                    "language_confidence": (language_by_source or {}).get(source.relative_path, {}).get("language_confidence"),
                     "extraction": {
                         "mode": extraction_mode,
                         "candidates": [
@@ -96,7 +105,7 @@ def build_envelope(
                                 "signals": candidate.signals,
                             }
                             for candidate in (
-                                score(segment(text), source=source, lexicon=load(language))
+                                score(segment(text), source=source, lexicon=source_lexicon)
                                 if extraction_mode == "scored"
                                 else ()
                             )

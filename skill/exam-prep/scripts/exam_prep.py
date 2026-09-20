@@ -50,7 +50,13 @@ from exam_prep_adapters.local_materials.extractor import extract_sources
 from exam_prep_adapters.local_materials.questions import extract_questions
 from exam_prep_adapters.local_materials.figures import extract_figures
 from exam_prep_lib.assessment_draft import build_draft, finalize_draft
-from exam_prep_lib.lexicon import available as available_languages
+from exam_prep_lib.lexicon import (
+    available as available_languages,
+    learned_lexicon_path,
+    load,
+    load_learned,
+    merge_learned,
+)
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -92,6 +98,41 @@ def _read_json(path: Path, default: object) -> object:
     if not path.exists():
         return default
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def _apply_learned_lexicon(store: StudyStore, path: str | Path, *, dry_run: bool = False) -> dict[str, object]:
+    proposal = json.loads(Path(path).read_text(encoding="utf-8"))
+    from exam_prep_lib.lexicon import validate_learned
+
+    validate_learned(proposal)
+    language = str(proposal["language"])
+    target = learned_lexicon_path(store.state_path, language)
+    existing = _read_json(target, None) if target.exists() else None
+    merged = merge_learned(existing, proposal)
+    changed = existing != merged
+    if not dry_run and changed:
+        _write_json(target, merged)
+    course_path = store.state_path / "course.json"
+    if not dry_run and course_path.exists():
+        course = _read_json(course_path, default_course())
+        if course.get("language") is None:
+            course.update(
+                {
+                    "language": language,
+                    "language_source": "configured",
+                    "language_confidence": 1.0,
+                    "language_detection_attempted": True,
+                }
+            )
+            _write_json(course_path, course)
+    return {
+        "status": "dry_run" if dry_run else "applied",
+        "dry_run": dry_run,
+        "language": language,
+        "path": str(target),
+        "changed": changed,
+        "slots": sorted(merged["slots"]),
+    }
 
 
 def _has_legacy_state(workspace: Path) -> bool:
@@ -510,6 +551,9 @@ def _parser() -> argparse.ArgumentParser:
     draft_parser.add_argument("--holdout-ratio", type=float, default=0.2)
     draft_parser.add_argument("--include-unclassified", action="store_true")
     draft_parser.add_argument("--extraction-mode", choices=("legacy", "scored"), default="scored")
+    apply_lexicon_parser = sub.add_parser("apply-lexicon")
+    apply_lexicon_parser.add_argument("path")
+    apply_lexicon_parser.add_argument("--dry-run", action="store_true")
     finalize_parser = sub.add_parser("finalize-assessment-draft")
     finalize_parser.add_argument("draft")
     finalize_parser.add_argument("--target-map", required=True)
@@ -566,12 +610,24 @@ def main(argv: list[str] | None = None) -> int:
         result = migrate_legacy_workspace(args.from_math_study)
         return _result(result.to_mapping())
     if args.command == "draft-assessments":
+        draft_store = _store(args.workspace)
+        draft_course = _read_json(draft_store.state_path / "course.json", default_course())
+        draft_language = str(draft_course.get("language") or "ru")
+        draft_lexicon = load(draft_language, extra=load_learned(draft_language, draft_store.state_path))
         questions = extract_questions(
-            extract_sources(args.materials_dir),
+            extract_sources(args.materials_dir, language=draft_language, lexicon=draft_lexicon),
             include_unclassified=args.include_unclassified,
+            language=draft_language,
             extraction_mode=args.extraction_mode,
+            lexicon=draft_lexicon,
         )
-        draft = build_draft(questions, reserve_for_mock=args.reserve_for_mock, holdout_ratio=args.holdout_ratio)
+        draft = build_draft(
+            questions,
+            reserve_for_mock=args.reserve_for_mock,
+            holdout_ratio=args.holdout_ratio,
+            language=draft_language,
+            lexicon=draft_lexicon,
+        )
         _write_json(Path(args.out), draft)
         return _result({"status": "draft_written", "out": str(Path(args.out).resolve()), "count": len(draft["assessments"])})
     if args.command == "finalize-assessment-draft":
@@ -582,6 +638,9 @@ def main(argv: list[str] | None = None) -> int:
         return _result({"status": "mint_package_written", "out": str(Path(args.out).resolve()), "count": len(package["assessments"])})
     store = _store(args.workspace)
     initialization_state, missing_files = _initialization_state(store)
+
+    if args.command == "apply-lexicon":
+        return _result(_apply_learned_lexicon(store, args.path, dry_run=args.dry_run))
 
     if args.command == "status" and initialization_state == "uninitialized":
         return _result({
@@ -986,6 +1045,19 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "status":
         session_history = store.read_session_summaries()
+        source_language_counts: dict[str, int] = {}
+        material_index_path = store.state_path / "material_index.json"
+        if material_index_path.exists():
+            try:
+                material_index = json.loads(material_index_path.read_text(encoding="utf-8"))
+                by_source = {
+                    str(entry.get("relative_path")): str(entry.get("language") or "unknown")
+                    for entry in material_index.get("entries", [])
+                }
+                for value in by_source.values():
+                    source_language_counts[value] = source_language_counts.get(value, 0) + 1
+            except (OSError, ValueError, json.JSONDecodeError):
+                source_language_counts = {}
         full = {
             "course": {
                 "course_id": course.get("course_id"),
@@ -994,6 +1066,7 @@ def main(argv: list[str] | None = None) -> int:
                     "source": course.get("language_source", "unknown"),
                     "confidence": course.get("language_confidence"),
                 },
+                "source_languages": source_language_counts,
                 "exam": course.get("exam"),
             },
             "session": session,
