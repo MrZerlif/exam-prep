@@ -8,6 +8,9 @@ from typing import Any, Iterable, Mapping, Sequence
 
 from .assessment import question_content_hash
 from .capabilities import CapabilityRegistry
+from .defaults import VERB_SLOT_TO_CAPABILITY
+from .lexicon import load
+from .semantics import best_slot
 
 
 class DraftValidationError(ValueError):
@@ -18,15 +21,11 @@ def _source_path(source_id: str) -> str:
     return source_id.split("#", 1)[0]
 
 
-def _capability(question: Any) -> str:
+def _capability(question: Any, language: str = "ru") -> str:
     if question.kind == "exam":
         return "exam_problem"
-    prompt = question.prompt.casefold()
-    if any(word in prompt for word in ("определ", "define")):
-        return "definition_recall"
-    if any(word in prompt for word in ("вычисл", "compute", "calculate")):
-        return "calculation"
-    return "independent_problem"
+    found = best_slot("verb.", question.prompt, load(language))
+    return VERB_SLOT_TO_CAPABILITY.get(found.slot, "independent_problem") if found else "independent_problem"
 
 
 def _purpose(question: Any, held_out: set[str]) -> str:
@@ -42,6 +41,7 @@ def build_draft(
     reserve_for_mock: Sequence[str] = (),
     holdout_ratio: float = 0.2,
     origin: str = "extracted",
+    language: str = "ru",
 ) -> dict[str, Any]:
     if origin not in {"extracted", "authored", "model_generated"}:
         raise DraftValidationError(f"unknown origin: {origin!r}")
@@ -60,7 +60,7 @@ def build_draft(
         draft = {
             "question_id": question.question_id,
             "target_id": (target_map or {}).get(question.question_id),
-            "capability_id": _capability(question),
+            "capability_id": _capability(question, language),
             "prompt": question.prompt,
             "rubric": {"reference_answer": question.reference_answer} if question.reference_answer else {},
             "expected_evidence": question.expected_evidence,

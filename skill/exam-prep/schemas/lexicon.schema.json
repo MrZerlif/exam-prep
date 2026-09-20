@@ -1,0 +1,57 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "language", "word_boundaries", "normalization", "slots"],
+  "properties": {
+    "schema_version": {"type": "integer", "const": 1},
+    "language": {"type": "string", "minLength": 2},
+    "word_boundaries": {"type": "boolean"},
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["fold", "strip_marks"],
+      "properties": {
+        "fold": {"type": "object", "additionalProperties": {"type": "string"}},
+        "strip_marks": {"type": "boolean"}
+      }
+    },
+    "stopwords": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "slots": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind.solution", "kind.homework", "kind.exam", "kind.lecture", "kind.notes", "struct.chapter", "verb.definition", "verb.proof", "verb.calculation", "unit.points"],
+      "properties": {
+        "kind.solution": {"$ref": "#/$defs/entries"},
+        "kind.homework": {"$ref": "#/$defs/entries"},
+        "kind.exam": {"$ref": "#/$defs/entries"},
+        "kind.lecture": {"$ref": "#/$defs/entries"},
+        "kind.notes": {"$ref": "#/$defs/entries"},
+        "struct.chapter": {"$ref": "#/$defs/entries"},
+        "verb.definition": {"$ref": "#/$defs/entries"},
+        "verb.proof": {"$ref": "#/$defs/entries"},
+        "verb.calculation": {"$ref": "#/$defs/entries"},
+        "unit.points": {"$ref": "#/$defs/entries"}
+      }
+    }
+  },
+  "$defs": {
+    "entries": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "oneOf": [
+          {"type": "string", "minLength": 1},
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["token"],
+            "properties": {
+              "token": {"type": "string", "minLength": 1},
+              "weight": {"type": "number", "exclusiveMinimum": 0}
+            }
+          }
+        ]
+      }
+    }
+  }
+}

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "en",
+  "word_boundaries": true,
+  "normalization": {"fold": {}, "strip_marks": true},
+  "stopwords": ["the", "and", "of", "to", "in", "for", "with", "is", "are", "that"],
+  "slots": {
+    "kind.solution": ["solution", "answer", "key"],
+    "kind.homework": ["task", "exercise", "example", "question", "problem", "homework"],
+    "kind.exam": ["exam", "test", "ticket", "variant"],
+    "kind.lecture": [{"token": "lecture", "weight": 1.0}, "lectures", "methodical"],
+    "kind.notes": ["notes", "summary"],
+    "struct.chapter": ["chapter", "topic", {"token": "lecture", "weight": 0.5}, "section"],
+    "verb.definition": ["define", "defines", "definition"],
+    "verb.proof": ["prove", "proves", "proof"],
+    "verb.calculation": ["compute", "computes", "calculate", "calculates", "calculation"],
+    "unit.points": ["point", "points"]
+  }
+}

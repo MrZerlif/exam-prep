@@ -10,8 +10,8 @@ from typing import Mapping
 FoldRules = Mapping[str, str]
 _HYPHENS = re.compile(r"[-‐‑‒–—−]+")
 _SPACES = re.compile(r"\s+")
-_VIETNAMESE_LETTERS = frozenset(
-    "ăâđêôơưáàảãạắằẳẵặấầẩẫậéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ"
+_VIETNAMESE_DISTINCTIVE_LETTERS = frozenset(
+    "ăâđêôơưắằẳẵặấầẩẫậếềểễệốồổỗộớờởỡợứừửữự"
 )
 
 
@@ -61,7 +61,7 @@ def loose_key(value: str, fold: FoldRules = {}) -> str:
     canonical = _apply_fold(canonical_key(value), fold)
     if not canonical:
         return ""
-    if any(char in _VIETNAMESE_LETTERS for char in canonical):
+    if any(char in _VIETNAMESE_DISTINCTIVE_LETTERS for char in canonical):
         return canonical
     result = _strip_latin_cyrillic_marks(canonical)
     return result.replace("ß", "ss").replace("ё", "е")

@@ -17,6 +17,17 @@ EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING = 20
 EXTRACTION_QUESTIONS_PER_PAGE_GAP = 40
 EXTRACTION_HARD_QUESTION_CAP = 5000
 
+VERB_SLOT_TO_QTYPE = {
+    "verb.definition": "definition",
+    "verb.proof": "proof",
+    "verb.calculation": "calculation",
+}
+VERB_SLOT_TO_CAPABILITY = {
+    "verb.definition": "definition_recall",
+    "verb.proof": "independent_problem",
+    "verb.calculation": "calculation",
+}
+
 _DEFAULT_COURSE = {
     "schema_version": 2,
     "course_id": "exam-prep-course",
