@@ -1,7 +1,5 @@
 """Deterministic extraction of homework and exam questions from pages."""
 
-# Portions adapted from ZeKaiNie/universal-examprep-skill (MIT), see vendor/exam-cram-coach/LICENSE
-
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace

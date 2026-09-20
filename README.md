@@ -110,14 +110,6 @@ changed. Use the
 and [example proposal](skill/exam-prep/examples/curriculum-proposal.json) as the
 payload contract.
 
-## Third-party code
-
-The local-material adapters preserve the MIT attribution for compatible
-surfaces adapted from
-[`ZeKaiNie/universal-examprep-skill`](https://github.com/ZeKaiNie/universal-examprep-skill).
-See [`skill/exam-prep/vendor/exam-cram-coach/`](skill/exam-prep/vendor/exam-cram-coach/)
-for the donor license and pinned source commit.
-
 ## Daily workflow
 
 After the workspace and curriculum exist, the common loop is:
@@ -218,8 +210,9 @@ without it.
   require tutor judgment.
 - Photograph and handwriting workflows have not been tested in the recorded
   scenarios.
-- The repository has no release packaging, continuous-integration workflow, or
-  `LICENSE` file. Reuse and distribution permissions are therefore unspecified.
+- Releases are packaged by `.github/workflows/release.yml` when a v*.*.* tag
+  is pushed. The repository has no separate test-CI workflow; reuse and
+  distribution are covered by the [MIT license](LICENSE).
 
 Treat the project as a developer-facing, experimental skill until the relevant
 host behavior and optional integrations have been independently exercised.

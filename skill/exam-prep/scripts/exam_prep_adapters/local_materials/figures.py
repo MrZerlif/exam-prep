@@ -1,7 +1,5 @@
 """Deterministic figure extraction and role-tagged asset indexing."""
 
-# Portions adapted from ZeKaiNie/universal-examprep-skill (MIT), see vendor/exam-cram-coach/LICENSE
-
 from __future__ import annotations
 
 import hashlib
