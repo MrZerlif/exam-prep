@@ -50,6 +50,7 @@ from exam_prep_adapters.local_materials.extractor import extract_sources
 from exam_prep_adapters.local_materials.questions import extract_questions
 from exam_prep_adapters.local_materials.figures import extract_figures
 from exam_prep_lib.assessment_draft import build_draft, finalize_draft
+from exam_prep_lib.lexicon import available as available_languages
 
 for _stream in (sys.stdout, sys.stderr):
     if hasattr(_stream, "reconfigure"):
@@ -437,9 +438,11 @@ def _parser() -> argparse.ArgumentParser:
         help="active study workspace; defaults to environment, git root, or cwd",
     )
     sub = parser.add_subparsers(dest="command", required=True)
-    sub.add_parser("init")
+    init_parser = sub.add_parser("init")
+    init_parser.add_argument("--language", choices=available_languages(), default=None)
     load = sub.add_parser("load-syllabus")
     load.add_argument("path")
+    load.add_argument("--language", choices=available_languages(), default=None)
     sub.add_parser("start")
     status_parser = sub.add_parser("status")
     status_parser.add_argument(
@@ -840,6 +843,8 @@ def main(argv: list[str] | None = None) -> int:
         store.initialize()
         now = _now()
         course = default_course()
+        if args.language:
+            course.update({"language": args.language, "language_source": "configured", "language_confidence": 1.0, "language_detection_attempted": True})
         syllabus = default_syllabus()
         learner = default_learner(now)
         session = default_session()
@@ -862,6 +867,10 @@ def main(argv: list[str] | None = None) -> int:
                 "; ".join(dimension_issues),
             )
         _write_json(store.state_path / "syllabus.json", loaded)
+        if args.language:
+            course = _read_json(store.state_path / "course.json", default_course())
+            course.update({"language": args.language, "language_source": "configured", "language_confidence": 1.0, "language_detection_attempted": True})
+            _write_json(store.state_path / "course.json", course)
         return _result(
             {
                 "status": "syllabus_loaded",
@@ -888,6 +897,11 @@ def main(argv: list[str] | None = None) -> int:
                     print(f"reason: {reason.encode('ascii', 'backslashreplace').decode('ascii')}")
             else:
                 print("valid: " + ("yes" if report.get("valid") else "no"))
+                language = report.get("language") or {}
+                if language:
+                    confidence = language.get("confidence")
+                    suffix = f", {confidence:.2f}" if isinstance(confidence, (int, float)) else ""
+                    print(f"language: {language.get('value') or 'unknown'} ({language.get('source', 'unknown')}{suffix})")
         else:
             _print_json(report)
         return 0 if report["valid"] else 1
@@ -975,6 +989,11 @@ def main(argv: list[str] | None = None) -> int:
         full = {
             "course": {
                 "course_id": course.get("course_id"),
+                "language": {
+                    "value": course.get("language"),
+                    "source": course.get("language_source", "unknown"),
+                    "confidence": course.get("language_confidence"),
+                },
                 "exam": course.get("exam"),
             },
             "session": session,

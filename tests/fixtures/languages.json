@@ -1,0 +1,42 @@
+{
+  "de": {
+    "questions": "Aufgabe 1 Definieren Sie den Grenzwert.\nAufgabe 2 Beweisen Sie den Satz.\nAufgabe 3 Berechnen Sie x.\nA) eins\nB) zwei\n(10 Punkte)",
+    "solutions": "Lösung 1 Grenzwertdefinition.\nLösung 2 Beweis."
+  },
+  "fr": {
+    "questions": "Exercice 1 Définir la limite.\nExercice 2 Prouver le théorème.\nExercice 3 Calculer x.\nA) un\nB) deux\n(10 points)",
+    "solutions": "Solution 1 Définition.\nSolution 2 Preuve."
+  },
+  "es": {
+    "questions": "Tarea 1 Definir el límite.\nTarea 2 Demostrar el teorema.\nTarea 3 Calcular x.\nA) uno\nB) dos\n(10 puntos)",
+    "solutions": "Solución 1 Definición.\nSolución 2 Prueba."
+  },
+  "it": {
+    "questions": "Esercizio 1 Definire il limite.\nEsercizio 2 Dimostrare il teorema.\nEsercizio 3 Calcolare x.\nA) uno\nB) due\n(10 punti)",
+    "solutions": "Soluzione 1 Definizione.\nSoluzione 2 Dimostrazione."
+  },
+  "pt": {
+    "questions": "Exercício 1 Definir o limite.\nExercício 2 Provar o teorema.\nExercício 3 Calcular x.\nA) um\nB) dois\n(10 pontos)",
+    "solutions": "Solução 1 Definição.\nSolução 2 Prova."
+  },
+  "pl": {
+    "questions": "Zadanie 1 Zdefiniuj granicę.\nZadanie 2 Udowodnij twierdzenie.\nZadanie 3 Oblicz x.\nA) jeden\nB) dwa\n(10 punktów)",
+    "solutions": "Rozwiązanie 1 Definicja.\nRozwiązanie 2 Dowód."
+  },
+  "tr": {
+    "questions": "Soru 1 Tanımla limiti.\nSoru 2 Kanıtla teoremi.\nSoru 3 Hesapla x.\nA) bir\nB) iki\n(10 puanı)",
+    "solutions": "Çözüm 1 Tanım.\nÇözüm 2 İspat."
+  },
+  "uk": {
+    "questions": "Завдання 1 Визначте границю.\nЗавдання 2 Доведіть теорему.\nЗавдання 3 Обчисліть x.\nA) один\nB) два\n(10 балів)",
+    "solutions": "Відповідь 1 Визначення.\nВідповідь 2 Доведення."
+  },
+  "zh": {
+    "questions": "题目1 定义极限。\n题目2 证明定理。\n题目3 计算x。\nA) 一\nB) 二\n(10 分)",
+    "solutions": "解答1 极限定义。\n解答2 证明。"
+  },
+  "ja": {
+    "questions": "問題1 定義を述べよ。\n問題2 証明せよ。\n問題3 計算せよ。\nA) 一\nB) 二\n(10 点)",
+    "solutions": "解答1 定義。\n解答2 証明。"
+  }
+}

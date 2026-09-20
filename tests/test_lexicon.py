@@ -16,7 +16,7 @@ from exam_prep_lib.assessment_draft import _capability
 
 class LexiconTests(unittest.TestCase):
     def test_ru_and_en_lexicons_are_available_and_complete(self):
-        self.assertEqual(("en", "ru"), load_available())
+        self.assertEqual(("de", "en", "es", "fr", "it", "ja", "pl", "pt", "ru", "tr", "uk", "zh"), load_available())
         schema = load_schema("lexicon.schema.json")
         for language in load_available():
             lexicon = load(language)

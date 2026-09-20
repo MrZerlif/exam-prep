@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "zh",
+  "word_boundaries": false,
+  "normalization": {"fold": {}, "strip_marks": false},
+  "stopwords": ["的", "了", "在", "是", "和", "有", "为", "与", "不", "中"],
+  "slots": {
+    "kind.solution": ["解答", "答案", "solution", "solutions"],
+    "kind.homework": ["题目", "习题", "问题"],
+    "kind.exam": ["考试", "试题", "测试"],
+    "kind.lecture": ["讲义", "课程"],
+    "kind.notes": ["笔记", "总结"],
+    "struct.chapter": ["章节", "主题", "部分"],
+    "verb.definition": ["定义"],
+    "verb.proof": ["证明"],
+    "verb.calculation": ["计算"],
+    "unit.points": ["分", "分数"]
+  }
+}

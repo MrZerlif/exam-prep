@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "pl",
+  "word_boundaries": true,
+  "normalization": {"fold": {}, "strip_marks": true},
+  "stopwords": ["i", "w", "z", "na", "do", "od", "nie", "jest", "są", "dla", "oraz"],
+  "slots": {
+    "kind.solution": ["rozwiązanie", "odpowiedź", "solution", "solutions"],
+    "kind.homework": ["zadanie", "ćwiczenie", "problem", "pytanie"],
+    "kind.exam": ["egzamin", "kolokwium", "test", "wariant"],
+    "kind.lecture": ["wykład", "lekcja"],
+    "kind.notes": ["notatki", "streszczenie"],
+    "struct.chapter": ["rozdział", "temat", "sekcja"],
+    "verb.definition": ["zdefiniuj", "definicja"],
+    "verb.proof": ["udowodnij", "dowód"],
+    "verb.calculation": ["oblicz", "obliczenie"],
+    "unit.points": ["punkt", "punkty", "punktów"]
+  }
+}

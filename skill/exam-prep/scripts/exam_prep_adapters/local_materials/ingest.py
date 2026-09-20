@@ -16,9 +16,14 @@ from .labels import segment
 from exam_prep_lib.lexicon import load
 
 
-def _configuration_hash(max_excerpt_chars: int) -> str:
+def _configuration_hash(max_excerpt_chars: int, extraction_mode: str, language: str) -> str:
     payload = json.dumps(
-        {"extractor": EXTRACTOR_VERSION, "max_excerpt_chars": int(max_excerpt_chars)},
+        {
+            "extractor": EXTRACTOR_VERSION,
+            "max_excerpt_chars": int(max_excerpt_chars),
+            "extraction_mode": extraction_mode,
+            "language": language,
+        },
         sort_keys=True,
         separators=(",", ":"),
     )
@@ -42,14 +47,14 @@ def build_envelope(
     provider_id: str = "local-materials",
     authority_map: Mapping[str, str] | None = None,
     max_excerpt_chars: int = 1200,
-    language: str = "ru",
     extraction_mode: str = "scored",
+    language: str = "ru",
 ) -> SourceEvidenceEnvelope:
     if extraction_mode not in {"legacy", "scored"}:
         raise ValueError("extraction_mode must be legacy or scored")
     materialized = tuple(sources)
     authority_map = dict(authority_map or {})
-    configuration_hash = _configuration_hash(max_excerpt_chars)
+    configuration_hash = _configuration_hash(max_excerpt_chars, extraction_mode, language)
     evidence: list[SourceEvidence] = []
     diagnostics: list[str] = []
     for source in materialized:

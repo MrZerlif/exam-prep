@@ -3,6 +3,7 @@
   "product_id": "exam-prep",
   "course_id": "example-exam",
   "title": "Exam preparation",
+  "language": null,
   "exam": {
     "date": null,
     "timezone": "UTC",

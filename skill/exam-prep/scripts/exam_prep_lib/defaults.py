@@ -47,6 +47,10 @@ _DEFAULT_COURSE = {
     "schema_version": 2,
     "course_id": "exam-prep-course",
     "title": "Exam preparation",
+    "language": None,
+    "language_source": "unknown",
+    "language_confidence": None,
+    "language_detection_attempted": False,
     "exam": {
         "date": None,
         "timezone": "UTC",

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "de",
+  "word_boundaries": true,
+  "normalization": {"fold": {}, "strip_marks": true},
+  "stopwords": ["der", "die", "das", "und", "von", "zu", "den", "mit", "ist", "sind", "eine", "ein"],
+  "slots": {
+    "kind.solution": ["lösung", "musterlösung", "antwort", "solution", "solutions"],
+    "kind.homework": ["aufgabe", "übung", "beispiel", "hausaufgabe"],
+    "kind.exam": ["klausur", "prüfung", "prüfung", "exam", "variante"],
+    "kind.lecture": ["vorlesung", "vorlesungen", "skript"],
+    "kind.notes": ["notizen", "zusammenfassung"],
+    "struct.chapter": ["kapitel", "thema", "abschnitt"],
+    "verb.definition": ["definieren", "definition"],
+    "verb.proof": ["beweisen", "beweis"],
+    "verb.calculation": ["berechnen", "berechnung"],
+    "unit.points": ["punkt", "punkte"]
+  }
+}

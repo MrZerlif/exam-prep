@@ -75,7 +75,8 @@ def _marker(line: str, *, solution: bool, language: str) -> tuple[str | None, st
     stripped = line.strip()
     if not stripped:
         return None
-    first = stripped.split(maxsplit=1)[0].strip("#.,:;()[]{}")
+    raw_first = stripped.split(maxsplit=1)[0]
+    first = raw_first.strip("#.,:;()[]{}")
     if stripped.startswith("№"):
         if solution:
             return None
@@ -88,7 +89,10 @@ def _marker(line: str, *, solution: bool, language: str) -> tuple[str | None, st
             return None
         if not solution and found.slot not in {"kind.homework", "kind.exam"}:
             return None
-        rest = stripped[len(stripped.split(maxsplit=1)[0]):].lstrip()
+        prefix_length = len(raw_first)
+        if raw_first.casefold().startswith(found.token.casefold()) and raw_first[len(found.token):].isdigit():
+            prefix_length = len(found.token)
+        rest = stripped[prefix_length:].lstrip()
     parsed = QUESTION_RE.match(rest)
     if not parsed:
         return None

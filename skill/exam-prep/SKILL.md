@@ -13,6 +13,11 @@ deterministic state engine. LLM produces structured observation proposals; the
 engine validates evidence and persists mastery, reviews, priorities, and
 recovery state.
 
+Local material extraction supports `en`, `ru`, `de`, `fr`, `es`, `it`, `pt`,
+`pl`, `tr`, `uk`, `zh`, and `ja`. A course may configure its language, or the
+engine detects it once during the first `ingest-materials` run and records the
+result in `course.json`.
+
 ## Sources and lifecycle
 
 Learning targets and the workspace are the stable record. `observations.jsonl`

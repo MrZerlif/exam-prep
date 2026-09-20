@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "language": "uk",
+  "word_boundaries": true,
+  "normalization": {"fold": {}, "strip_marks": true},
+  "stopwords": ["і", "в", "у", "не", "що", "на", "я", "з", "як", "для", "це"],
+  "slots": {
+    "kind.solution": ["розв'язання", "відповідь", "розв’язок", "solution", "solutions"],
+    "kind.homework": ["задача", "вправа", "питання", "завдання"],
+    "kind.exam": ["іспит", "залік", "тест", "варіант"],
+    "kind.lecture": ["лекція", "курс"],
+    "kind.notes": ["конспект", "нотатки", "резюме"],
+    "struct.chapter": ["розділ", "тема", "секція"],
+    "verb.definition": ["визначте", "визначення"],
+    "verb.proof": ["доведіть", "доведення"],
+    "verb.calculation": ["обчисліть", "обчислення"],
+    "unit.points": ["бал", "бали", "балів"]
+  }
+}

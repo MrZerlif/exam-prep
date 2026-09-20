@@ -25,6 +25,7 @@ from .target_normalization import normalize_event, normalize_syllabus
 from .assessment import FrozenAssessment
 from .provenance import source_ref_from_mapping
 from .scheduler import _exam_time
+from .lexicon import available as available_languages
 
 
 def blueprint_revision_diagnostics(
@@ -296,6 +297,18 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         return None
 
     add("course_schema", check_course_schema, path=str(course_path))
+
+    def check_language():
+        if course_issue:
+            return "warning", "skipped: course.json could not be parsed"
+        language = course.get("language")
+        if language is not None and language not in available_languages():
+            return "error", f"unsupported_language: no lexicon is available for {language!r}"
+        if language is None and course.get("language_detection_attempted"):
+            return "warning", "unsupported_language: language detection confidence was below 0.6"
+        return None
+
+    add("course_language", check_language, path=str(course_path))
 
     def check_syllabus_schema():
         if syllabus_issue:
@@ -671,5 +684,10 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         "checks": checks,
         "error_count": len(errors),
         "warning_count": len(warnings),
+        "language": {
+            "value": course.get("language"),
+            "source": course.get("language_source", "unknown"),
+            "confidence": course.get("language_confidence"),
+        },
     }
 
