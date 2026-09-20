@@ -13,6 +13,15 @@ from pathlib import Path
 from uuid import uuid4
 
 from exam_prep_lib.capabilities import CapabilityRegistry, capability_dimension_issues
+from exam_prep_lib.activity import (
+    ActivityConsumption,
+    ActivityStateError,
+    activity_status,
+    consume_activity,
+    discard_activity,
+    finish_activity,
+    start_activity,
+)
 from exam_prep_lib.defaults import default_course, default_learner, default_session, default_syllabus
 from exam_prep_lib.evaluation import summarize_evaluation
 from exam_prep_lib.diagnostics import (
@@ -491,6 +500,11 @@ def _parser() -> argparse.ArgumentParser:
     load.add_argument("path")
     load.add_argument("--language", choices=available_languages(), default=None)
     sub.add_parser("start")
+    start_activity_parser = sub.add_parser("start-activity")
+    start_activity_parser.add_argument("activity_id")
+    sub.add_parser("finish-activity")
+    sub.add_parser("discard-activity")
+    sub.add_parser("activity-status")
     status_parser = sub.add_parser("status")
     status_parser.add_argument(
         "--compact",
@@ -1075,6 +1089,43 @@ def main(argv: list[str] | None = None) -> int:
             }
         )
 
+    if args.command == "start-activity":
+        session, _activated = _activate_session(session)
+        try:
+            transition = start_activity(session, args.activity_id, _now())
+        except ActivityStateError as exc:
+            _print_json({"status": "invalid_activity_state", "reason": str(exc)})
+            return 1
+        if transition.changed:
+            _persist_learning(store, course, syllabus, learner, transition.session)
+        _print_json(transition.payload)
+        return transition.exit_code
+
+    if args.command == "finish-activity":
+        try:
+            transition = finish_activity(session, _now())
+        except ActivityStateError as exc:
+            _print_json({"status": "invalid_activity_state", "reason": str(exc)})
+            return 1
+        if transition.changed:
+            _persist_learning(store, course, syllabus, learner, transition.session)
+        _print_json(transition.payload)
+        return transition.exit_code
+
+    if args.command == "discard-activity":
+        transition = discard_activity(session)
+        if transition.changed:
+            _persist_learning(store, course, syllabus, learner, transition.session)
+        _print_json(transition.payload)
+        return transition.exit_code
+
+    if args.command == "activity-status":
+        try:
+            status = activity_status(session)
+        except ActivityStateError as exc:
+            _print_json({"status": "invalid_activity_state", "reason": str(exc)})
+            return 1
+        return _result(status)
     if args.command == "status":
         session_history = store.read_session_summaries()
         all_events = store.read_complete_observations()
@@ -1140,6 +1191,23 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "record-observation":
         proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
         session, _changed = _activate_session(session)
+        recorded_at = _now()
+        if proposal.get("schema_version") == 2:
+            try:
+                consumption = consume_activity(
+                    session,
+                    proposal.get("activity_id"),
+                    recorded_at,
+                )
+            except ActivityStateError as exc:
+                _print_json({"status": "invalid_activity_state", "reason": str(exc)})
+                return 1
+        else:
+            consumption = ActivityConsumption(
+                session=dict(session),
+                elapsed_seconds=None,
+                matched=False,
+            )
         # Computed before the append so "already linked" means the state this
         # attempt arrived into. Never gates the write - see the function's
         # docstring on why an unlinked attempt is still recorded.
@@ -1152,14 +1220,17 @@ def main(argv: list[str] | None = None) -> int:
         result = store.append_observation(
             proposal,
             session["session_id"],
-            _now(),
-            None,
-            None,
+            recorded_at,
+            expected_seconds=None,
+            elapsed_seconds=consumption.elapsed_seconds,
             session_phase=session["phase"],
             exam_revision=int(course.get("exam", {}).get("revision", 1)),
             exam_hash=StudyStore.hash_document(course.get("exam") or {}),
         )
-        session = dict(session)
+        if consumption.matched:
+            session = consumption.session
+        else:
+            session = dict(session)
         target_id = proposal.get("target_id", proposal.get("concept_id"))
         done = _attempt_is_done(proposal)
         session.update(
@@ -1190,7 +1261,6 @@ def main(argv: list[str] | None = None) -> int:
         if args.include_next_hint:
             payload["next"] = _next_hint(course, session, reviews)
         return _result(payload)
-
     if args.command == "review-due":
         now = datetime.now(timezone.utc)
         due = {
@@ -1368,6 +1438,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "end-session":
         session_events: list[dict] = []
+        discarded_activity = discard_activity(session)
+        session = discarded_activity.session
         summary = None
         active_id = session.get("session_id")
         if session.get("phase") in ("study", "exam") and active_id:
@@ -1466,6 +1538,7 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                 }
             summary["evaluation"] = summarize_evaluation(session_events)
+            summary["evaluation"] = summarize_evaluation(session_events)
             store.append_session_summary(summary)
         session = dict(session)
         # Deliberately leave current_target_id/current_task/last_attempt_*/
@@ -1475,6 +1548,8 @@ def main(argv: list[str] | None = None) -> int:
         session.update({"phase": "idle", "mock_started_at": None})
         concepts, reviews, _manifest = _persist_learning(store, course, syllabus, learner, session)
         payload = {"status": "session_ended", "session": session, "summary": summary}
+        if discarded_activity.changed:
+            payload["discarded_activity"] = discarded_activity.payload
         if args.include_next_hint:
             payload["next"] = _next_hint(course, session, reviews)
         return _result(payload)
