@@ -12,6 +12,27 @@ DEFAULT_RECURRING_MISTAKE_POLICY = {
     "resolve_after_clean_successes": 3,
 }
 
+# Classes of built-in error tags. The v2 schema intentionally stays open, so
+# an unknown tag is a normal situation. Assigning formula_recall_error,
+# algebra_error, and notation_error to execution is a working assumption, not
+# an established fact: failure to recall a formula can also be a gap in
+# understanding.
+ERROR_TAG_CLASS = {
+    "conceptual_error": "understanding",
+    "method_selection_error": "understanding",
+    "prerequisite_gap": "understanding",
+    "domain_condition_error": "understanding",
+    "proof_structure_error": "understanding",
+    "formula_recall_error": "execution",
+    "algebra_error": "execution",
+    "notation_error": "execution",
+    "careless_error": "execution",
+    "speed_problem": "execution",
+}
+
+
+def classify_error_tag(tag: str) -> str:
+    return ERROR_TAG_CLASS.get(tag, "other")
 EXTRACTION_ACCEPTED_FRACTION_BLOCKING = 0.9
 EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING = 20
 EXTRACTION_QUESTIONS_PER_PAGE_GAP = 40

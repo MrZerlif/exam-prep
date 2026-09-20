@@ -91,7 +91,10 @@
       }
     },
     "error_tags": {
-      "type": "array"
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     },
     "diagnostic_confidence": {
       "type": "string",
