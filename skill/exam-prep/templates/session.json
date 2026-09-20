@@ -9,6 +9,10 @@
   "last_attempt_outcome": null,
   "last_attempt_error_tags": [],
   "current_task_done": false,
-  "mock_assessment_ids": []
+  "mock_assessment_ids": [],
+  "active_activity_id": null,
+  "active_activity_started_at": null,
+  "pending_activity_id": null,
+  "pending_activity_elapsed_seconds": null
 }
 

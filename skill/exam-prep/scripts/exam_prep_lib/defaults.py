@@ -141,6 +141,10 @@ _DEFAULT_SESSION = {
     "last_attempt_error_tags": [],
     "current_task_done": False,
     "mock_assessment_ids": [],
+    "active_activity_id": None,
+    "active_activity_started_at": None,
+    "pending_activity_id": None,
+    "pending_activity_elapsed_seconds": None,
 }
 
 
