@@ -30,6 +30,28 @@ class Candidate:
 _POINTS_SHAPE_RE = re.compile(r"\(\s*\d+\s+[^)]*\)", re.UNICODE)
 
 
+_SECTION_CONTEXT_LOOKBACK = 10
+
+
+def _section_context(index: int, segments: Sequence[Segment], lexicon: Lexicon) -> bool:
+    """Whether the nearest heading above `index` falls into kind.homework/exam.
+
+    Walks backward and stops at the first segment whose body hits *any*
+    kind.* slot - not just homework/exam - so an older heading such as
+    "kind.lecture" is not silently overridden by a homework word appearing
+    further down in ordinary prose. The walk is bounded so a heading near
+    the top of a long document cannot promote everything below it.
+    """
+
+    start = max(0, index - _SECTION_CONTEXT_LOOKBACK)
+    for item in reversed(segments[start:index]):
+        found = best_slot("kind.", item.body, lexicon)
+        if found is None:
+            continue
+        return found.slot in {"kind.homework", "kind.exam"}
+    return False
+
+
 def _source_kind(source: Any) -> str:
     if isinstance(source, Mapping):
         return str(source.get("kind", ""))
@@ -119,6 +141,7 @@ def question_candidate_score(
         "sibling_uniformity": _sibling_uniformity(index, all_segments),
         "lexicon_hit": best_slot("verb.", segment.body, lexicon) is not None or best_slot("kind.", segment.body, lexicon) is not None,
         "dense_run": _dense_run(index, all_segments),
+        "section_context": _section_context(index, all_segments, lexicon),
         "heading_shape": _heading_shape(index, all_segments),
         "global_hierarchy": _global_hierarchy(all_segments) if global_hierarchy is None else global_hierarchy,
     }
