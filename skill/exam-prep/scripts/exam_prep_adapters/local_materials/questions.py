@@ -25,12 +25,13 @@ from exam_prep_lib.text_normalize import canonical_key
 from .chapters import number_from_name
 from .candidates import score
 from .extractor import ExtractedPage, ExtractedSource
-from .labels import segment
+from .labels import option_run, segment
+from .points import extract as extract_points, infer_token, verify_total
 
 QUESTION_RE = re.compile(r"^\s*(?:№\s*)?([0-9]+(?:[.\-][0-9A-Za-z]+)*)?\s*[.:)]?\s*(.*)$", re.IGNORECASE)
 SOLUTION_RE = re.compile(r"^\s*(?:№\s*)?([0-9]+(?:[.\-][0-9A-Za-z]+)*)?\s*[.:)]?\s*(.*)$", re.IGNORECASE)
 POINTS_RE = re.compile(r"\(\s*\d+\s*[^)]*\)", re.IGNORECASE)
-OPTION_RE = re.compile(r"^\s*([A-DА-Г])\s*[).:-]\s*(.+)$", re.IGNORECASE)
+OPTION_LINE_RE = re.compile(r"^\s*(?P<label>[^\W\d_]{1,3}|\d{1,2})\s*[).:：-]\s*(?P<body>.+)$", re.UNICODE)
 EXTRACTABLE_KINDS = frozenset({"exam", "homework"})
 OPT_IN_KINDS = frozenset({"other", "lecture", "notes"})
 
@@ -137,21 +138,25 @@ def _strip_shared_lines(value: str) -> str:
 
 
 def _options(prompt: str) -> tuple[tuple[str, ...], str]:
+    labels = option_run(prompt)
+    if not labels:
+        return (), prompt
+    label_keys = {label.casefold() for label in labels}
     options: list[str] = []
     kept: list[str] = []
     for line in prompt.splitlines():
-        match = OPTION_RE.match(line)
-        if match:
-            options.append(match.group(2).strip())
+        found = OPTION_LINE_RE.match(line)
+        if found and found.group("label").casefold() in label_keys:
+            options.append(found.group("body").strip())
         else:
             kept.append(line)
     return tuple(options), "\n".join(kept).strip()
 
 
-def _extract_points(prompt: str, language: str = "ru") -> tuple[str, int | None]:
+def _extract_points(prompt: str, language: str = "ru", token: str | None = None) -> tuple[str, int | None]:
     lexicon = load(language)
     for candidate in POINTS_RE.finditer(prompt):
-        if best_slot("unit.points", candidate.group(0), lexicon) is None:
+        if extract_points(candidate.group(0), token=token, lexicon=lexicon) is None:
             continue
         value = re.search(r"\d+", candidate.group(0))
         if value is None:
@@ -227,6 +232,7 @@ def extract_questions(
     include_unclassified: bool = False,
     language: str = "ru",
     extraction_mode: str = "scored",
+    expected_total_points: float | int | None = 100,
 ) -> tuple[ExtractedQuestion, ...]:
     if extraction_mode not in {"legacy", "scored"}:
         raise ValueError("extraction_mode must be legacy or scored")
@@ -248,7 +254,40 @@ def extract_questions(
             continue
         kind = "exam" if source.kind == "exam" else "homework"
         solutions = solutions_by_file.get(_solution_file_key(source.relative_path, language), {})
-        source_issues = tuple(source.issues) + source_question_issues(source, language)
+        point_token = infer_token(source.pages, lexicon=load(language))
+        candidate_pages = {
+            page.number: score(
+                segment(page.text),
+                source=source,
+                lexicon=load(language),
+                solutions_by_file=solutions,
+                points_token=point_token,
+            )
+            for page in source.pages
+        }
+        point_values = [
+            extract_points(candidate.segment.body, token=point_token, lexicon=load(language))
+            for candidates in candidate_pages.values()
+            for candidate in candidates
+            if candidate.bucket in {"accept", "review"}
+        ]
+        points_verified = verify_total(point_values, expected_total_points) if point_values else None
+        points_weight = 0.5 if points_verified is False else 1.0
+        if points_weight != 1.0:
+            candidate_pages = {
+                page.number: score(
+                    segment(page.text),
+                    source=source,
+                    lexicon=load(language),
+                    solutions_by_file=solutions,
+                    points_token=point_token,
+                    points_weight=points_weight,
+                )
+                for page in source.pages
+            }
+        source_issues = list(tuple(source.issues) + source_question_issues(source, language))
+        if points_verified is False:
+            source_issues.append(IngestIssue("low_confidence_question", source.relative_path, "inferred point total does not match expected_total_points", "info"))
         for page in source.pages:
             if extraction_mode == "legacy":
                 candidate_blocks = tuple(
@@ -258,17 +297,12 @@ def extract_questions(
             else:
                 candidate_blocks = tuple(
                     (candidate.segment.label.raw, candidate.segment.body, candidate)
-                    for candidate in score(
-                        segment(page.text),
-                        source=source,
-                        lexicon=load(language),
-                        solutions_by_file=solutions,
-                    )
+                    for candidate in candidate_pages.get(page.number, ())
                     if candidate.bucket in {"accept", "review"}
                 )
             for label, raw_prompt, candidate in candidate_blocks:
                 prompt = _strip_shared_lines(raw_prompt)
-                prompt, points = _extract_points(prompt, language)
+                prompt, points = _extract_points(prompt, language, point_token)
                 options, prompt = _options(prompt)
                 prompt, embedded_answer = _split_answer(prompt, language)
                 answer = _match_solution(label, solutions) or embedded_answer
