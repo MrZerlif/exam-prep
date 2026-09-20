@@ -14,6 +14,7 @@ from uuid import uuid4
 
 from exam_prep_lib.capabilities import CapabilityRegistry, capability_dimension_issues
 from exam_prep_lib.defaults import default_course, default_learner, default_session, default_syllabus
+from exam_prep_lib.evaluation import summarize_evaluation
 from exam_prep_lib.diagnostics import (
     blueprint_revision_diagnostics,
     run_validation,
@@ -176,12 +177,13 @@ def _compact_status(result: dict) -> dict:
     each target's availability/mastery_status/recurring_mistakes (dropping
     confidence, evidence counters, evidence_maturity, and numeric mastery
     dimensions - available in full via plain `status` or `roadmap`),
-    review_queue narrowed to items actually due, and diagnostics fields
-    dropped when empty rather than printed as null/[]/false. session,
+    course-wide calibration is intentionally removed because it is not needed to choose the next action,
+    review_queue narrowed to items actually due, and diagnostics fields dropped when empty rather than printed as null/[]/false. session,
     resume_point, course, and last_session_summary are already small and
     are passed through unchanged."""
 
     compact = dict(result)
+    compact.pop("course_wide_calibration", None)
     targets_key = "targets" if "targets" in result else "concepts"
     derived = result.get(targets_key)
     if isinstance(derived, dict) and isinstance(derived.get("targets"), dict):
@@ -1075,6 +1077,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.command == "status":
         session_history = store.read_session_summaries()
+        all_events = store.read_complete_observations()
         source_language_counts: dict[str, int] = {}
         material_index_path = store.state_path / "material_index.json"
         if material_index_path.exists():
@@ -1110,8 +1113,11 @@ def main(argv: list[str] | None = None) -> int:
                 CapabilityRegistry.from_syllabus(syllabus).rejected_descriptors()
             ),
             "blueprint_diagnostics": blueprint_revision_diagnostics(
-                course, store.read_complete_observations()
+                course, all_events
             ),
+            "course_wide_calibration": summarize_evaluation(
+                all_events
+            )["confidence_calibration"],
             "resume_point": _resume_point(syllabus, concepts, session),
         }
         if args.include_next_hint:
@@ -1361,6 +1367,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     if args.command == "end-session":
+        session_events: list[dict] = []
         summary = None
         active_id = session.get("session_id")
         if session.get("phase") in ("study", "exam") and active_id:
@@ -1458,6 +1465,7 @@ def main(argv: list[str] | None = None) -> int:
                         session, store.read_assessments(), session_events
                     ),
                 }
+            summary["evaluation"] = summarize_evaluation(session_events)
             store.append_session_summary(summary)
         session = dict(session)
         # Deliberately leave current_target_id/current_task/last_attempt_*/
