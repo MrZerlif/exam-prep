@@ -6,6 +6,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "skill" / "exam-prep" / "scri
 
 from exam_prep_adapters.local_materials.extractor import ExtractedPage, ExtractedSource
 from exam_prep_adapters.local_materials.questions import extract_questions, source_question_issues
+from exam_prep_lib.assessment_draft import build_draft
 
 
 def source(path: str, kind: str, text: str) -> ExtractedSource:
@@ -138,6 +139,59 @@ class ExpectedTotalPointsTests(unittest.TestCase):
         ]
         self.assertTrue(mismatches)
         self.assertEqual({"info"}, {issue.severity for issue in mismatches})
+
+
+LECTURE_WITH_EXERCISES = "\n".join((
+    "1. Непрерывность",
+    "Оглавление",
+    "2. Производная",
+    "Задача 1. Найдите производную функции f(x) = x^2 в точке x = 3. (2 балла)",
+    "Задача 2. Найдите предел последовательности a_n = 1/n при n к бесконечности. (2 балла)",
+))
+
+
+class LectureExerciseOptInTests(unittest.TestCase):
+    """Lecture exercises are real practice material, behind an explicit flag."""
+
+    def lecture(self) -> ExtractedSource:
+        return source("lecture.md", "lecture", LECTURE_WITH_EXERCISES)
+
+    def test_lecture_exercises_need_flag(self):
+        self.assertEqual((), extract_questions((self.lecture(),)))
+
+    def test_lecture_exercises_are_extracted_behind_the_flag(self):
+        questions = extract_questions((self.lecture(),), include_lecture_exercises=True)
+        self.assertTrue(questions)
+
+    def test_lecture_exercises_accept_only(self):
+        questions = extract_questions((self.lecture(),), include_lecture_exercises=True)
+        prompts = " ".join(question.prompt for question in questions)
+        self.assertNotIn("Оглавление", prompts)
+
+    def test_lecture_question_is_marked_with_its_origin(self):
+        questions = extract_questions((self.lecture(),), include_lecture_exercises=True)
+        for question in questions:
+            origin = [
+                issue for issue in question.issues
+                if issue.kind == "low_confidence_question" and "lecture.md" in issue.detail
+            ]
+            self.assertTrue(origin, question.prompt)
+            self.assertEqual({"info"}, {issue.severity for issue in origin})
+
+    def test_lecture_question_never_mock(self):
+        questions = extract_questions((self.lecture(),), include_lecture_exercises=True)
+        draft = build_draft(questions, holdout_ratio=1.0)
+        self.assertTrue(draft["assessments"])
+        self.assertEqual(
+            {"practice"}, {item["purpose"] for item in draft["assessments"]}
+        )
+
+    def test_unclassified_opt_in_is_unchanged_by_the_lecture_flag(self):
+        material = source("unknown.md", "other", "Question 1\nCompute x")
+        self.assertEqual((), extract_questions((material,), include_lecture_exercises=True))
+        self.assertEqual(
+            1, len(extract_questions((material,), include_unclassified=True))
+        )
 
 
 if __name__ == "__main__":

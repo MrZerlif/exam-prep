@@ -554,6 +554,7 @@ def _parser() -> argparse.ArgumentParser:
     draft_parser.add_argument("--reserve-for-mock", action="append", default=[])
     draft_parser.add_argument("--holdout-ratio", type=float, default=0.2)
     draft_parser.add_argument("--include-unclassified", action="store_true")
+    draft_parser.add_argument("--include-lecture-exercises", action="store_true")
     draft_parser.add_argument("--extraction-mode", choices=("legacy", "scored"), default="scored")
     apply_lexicon_parser = sub.add_parser("apply-lexicon")
     apply_lexicon_parser.add_argument("path")
@@ -638,6 +639,7 @@ def main(argv: list[str] | None = None) -> int:
         questions = extract_questions(
             localized,
             include_unclassified=args.include_unclassified,
+            include_lecture_exercises=args.include_lecture_exercises,
             language=draft_language,
             extraction_mode=args.extraction_mode,
             expected_total_points=(draft_course.get("exam") or {}).get("expected_total_points"),

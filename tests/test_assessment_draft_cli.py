@@ -123,5 +123,41 @@ class DraftExpectedTotalPointsTests(unittest.TestCase):
         self.assertTrue(self.draft_with_expected_total(100))
 
 
+class DraftLectureExerciseFlagTests(unittest.TestCase):
+    def draft(self, *extra):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            materials = root / "materials"
+            materials.mkdir()
+            (materials / "lekciya.md").write_text(
+                "\n".join((
+                    "1. Непрерывность",
+                    "Оглавление",
+                    "Задача 1. Найдите производную функции f(x) = x^2 в точке x = 3. (2 балла)",
+                )),
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with redirect_stdout(output):
+                self.assertEqual(0, main(["--workspace", str(root), "init", "--language", "ru"]))
+                self.assertEqual(
+                    0,
+                    main([
+                        "--workspace", str(root), "draft-assessments", str(materials),
+                        "--out", str(root / "draft.json"), *extra,
+                    ]),
+                )
+            return json.loads((root / "draft.json").read_text(encoding="utf-8"))["assessments"]
+
+    def test_lecture_exercises_are_absent_by_default(self):
+        self.assertEqual([], self.draft())
+
+    def test_flag_extracts_lecture_exercises_as_practice(self):
+        assessments = self.draft("--include-lecture-exercises")
+        self.assertEqual(1, len(assessments))
+        self.assertEqual("practice", assessments[0]["purpose"])
+        self.assertIn("производную", assessments[0]["prompt"])
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -37,6 +37,7 @@ OPT_IN_KINDS = frozenset({"other", "lecture", "notes"})
 # A file with no prose is a parser failure only where prose was expected. In a
 # problem set one line per task is the normal layout, not a symptom.
 PROSE_EXPECTED_KINDS = frozenset({"lecture", "notes", "other"})
+LECTURE_KINDS = frozenset({"lecture", "notes"})
 
 
 @dataclass(frozen=True)
@@ -247,6 +248,7 @@ def extract_questions(
     sources: Iterable[ExtractedSource],
     *,
     include_unclassified: bool = False,
+    include_lecture_exercises: bool = False,
     language: str = "ru",
     extraction_mode: str = "scored",
     expected_total_points: float | int | None = None,
@@ -290,7 +292,17 @@ def extract_questions(
     for source in materialized:
         if source.kind == "solution":
             continue
-        if source.kind not in EXTRACTABLE_KINDS and not (include_unclassified and source.kind == "other"):
+        accept_only = False
+        if source.kind in OPT_IN_KINDS:
+            if source.kind == "other" and not include_unclassified:
+                continue
+            if source.kind in LECTURE_KINDS:
+                if not include_lecture_exercises:
+                    continue
+                # A lecture is mostly prose: only the unambiguous accept
+                # bucket is an exercise, never the review bucket.
+                accept_only = True
+        elif source.kind not in EXTRACTABLE_KINDS:
             continue
         source_semantics = source_lexicon(source)
         kind = "exam" if source.kind == "exam" else "homework"
@@ -332,6 +344,16 @@ def extract_questions(
         )
         if points_verified is False:
             source_issues.append(IngestIssue("low_confidence_question", source.relative_path, "inferred point total does not match expected_total_points", "info"))
+        if accept_only:
+            source_issues.append(
+                IngestIssue(
+                    "low_confidence_question",
+                    source.relative_path,
+                    f"extracted from {source.kind} source {source.relative_path} via --include-lecture-exercises",
+                    "info",
+                )
+            )
+        accepted_buckets = {"accept"} if accept_only else {"accept", "review"}
         for page in source.pages:
             if extraction_mode == "legacy":
                 candidate_blocks = tuple(
@@ -346,7 +368,7 @@ def extract_questions(
                 candidate_blocks = tuple(
                     (candidate.segment.label.raw, candidate.segment.body, candidate)
                     for candidate in candidate_pages.get(page.number, ())
-                    if candidate.bucket in {"accept", "review"}
+                    if candidate.bucket in accepted_buckets
                 )
             for label, raw_prompt, candidate in candidate_blocks:
                 prompt = _strip_shared_lines(raw_prompt)
