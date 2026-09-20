@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parents[1] / "skill" / "exam-prep" / "scri
 
 from exam_prep import main
 from exam_prep_lib.schema_validation import SchemaError
+from exam_prep_lib.lexicon import load, load_learned, merge_learned, validate_learned
 
 
 class LearnedLexiconTests(unittest.TestCase):
@@ -135,6 +136,97 @@ class LearnedLexiconTests(unittest.TestCase):
         report = self.run_cli("validate")
         self.assertIn("nl", report["learned_lexicons"])
         self.assertEqual("ok", next(item["status"] for item in report["checks"] if item["name"] == "learned_lexicons"))
+
+
+class LearnedLexiconMatchingRulesTests(unittest.TestCase):
+    """A fully learned language must be able to describe how it matches."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        (self.root / "lexicons").mkdir(parents=True)
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def write(self, language, payload):
+        (self.root / "lexicons" / f"learned-{language}.json").write_text(
+            json.dumps(payload, ensure_ascii=False), encoding="utf-8"
+        )
+
+    def test_learned_lexicon_declares_word_boundaries(self):
+        # Thai is written without spaces between words, so a language that
+        # exists only as an overlay has to be able to turn boundaries off.
+        self.write("th", {
+            "schema_version": 1,
+            "language": "th",
+            "word_boundaries": False,
+            "slots": {"kind.exam": ["ข้อสอบ"]},
+        })
+        overlay = load_learned("th", self.root)
+        self.assertFalse(overlay.word_boundaries)
+        self.assertEqual(overlay, load("th", extra=overlay))
+
+    def test_learned_lexicon_defaults_to_word_boundaries(self):
+        self.write("th", {
+            "schema_version": 1,
+            "language": "th",
+            "slots": {"kind.exam": ["ข้อสอบ"]},
+        })
+        self.assertTrue(load_learned("th", self.root).word_boundaries)
+
+    def test_bundled_normalization_wins_over_overlay(self):
+        self.write("tr", {
+            "schema_version": 1,
+            "language": "tr",
+            "word_boundaries": False,
+            "normalization": {"fold": {"ı": "x"}, "strip_marks": False},
+            "slots": {"kind.exam": ["deneme"]},
+        })
+        merged = load("tr", extra=load_learned("tr", self.root))
+        self.assertTrue(merged.word_boundaries)
+        self.assertEqual({"ı": "i", "İ": "i"}, merged.fold)
+        self.assertTrue(merged.strip_marks)
+
+    def test_merge_preserves_declared_matching_rules(self):
+        addition = {
+            "schema_version": 1,
+            "language": "th",
+            "word_boundaries": False,
+            "normalization": {"fold": {"ๅ": "า"}, "strip_marks": False},
+            "slots": {"kind.exam": ["ข้อสอบ"]},
+        }
+        merged = merge_learned(None, addition)
+        self.assertFalse(merged["word_boundaries"])
+        self.assertEqual({"fold": {"ๅ": "า"}, "strip_marks": False}, merged["normalization"])
+
+    def test_merge_lets_a_later_proposal_correct_the_rules(self):
+        first = {
+            "schema_version": 1,
+            "language": "th",
+            "word_boundaries": True,
+            "slots": {"kind.exam": ["ข้อสอบ"]},
+        }
+        second = {
+            "schema_version": 1,
+            "language": "th",
+            "word_boundaries": False,
+            "slots": {"kind.homework": ["การบ้าน"]},
+        }
+        merged = merge_learned(first, second)
+        self.assertFalse(merged["word_boundaries"])
+        self.assertEqual(
+            {"kind.exam", "kind.homework"}, set(merged["slots"])
+        )
+
+    def test_overlay_still_rejects_unknown_fields(self):
+        with self.assertRaises(SchemaError):
+            validate_learned({
+                "schema_version": 1,
+                "language": "th",
+                "stopwords": ["และ"],
+                "slots": {"kind.exam": ["ข้อสอบ"]},
+            })
 
 
 if __name__ == "__main__":

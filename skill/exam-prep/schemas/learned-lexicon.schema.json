@@ -7,6 +7,15 @@
   "properties": {
     "schema_version": {"type": "integer", "enum": [1]},
     "language": {"type": "string", "minLength": 2, "pattern": "^[a-z]{2,8}$"},
+    "word_boundaries": {"type": "boolean"},
+    "normalization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fold": {"type": "object", "additionalProperties": {"type": "string"}},
+        "strip_marks": {"type": "boolean"}
+      }
+    },
     "slots": {
       "type": "object",
       "additionalProperties": false,
