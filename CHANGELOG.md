@@ -1,7 +1,31 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-09-20
 
+### Изменения поведения
+
+Число извлечённых вопросов у существующих курсов изменится. Индекс материалов
+пересобирается автоматически (`EXTRACTOR_VERSION` поднят до 4).
+
+- Лекции и конспекты больше не дают вопросов; для лекционных упражнений есть
+  `--include-lecture-exercises`.
+- `expected_total_points` по умолчанию `null`; сверка суммы баллов выполняется
+  только когда значение задано явно. У курсов, где там остался шаблонный `100`,
+  `validate` подскажет один раз.
+- Уже сминченные ассессменты не чистятся задним числом, чтобы не оторвать
+  историю наблюдений.
+
+- SKILL.md теперь называет команду возобновления буквально: `status --compact`
+  вместо описательного «compact `status`». Прочитавший только SKILL.md агент
+  раньше выполнял полный `status` — на курсе из 40 целей это 58 КБ против 10 КБ
+  у `--compact`, то есть лишняя стоимость на каждое возобновление сессии.
+  Дефолт CLI не менялся, `--compact` остаётся опциональным флагом.
+- `--include-lecture-exercises` теперь действительно извлекает вопросы. Флаг,
+  гейт и info-issue уже существовали, но лекционский кандидат не мог набрать
+  порог `accept`: потолок был 2.5 при пороге 3.0, а `source_kind` (+1.5) даётся
+  только `exam`/`homework`. Добавлен сигнал `section_context` (+1.5) — кандидат
+  стоит под заголовком, который сам попадает в `kind.homework`/`kind.exam`, с
+  ограниченной глубиной поиска и без обращения к языковым словам в коде.
 - Material ingestion now excludes lecture and notes sources from question extraction by default, requires explicit opt-in for unclassified sources, and records extraction anomalies instead of silently accepting suspicious output.
 - `unclassified_source` is no longer raised for a source whose language was detected with confidence at or above 0.9. That issue means "the lexicon is short of words", and a textbook is not that case: the lexicon identified the language perfectly, the kind taxonomy simply has no slot for a textbook. Conflating the two made `apply-lexicon` noisy with proposals that had nothing to add. A `kind.textbook` slot remains a separate question, since it also implies an authority and a source-policy position.
 - The `extraction_anomaly` ratio is skipped entirely for sources with fewer than five label segments, where it carries no information: a textbook page whose only label is its chapter heading is one segment out of one, a perfect ratio that says nothing about the parser.
