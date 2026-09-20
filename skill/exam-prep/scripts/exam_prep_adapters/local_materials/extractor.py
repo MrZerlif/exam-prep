@@ -22,7 +22,7 @@ from .pdf_backend import PdfSupportMissing, pdf_backend, read_pdf as _read_pdf
 
 read_pdf = _read_pdf
 
-EXTRACTOR_VERSION = "3"
+EXTRACTOR_VERSION = "4"
 MAX_FILE_BYTES = 64 * 1024 * 1024
 SKIP_DIRS = frozenset({".git", ".exam-prep", "__pycache__", "node_modules"})
 SKIP_NAMES = frozenset({"~$", ".DS_Store"})

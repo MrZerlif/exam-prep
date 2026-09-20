@@ -5,7 +5,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[1] / "skill" / "exam-prep" / "scripts"))
 
 from exam_prep_adapters.local_materials.extractor import ExtractedPage, ExtractedSource
-from exam_prep_adapters.local_materials.questions import extract_questions
+from exam_prep_adapters.local_materials.questions import extract_questions, source_question_issues
 
 
 def source(path: str, kind: str, text: str) -> ExtractedSource:
@@ -62,6 +62,40 @@ class QuestionExtractorTests(unittest.TestCase):
         )
         answers = {question.prompt: question.reference_answer for question in questions}
         self.assertEqual({"Find a": "a = 1", "Find b": "b = 2"}, answers)
+
+
+class ExtractionAnomalyScopeTests(unittest.TestCase):
+    """The prose ratio only signals a parser failure where prose is expected."""
+
+    def test_compact_problem_set_is_not_anomalous(self):
+        material = source(
+            "hw.md",
+            "homework",
+            "\n".join(f"{index}) Найдите предел a_n." for index in range(1, 13)),
+        )
+        self.assertEqual((), source_question_issues(material))
+
+    def test_compact_exam_is_not_anomalous(self):
+        material = source(
+            "exam.md",
+            "exam",
+            "\n".join(
+                f"{index}) Berechnen Sie. ({points} Punkte)"
+                for index, points in zip(range(1, 5), (10, 10, 15, 25))
+            ),
+        )
+        self.assertEqual((), source_question_issues(material, "de"))
+
+    def test_dense_other_source_still_blocks(self):
+        material = source(
+            "unknown.md",
+            "other",
+            "\n".join(f"{index}) Найдите предел a_n." for index in range(1, 13)),
+        )
+        issues = source_question_issues(material)
+        self.assertTrue(
+            any(issue.kind == "extraction_anomaly" and issue.severity == "blocking" for issue in issues)
+        )
 
 
 if __name__ == "__main__":
