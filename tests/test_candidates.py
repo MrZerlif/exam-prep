@@ -58,5 +58,63 @@ class CandidateScoringTests(unittest.TestCase):
         self.assertEqual(["1"], [item.segment.label.raw for item in candidates])
 
 
+class SectionContextTests(unittest.TestCase):
+    """A lecture exercise under a homework-shaped heading is structurally
+    distinguishable from a table of contents, without a source_kind bonus
+    or a verb hit in the body itself."""
+
+    def test_lecture_exercise_under_homework_heading_accepts(self):
+        text = (
+            "Теория.\n\n"
+            "Задачи для самостоятельной работы\n"
+            + "\n".join(f"{i}) Найдите предел a_n." for i in range(1, 6))
+        )
+        candidates = score(segment(text), source=SimpleNamespace(kind="lecture"), lexicon=load("ru"))
+        accepted = [item for item in candidates if item.bucket == "accept"]
+        self.assertEqual(5, len(accepted))
+
+    def test_lecture_toc_stays_rejected(self):
+        text = (
+            "1.1 Введение\n1.2 Пределы\n1.3 Производные\n"
+            + "\n".join(f"{i}) Найдите предел a_n." for i in range(1, 6))
+        )
+        candidates = score(segment(text), source=SimpleNamespace(kind="lecture"), lexicon=load("ru"))
+        accepted = [item for item in candidates if item.bucket == "accept"]
+        self.assertEqual([], accepted)
+
+    def test_section_context_is_language_driven(self):
+        text = (
+            "Theorie.\n\n"
+            "Aufgabe zur Übung\n"
+            + "\n".join(f"{i}) Bestimmen Sie den Grenzwert der Folge a_n." for i in range(1, 6))
+        )
+        candidates = score(segment(text), source=SimpleNamespace(kind="lecture"), lexicon=load("de"))
+        accepted = [item for item in candidates if item.bucket == "accept"]
+        self.assertEqual(5, len(accepted))
+
+    def test_distant_heading_is_out_of_range(self):
+        # A homework heading more than the lookback depth above the candidate
+        # must not reach it - otherwise one heading near the top of a long
+        # lecture would silently promote everything below it.
+        from exam_prep_adapters.local_materials.candidates import _section_context
+        from exam_prep_adapters.local_materials.labels import Label, Segment
+
+        heading = Segment(None, "Задачи для самостоятельной работы", 1, 0)
+        filler = [Segment(None, f"Absatz {i} der Theorie.", i + 1, 0) for i in range(11)]
+        segments = (heading, *filler)
+        lexicon = load("ru")
+        self.assertFalse(_section_context(len(segments), segments, lexicon))
+
+    def test_nearby_heading_is_in_range(self):
+        from exam_prep_adapters.local_materials.candidates import _section_context
+        from exam_prep_adapters.local_materials.labels import Segment
+
+        heading = Segment(None, "Задачи для самостоятельной работы", 1, 0)
+        filler = [Segment(None, f"Absatz {i} der Theorie.", i + 1, 0) for i in range(3)]
+        segments = (heading, *filler)
+        lexicon = load("ru")
+        self.assertTrue(_section_context(len(segments), segments, lexicon))
+
+
 if __name__ == "__main__":
     unittest.main()

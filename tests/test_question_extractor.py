@@ -242,5 +242,34 @@ class LectureExerciseOptInTests(unittest.TestCase):
         )
 
 
+class LectureExerciseWithoutPointsTests(unittest.TestCase):
+    """The common case the section_context signal exists for: a lecture
+    exercise with no points markup and no verb the lexicon recognises -
+    only the "Задачи для самостоятельной работы" heading marks it as an
+    exercise, exactly like the plan's own repro script."""
+
+    def lecture(self) -> ExtractedSource:
+        return source(
+            "lek.pdf",
+            "lecture",
+            "Теория.\n\nЗадачи для самостоятельной работы\n"
+            + "\n".join(f"{i}) Найдите предел a_n." for i in range(1, 6)),
+        )
+
+    def test_flag_is_required(self):
+        self.assertEqual(0, len(extract_questions((self.lecture(),))))
+
+    def test_flag_extracts_all_five(self):
+        self.assertEqual(
+            5, len(extract_questions((self.lecture(),), include_lecture_exercises=True))
+        )
+
+    def test_never_enters_mock_pool(self):
+        questions = extract_questions((self.lecture(),), include_lecture_exercises=True)
+        draft = build_draft(questions, holdout_ratio=1.0)
+        self.assertEqual(5, len(draft["assessments"]))
+        self.assertEqual({"practice"}, {item["purpose"] for item in draft["assessments"]})
+
+
 if __name__ == "__main__":
     unittest.main()

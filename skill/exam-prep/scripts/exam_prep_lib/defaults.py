@@ -34,6 +34,7 @@ EXTRACTION_SCORE_WEIGHTS = {
     "sibling_uniformity": 1.0,
     "lexicon_hit": 1.0,
     "dense_run": 0.5,
+    "section_context": 1.5,
     "heading_shape": -2.0,
     "global_hierarchy": -2.0,
 }
