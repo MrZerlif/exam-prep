@@ -16,6 +16,14 @@ EXTRACTION_ACCEPTED_FRACTION_BLOCKING = 0.9
 EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING = 20
 EXTRACTION_QUESTIONS_PER_PAGE_GAP = 40
 EXTRACTION_HARD_QUESTION_CAP = 5000
+# "Every block is a question" only means something over a real sample. A
+# prose page whose single label is its chapter heading is one segment out of
+# one - a perfect ratio carrying no information about the parser.
+EXTRACTION_ANOMALY_MIN_SEGMENTS = 5
+# Above this, language detection is not the thing that failed, so an
+# unrecognised kind means the taxonomy lacks a slot (a textbook), not that
+# the lexicon is missing words. Well clear of the 0.6 detection floor.
+EXTRACTION_CONFIDENT_LANGUAGE = 0.9
 
 EXTRACTION_SCORE_WEIGHTS = {
     "solution_pair": 3.0,
