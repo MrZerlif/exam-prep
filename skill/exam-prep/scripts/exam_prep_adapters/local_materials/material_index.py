@@ -247,7 +247,12 @@ def build_material_index(
                     "issues": [
                         issue.to_mapping()
                         for issue in tuple(source.issues)
-                        + source_question_issues(source, source_language, lexicon=source_lexicon)
+                        + source_question_issues(
+                            source,
+                            source_language,
+                            lexicon=source_lexicon,
+                            language_confidence=source_metadata.get("language_confidence"),
+                        )
                     ],
                     "language": source_metadata.get("language"),
                     "language_source": source_metadata.get("language_source"),

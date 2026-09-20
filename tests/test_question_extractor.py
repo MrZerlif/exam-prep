@@ -87,6 +87,23 @@ class ExtractionAnomalyScopeTests(unittest.TestCase):
         )
         self.assertEqual((), source_question_issues(material, "de"))
 
+    def test_short_prose_source_is_not_anomalous(self):
+        # Few segments make the ratio meaningless: a textbook page whose only
+        # label is its chapter heading is one segment out of one, which is a
+        # perfect ratio and tells us nothing about the parser.
+        material = source(
+            "Stewart_Calculus.txt",
+            "other",
+            "Глава 1. Пределы и непрерывность функций одной переменной.\n"
+            "Предел последовательности определяется следующим образом.\n"
+            "Функция называется непрерывной в точке, если предел совпадает со значением.\n"
+            "Теорема о промежуточном значении утверждает существование корня.\n",
+        )
+        self.assertEqual(
+            [],
+            [issue.kind for issue in source_question_issues(material, "ru", language_confidence=1.0)],
+        )
+
     def test_dense_other_source_still_blocks(self):
         material = source(
             "unknown.md",
@@ -148,6 +165,37 @@ LECTURE_WITH_EXERCISES = "\n".join((
     "Задача 1. Найдите производную функции f(x) = x^2 в точке x = 3. (2 балла)",
     "Задача 2. Найдите предел последовательности a_n = 1/n при n к бесконечности. (2 балла)",
 ))
+
+
+class UnclassifiedSourceConfidenceTests(unittest.TestCase):
+    """unclassified_source means "the lexicon is short of words", not
+    "the taxonomy has no slot for a textbook"."""
+
+    def textbook(self) -> ExtractedSource:
+        return source(
+            "Stewart_Calculus.txt",
+            "other",
+            "Глава 1. Пределы и непрерывность.\n"
+            "Предел последовательности определяется следующим образом.\n"
+            "Функция называется непрерывной в точке, если предел совпадает со значением.\n",
+        )
+
+    def kinds(self, confidence):
+        return [
+            issue.kind
+            for issue in source_question_issues(
+                self.textbook(), "ru", language_confidence=confidence
+            )
+        ]
+
+    def test_confidently_detected_language_does_not_flag_unclassified(self):
+        self.assertNotIn("unclassified_source", self.kinds(1.0))
+
+    def test_uncertain_language_still_flags_unclassified(self):
+        self.assertIn("unclassified_source", self.kinds(0.62))
+
+    def test_unknown_confidence_still_flags_unclassified(self):
+        self.assertIn("unclassified_source", self.kinds(None))
 
 
 class LectureExerciseOptInTests(unittest.TestCase):

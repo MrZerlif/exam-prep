@@ -629,7 +629,7 @@ def main(argv: list[str] | None = None) -> int:
                 "source": draft_course.get("language_source", "configured"),
                 "confidence": draft_course.get("language_confidence"),
             }
-        localized, _source_languages, source_lexicons = localize_materials(
+        localized, source_languages, source_lexicons = localize_materials(
             args.materials_dir,
             default_language=draft_language,
             default_lexicon=draft_lexicon,
@@ -645,6 +645,10 @@ def main(argv: list[str] | None = None) -> int:
             expected_total_points=(draft_course.get("exam") or {}).get("expected_total_points"),
             lexicon=draft_lexicon,
             lexicon_by_source=source_lexicons,
+            language_confidence_by_source={
+                path: metadata.get("language_confidence")
+                for path, metadata in source_languages.items()
+            },
         )
         draft = build_draft(
             questions,

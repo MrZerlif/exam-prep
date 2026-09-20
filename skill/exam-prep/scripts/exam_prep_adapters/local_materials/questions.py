@@ -13,6 +13,8 @@ from typing import Iterable, Mapping, Sequence
 from exam_prep_lib.ingest_issues import IngestIssue
 from exam_prep_lib.defaults import (
     EXTRACTION_ACCEPTED_FRACTION_BLOCKING,
+    EXTRACTION_ANOMALY_MIN_SEGMENTS,
+    EXTRACTION_CONFIDENT_LANGUAGE,
     EXTRACTION_HARD_QUESTION_CAP,
     EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING,
     EXTRACTION_QUESTIONS_PER_PAGE_GAP,
@@ -195,7 +197,13 @@ def _match_solution(label: str | None, solutions: dict[str | None, str]) -> str 
     return solutions.get(pair_key(label))
 
 
-def source_question_issues(source: ExtractedSource, language: str = "ru", *, lexicon: Lexicon | None = None) -> tuple[IngestIssue, ...]:
+def source_question_issues(
+    source: ExtractedSource,
+    language: str = "ru",
+    *,
+    lexicon: Lexicon | None = None,
+    language_confidence: float | None = None,
+) -> tuple[IngestIssue, ...]:
     semantic_lexicon = lexicon or load(language)
     blocks = [candidate for page in source.pages for candidate in score(segment(page.text), source=source, lexicon=semantic_lexicon)]
     question_count = len(blocks)
@@ -206,6 +214,7 @@ def source_question_issues(source: ExtractedSource, language: str = "ru", *, lex
     blocking = (
         (
             source.kind in PROSE_EXPECTED_KINDS
+            and segments_total >= EXTRACTION_ANOMALY_MIN_SEGMENTS
             and accepted_fraction > EXTRACTION_ACCEPTED_FRACTION_BLOCKING
         )
         or (source.kind in {"lecture", "notes"} and questions_per_page > EXTRACTION_LECTURE_QUESTIONS_PER_PAGE_BLOCKING)
@@ -232,7 +241,15 @@ def source_question_issues(source: ExtractedSource, language: str = "ru", *, lex
                 "gap",
             )
         )
-    if source.kind == "other":
+    # A confidently detected language means the lexicon did its job, so the
+    # kind is unrecognised because the taxonomy has no slot for it - a
+    # textbook, typically. Reporting that as a missing lexicon would make
+    # apply-lexicon noisy and teach the agent to ignore it.
+    confident_language = (
+        language_confidence is not None
+        and language_confidence >= EXTRACTION_CONFIDENT_LANGUAGE
+    )
+    if source.kind == "other" and not confident_language:
         issues.append(
             IngestIssue(
                 "unclassified_source",
@@ -254,6 +271,7 @@ def extract_questions(
     expected_total_points: float | int | None = None,
     lexicon: Lexicon | None = None,
     lexicon_by_source: Mapping[str, Lexicon] | None = None,
+    language_confidence_by_source: Mapping[str, float | None] | None = None,
 ) -> tuple[ExtractedQuestion, ...]:
     if extraction_mode not in {"legacy", "scored"}:
         raise ValueError("extraction_mode must be legacy or scored")
@@ -340,7 +358,12 @@ def extract_questions(
             }
         source_issues = list(
             tuple(source.issues)
-            + source_question_issues(source, source_semantics.language, lexicon=source_semantics)
+            + source_question_issues(
+                source,
+                source_semantics.language,
+                lexicon=source_semantics,
+                language_confidence=(language_confidence_by_source or {}).get(source.relative_path),
+            )
         )
         if points_verified is False:
             source_issues.append(IngestIssue("low_confidence_question", source.relative_path, "inferred point total does not match expected_total_points", "info"))

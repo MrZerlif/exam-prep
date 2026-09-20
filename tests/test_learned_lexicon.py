@@ -138,6 +138,45 @@ class LearnedLexiconTests(unittest.TestCase):
         self.assertEqual("ok", next(item["status"] for item in report["checks"] if item["name"] == "learned_lexicons"))
 
 
+class TextbookClassificationTests(unittest.TestCase):
+    """A textbook is classified-but-unslotted, which is not a lexicon gap."""
+
+    def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.root = Path(self.temp_dir.name)
+        self.materials = self.root / "materials"
+        self.materials.mkdir()
+
+    def tearDown(self):
+        self.temp_dir.cleanup()
+
+    def run_cli(self, *args):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output):
+            code = main(["--workspace", str(self.root), *args])
+        self.assertEqual(0, code, output.getvalue())
+        return json.loads(output.getvalue())
+
+    def test_confidently_detected_textbook_does_not_ask_for_a_lexicon(self):
+        body = (
+            "Функция называется непрерывной в точке, если предел совпадает "
+            "со значением функции в этой точке. Теорема о промежуточном "
+            "значении утверждает, что непрерывная на отрезке функция "
+            "принимает все промежуточные значения. Для доказательства мы "
+            "используем свойство полноты множества вещественных чисел.\n"
+        )
+        (self.materials / "Stewart_Calculus.txt").write_text(
+            "Глава 1. Пределы и непрерывность функций одной переменной.\n" + body * 8,
+            encoding="utf-8",
+        )
+        self.run_cli("init", "--language", "ru")
+        result = self.run_cli("ingest-materials", str(self.materials))
+        entry = result["index"]["entries"][0]
+        self.assertEqual("other", entry["kind"])
+        self.assertGreaterEqual(entry["language_confidence"], 0.9)
+        self.assertEqual([], [issue["kind"] for issue in entry["issues"]])
+
+
 class LearnedLexiconMatchingRulesTests(unittest.TestCase):
     """A fully learned language must be able to describe how it matches."""
 
