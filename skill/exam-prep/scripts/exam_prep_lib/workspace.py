@@ -60,6 +60,10 @@ class RuntimePaths:
         return self.root / "ingest_issues.json"
 
     @property
+    def lexicons(self) -> Path:
+        return self.root / "lexicons"
+
+    @property
     def learner(self) -> Path:
         return self.root / "learner.json"
 

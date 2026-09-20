@@ -6,8 +6,10 @@ from dataclasses import dataclass
 from functools import lru_cache
 import json
 from pathlib import Path
+import re
 from typing import Any, Mapping
 
+from .schema_validation import load_schema, validate_document
 from .text_normalize import canonical_key, loose_key
 
 
@@ -144,6 +146,87 @@ def _build(raw: Mapping[str, Any]) -> Lexicon:
     )
 
 
+def validate_learned(raw: Mapping[str, Any]) -> list[str]:
+    """Validate the intentionally small, slot-only workspace overlay."""
+
+    validate_document(raw, load_schema("learned-lexicon.schema.json"))
+    if not re.fullmatch(r"[a-z]{2,8}", str(raw.get("language", ""))):
+        raise ValueError("learned lexicon language must be a lowercase ISO-style code")
+    slots = raw.get("slots")
+    if not isinstance(slots, Mapping) or not slots:
+        raise ValueError("learned lexicon must contain at least one slot")
+    for slot, entries in slots.items():
+        if slot not in LEXICON_SLOTS:
+            raise ValueError(f"unknown learned lexicon slot: {slot}")
+        if not isinstance(entries, list) or not entries:
+            raise ValueError(f"learned lexicon slot {slot!r} must be non-empty")
+        for entry in entries:
+            token = entry if isinstance(entry, str) else entry.get("token") if isinstance(entry, Mapping) else None
+            if not isinstance(token, str) or not token.strip():
+                raise ValueError(f"learned lexicon slot {slot!r} contains an invalid token")
+            if isinstance(entry, Mapping):
+                weight = entry.get("weight", 1.0)
+                if isinstance(weight, bool) or not isinstance(weight, (int, float)) or weight <= 0:
+                    raise ValueError(f"learned lexicon slot {slot!r} contains an invalid weight")
+    return []
+
+
+def learned_lexicon_path(workspace: str | Path, language: str) -> Path:
+    return Path(workspace).expanduser().resolve() / "lexicons" / f"learned-{language}.json"
+
+
+def _build_learned(raw: Mapping[str, Any]) -> Lexicon:
+    validate_learned(raw)
+    return Lexicon(
+        language=str(raw["language"]),
+        word_boundaries=True,
+        fold={},
+        by_slot={
+            slot: tuple(_entry(entry, {}, True) for entry in raw["slots"].get(slot, ()))
+            for slot in LEXICON_SLOTS
+        },
+        strip_marks=True,
+        stopwords=(),
+    )
+
+
+def load_learned(language: str, workspace: str | Path) -> Lexicon | None:
+    path = learned_lexicon_path(workspace, language)
+    if not path.exists():
+        return None
+    raw = json.loads(path.read_text(encoding="utf-8"))
+    if raw.get("language") != language:
+        raise ValueError(f"learned lexicon filename and language disagree: {path.name}")
+    return _build_learned(raw)
+
+
+def learned_languages(workspace: str | Path) -> tuple[str, ...]:
+    root = Path(workspace).expanduser().resolve() / "lexicons"
+    return tuple(sorted(path.stem.removeprefix("learned-") for path in root.glob("learned-*.json")))
+
+
+def merge_learned(existing: Mapping[str, Any] | None, addition: Mapping[str, Any]) -> dict[str, Any]:
+    validate_learned(addition)
+    language = str(addition["language"])
+    if existing is not None:
+        validate_learned(existing)
+        if str(existing["language"]) != language:
+            raise ValueError("learned lexicon language does not match the existing overlay")
+    result: dict[str, Any] = {"schema_version": 1, "language": language, "slots": {}}
+    for slot in LEXICON_SLOTS:
+        merged = list((existing or {}).get("slots", {}).get(slot, ()))
+        seen = {canonical_key(item if isinstance(item, str) else str(item["token"])) for item in merged}
+        for item in addition["slots"].get(slot, ()):
+            token = item if isinstance(item, str) else str(item["token"])
+            key = canonical_key(token)
+            if key not in seen:
+                merged.append(item)
+                seen.add(key)
+        if merged:
+            result["slots"][slot] = merged
+    return result
+
+
 @lru_cache(maxsize=None)
 def _load_cached(language: str) -> Lexicon:
     path = _lexicon_root() / f"{language}.json"
@@ -154,7 +237,12 @@ def _load_cached(language: str) -> Lexicon:
 
 
 def load(language: str, *, extra: Lexicon | None = None) -> Lexicon:
-    base = _load_cached(str(language))
+    try:
+        base = _load_cached(str(language))
+    except ValueError:
+        if extra is not None and extra.language == str(language):
+            return extra
+        raise
     if extra is None:
         return base
     if extra.language != base.language:

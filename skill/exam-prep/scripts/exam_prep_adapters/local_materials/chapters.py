@@ -8,7 +8,7 @@ from dataclasses import dataclass
 import re
 from typing import Iterable, Any
 
-from exam_prep_lib.lexicon import load
+from exam_prep_lib.lexicon import Lexicon, load
 from exam_prep_lib.semantics import match
 
 _CHAPTER_NUMBER_RE = re.compile(r"(?<!\w)([0-9]{1,3}|[IVXLCDM]+)(?!\w)", re.IGNORECASE)
@@ -38,8 +38,8 @@ def _roman(value: str) -> int | None:
     return total or None
 
 
-def number_from_name(value: str, language: str = "ru") -> int | None:
-    found = match("struct.chapter", value, load(language))
+def number_from_name(value: str, language: str = "ru", *, lexicon: Lexicon | None = None) -> int | None:
+    found = match("struct.chapter", value, lexicon or load(language))
     if found is None:
         return None
     normalized = value.casefold()
@@ -58,19 +58,19 @@ def guess_title(value: str) -> str:
     return first.lstrip("# ")[:200] or "Untitled"
 
 
-def build_chapters(items: Iterable[Any], language: str = "ru") -> tuple[Chapter, ...]:
+def build_chapters(items: Iterable[Any], language: str = "ru", *, lexicon: Lexicon | None = None) -> tuple[Chapter, ...]:
     grouped: dict[int, dict[str, Any]] = {}
     for item in items:
         if isinstance(item, tuple) and len(item) == 2:
             source_id, page = item
             text = getattr(page, "text", str(page))
-            number = number_from_name(text, language) or number_from_name(str(source_id), language)
+            number = number_from_name(text, language, lexicon=lexicon) or number_from_name(str(source_id), language, lexicon=lexicon)
             page_number = getattr(page, "number", None)
         else:
             source_id = getattr(item, "relative_path", "")
             pages = getattr(item, "pages", ())
             text = "\n".join(getattr(page, "text", "") for page in pages)
-            number = number_from_name(text, language) or number_from_name(str(source_id), language)
+            number = number_from_name(text, language, lexicon=lexicon) or number_from_name(str(source_id), language, lexicon=lexicon)
             page_number = getattr(pages[0], "number", None) if pages else None
         if number is None:
             continue

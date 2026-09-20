@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+from collections import Counter
+from dataclasses import replace
 from pathlib import Path
+import re
 from typing import Mapping, Any
 
 from exam_prep_lib.source_evidence import ingest_source_evidence
@@ -12,10 +15,10 @@ from exam_prep_lib.storage import StudyStore
 from exam_prep_lib.workspace import runtime_paths
 from exam_prep_lib.ingest_issues import IngestIssue
 from exam_prep_lib.language_detect import detect
-from exam_prep_lib.lexicon import available
+from exam_prep_lib.lexicon import available, learned_languages, load, load_learned, Lexicon
 
 from .chapters import number_from_name
-from .extractor import EXTRACTOR_VERSION, MAX_FILE_BYTES, ExtractedSource, extract_sources
+from .extractor import EXTRACTOR_VERSION, MAX_FILE_BYTES, ExtractedSource, classify, extract_sources
 from .ingest import build_envelope
 from .questions import source_question_issues
 
@@ -36,12 +39,127 @@ def _configuration_hash(max_file_bytes: int, language: str) -> str:
     return hashlib.sha256(value.encode("utf-8")).hexdigest()
 
 
-def build_material_index(materials_dir: str | Path, *, max_file_bytes: int = MAX_FILE_BYTES, language: str = "ru") -> dict[str, Any]:
-    sources = extract_sources(materials_dir, max_file_bytes=max_file_bytes, language=language)
+_UNIT_CANDIDATE_RE = re.compile(r"\(\s*\d+\s+([^)]*)\)", re.UNICODE)
+_UNCLASSIFIED_LIMIT = 20
+_UNCLASSIFIED_TEXT_LIMIT = 160
+
+
+def _unclassified_summary(
+    sources: tuple[ExtractedSource, ...],
+    *,
+    language_metadata: Mapping[str, Any] | None,
+) -> dict[str, Any] | None:
+    unclassified = tuple(source for source in sources if source.kind == "other")
+    if not unclassified:
+        return None
+    file_stems = sorted({Path(source.relative_path).stem[:_UNCLASSIFIED_TEXT_LIMIT] for source in unclassified})
+    head_counts: Counter[str] = Counter()
+    unit_counts: Counter[str] = Counter()
+    for source in unclassified:
+        for page in source.pages:
+            lines = [line.strip()[:_UNCLASSIFIED_TEXT_LIMIT] for line in page.text.splitlines() if line.strip()]
+            head_counts.update(lines[:3])
+            for match in _UNIT_CANDIDATE_RE.finditer(page.text):
+                token = match.group(1).strip().split()[0] if match.group(1).strip() else ""
+                if token:
+                    unit_counts[token[:_UNCLASSIFIED_TEXT_LIMIT]] += 1
+    repeated_heads = sorted(
+        (head for head, count in head_counts.items() if count >= 2),
+        key=lambda value: (-head_counts[value], value),
+    )[:_UNCLASSIFIED_LIMIT]
+    unit_candidates = sorted(unit_counts, key=lambda value: (-unit_counts[value], value))[:_UNCLASSIFIED_LIMIT]
+    slots_needed = ["kind.exam", "kind.solution"]
+    if unit_candidates:
+        slots_needed.append("unit.points")
+    return {
+        "language": (language_metadata or {}).get("value"),
+        "file_stems": file_stems[:_UNCLASSIFIED_LIMIT],
+        "repeated_heads": repeated_heads,
+        "unit_candidates": unit_candidates,
+        "slots_needed": slots_needed,
+    }
+
+
+def _localized_sources(
+    materials_dir: str | Path,
+    *,
+    default_language: str,
+    default_lexicon: Lexicon,
+    default_metadata: Mapping[str, Any] | None,
+    lexicons: Mapping[str, Lexicon],
+    max_file_bytes: int = MAX_FILE_BYTES,
+) -> tuple[tuple[ExtractedSource, ...], dict[str, dict[str, Any]], dict[str, Lexicon]]:
+    initial = extract_sources(
+        materials_dir,
+        max_file_bytes=max_file_bytes,
+        language=default_language,
+        lexicon=default_lexicon,
+    )
+    source_languages: dict[str, dict[str, Any]] = {}
+    source_lexicons: dict[str, Lexicon] = {}
+    localized: list[ExtractedSource] = []
+    candidates = tuple(lexicons)
+    for source in initial:
+        text = "\n".join(page.text for page in source.pages)[:20_000]
+        detected = detect(text, candidates=candidates) if text else None
+        if detected is not None and detected[0] in lexicons:
+            source_language, confidence = detected
+            metadata = {"language": source_language, "language_source": "detected", "language_confidence": confidence}
+        elif (default_metadata or {}).get("value"):
+            source_language = default_language
+            metadata = {
+                "language": source_language,
+                "language_source": str((default_metadata or {}).get("source", "configured")),
+                "language_confidence": (default_metadata or {}).get("confidence"),
+            }
+        else:
+            source_language = default_language
+            metadata = {"language": None, "language_source": "unknown", "language_confidence": None}
+        source_lexicon = lexicons.get(source_language, default_lexicon)
+        kind = classify(source.relative_path, text, source_language, lexicon=source_lexicon)
+        issues = list(source.issues)
+        if metadata["language"] is None:
+            issues.append(
+                IngestIssue(
+                    "unsupported_language",
+                    source.relative_path,
+                    "language detection confidence was below 0.6",
+                    "gap",
+                )
+            )
+        localized.append(replace(source, kind=kind, issues=tuple(issues)))
+        source_languages[source.relative_path] = metadata
+        source_lexicons[source.relative_path] = source_lexicon
+    return tuple(localized), source_languages, source_lexicons
+
+
+def build_material_index(
+    materials_dir: str | Path,
+    *,
+    max_file_bytes: int = MAX_FILE_BYTES,
+    language: str = "ru",
+    language_metadata: Mapping[str, Any] | None = None,
+    lexicon: Lexicon | None = None,
+    lexicons: Mapping[str, Lexicon] | None = None,
+) -> dict[str, Any]:
+    semantic_lexicon = lexicon or load(language)
+    available_lexicons = dict(lexicons or {language: semantic_lexicon})
+    available_lexicons.setdefault(language, semantic_lexicon)
+    sources, source_languages, source_lexicons = _localized_sources(
+        materials_dir,
+        default_language=language,
+        default_lexicon=semantic_lexicon,
+        default_metadata=language_metadata,
+        lexicons=available_lexicons,
+        max_file_bytes=max_file_bytes,
+    )
     entries: list[dict[str, Any]] = []
     configuration_hash = _configuration_hash(max_file_bytes, language)
     for source in sources:
-        chapter = number_from_name(source.relative_path, language)
+        source_metadata = source_languages.get(source.relative_path, {"language": language, "language_source": "configured", "language_confidence": 1.0})
+        source_language = str(source_metadata.get("language") or language)
+        source_lexicon = source_lexicons.get(source.relative_path, semantic_lexicon)
+        chapter = number_from_name(source.relative_path, source_language, lexicon=source_lexicon)
         for page in source.pages or (None,):
             entries.append(
                 {
@@ -56,10 +174,27 @@ def build_material_index(materials_dir: str | Path, *, max_file_bytes: int = MAX
                     "backend": source.backend,
                     "backend_version": source.backend_version,
                     "configuration_hash": configuration_hash,
-                    "issues": [issue.to_mapping() for issue in tuple(source.issues) + source_question_issues(source, language)],
+                    "issues": [
+                        issue.to_mapping()
+                        for issue in tuple(source.issues)
+                        + source_question_issues(source, source_language, lexicon=source_lexicon)
+                    ],
+                    "language": source_metadata.get("language"),
+                    "language_source": source_metadata.get("language_source"),
+                    "language_confidence": source_metadata.get("language_confidence"),
                 }
             )
-    return {"schema_version": 1, "extractor": "local-materials", "extractor_version": EXTRACTOR_VERSION, "configuration_hash": configuration_hash, "entries": entries}
+    result: dict[str, Any] = {
+        "schema_version": 2,
+        "extractor": "local-materials",
+        "extractor_version": EXTRACTOR_VERSION,
+        "configuration_hash": configuration_hash,
+        "entries": entries,
+    }
+    unclassified = _unclassified_summary(sources, language_metadata=language_metadata)
+    if unclassified is not None:
+        result["unclassified"] = unclassified
+    return result
 
 
 def load_material_index(runtime_root: str | Path) -> dict[str, Any]:
@@ -85,7 +220,7 @@ def _course_language(
     requested: str | None,
 ) -> tuple[str, dict[str, object], IngestIssue | None]:
     if requested:
-        if requested not in available():
+        if requested not in available() and requested not in learned_languages(store.state_path):
             raise ValueError(f"unknown language lexicon: {requested}")
         return requested, {"value": requested, "source": "configured", "confidence": 1.0}, None
     course_path = runtime_paths(store.root).course
@@ -97,7 +232,7 @@ def _course_language(
         return "ru", {"value": None, "source": "unknown", "confidence": None}, None
     configured = course.get("language")
     if configured:
-        if configured not in available():
+        if configured not in available() and configured not in learned_languages(store.state_path):
             issue = IngestIssue("unsupported_language", None, f"no lexicon is available for configured language {configured!r}", "gap")
             return "ru", {"value": configured, "source": "configured", "confidence": None}, issue
         return str(configured), {"value": configured, "source": course.get("language_source", "configured"), "confidence": course.get("language_confidence", 1.0)}, None
@@ -132,9 +267,31 @@ def hydrate_sources(
     max_excerpt_chars: int = 1200,
     extraction_mode: str = "scored",
     language: str = "ru",
+    language_metadata: Mapping[str, Any] | None = None,
+    lexicon: Lexicon | None = None,
+    lexicons: Mapping[str, Lexicon] | None = None,
 ) -> dict[str, Any]:
-    sources = _source_ids(tuple(extract_sources(materials_dir, language=language)), set(source_ids or ()))
-    envelope = build_envelope(sources, authority_map=authority_map, max_excerpt_chars=max_excerpt_chars, extraction_mode=extraction_mode, language=language)
+    semantic_lexicon = lexicon or load(language)
+    available_lexicons = dict(lexicons or {language: semantic_lexicon})
+    available_lexicons.setdefault(language, semantic_lexicon)
+    localized, source_languages, source_lexicons = _localized_sources(
+        materials_dir,
+        default_language=language,
+        default_lexicon=semantic_lexicon,
+        default_metadata=language_metadata,
+        lexicons=available_lexicons,
+    )
+    sources = _source_ids(localized, set(source_ids or ()))
+    envelope = build_envelope(
+        sources,
+        authority_map=authority_map,
+        max_excerpt_chars=max_excerpt_chars,
+        extraction_mode=extraction_mode,
+        language=language,
+        lexicon=semantic_lexicon,
+        lexicon_by_source=source_lexicons,
+        language_by_source=source_languages,
+    )
     result = ingest_source_evidence(store, envelope)
     return {**result.to_mapping(), "source_ids": [item.source_ref.source_id for item in envelope.evidence]}
 
@@ -155,7 +312,20 @@ def ingest_materials(
     if mode not in {"lightweight", "full"}:
         raise ValueError("mode must be lightweight or full")
     active_language, language_metadata, language_issue = _course_language(materials_dir, store, language)
-    index = build_material_index(materials_dir, max_file_bytes=max_file_bytes, language=active_language)
+    lexicon_languages = sorted(set(available()) | set(learned_languages(store.state_path)))
+    lexicons = {
+        code: load(code, extra=load_learned(code, store.state_path))
+        for code in lexicon_languages
+    }
+    semantic_lexicon = lexicons[active_language]
+    index = build_material_index(
+        materials_dir,
+        max_file_bytes=max_file_bytes,
+        language=active_language,
+        language_metadata=language_metadata,
+        lexicon=semantic_lexicon,
+        lexicons=lexicons,
+    )
     if language_issue is not None and index["entries"]:
         index["entries"][0]["issues"].append(language_issue.to_mapping())
     if not dry_run:
@@ -169,6 +339,16 @@ def ingest_materials(
         if dry_run:
             result["appended"] = 0
         else:
-            hydrated = hydrate_sources(materials_dir, store, authority_map=authority_map, max_excerpt_chars=max_excerpt_chars, extraction_mode=extraction_mode, language=active_language)
+            hydrated = hydrate_sources(
+                materials_dir,
+                store,
+                authority_map=authority_map,
+                max_excerpt_chars=max_excerpt_chars,
+                extraction_mode=extraction_mode,
+                language=active_language,
+                language_metadata=language_metadata,
+                lexicon=semantic_lexicon,
+                lexicons=lexicons,
+            )
             result.update({"appended": hydrated["appended"], "diagnostics": hydrated["diagnostics"]})
     return result

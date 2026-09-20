@@ -1,6 +1,6 @@
 ---
 name: exam-prep
-description: Use when a learner is preparing for an exam by a fixed date, needs a plan from their own materials, has limited time or weak prerequisites, repeats mistakes, or asks to resume persistent local progress.
+description: Use when a learner is preparing for an exam by a fixed date, needs a plan from their own materials, has limited time or weak prerequisites, repeats mistakes, or asks to resume persistent local progress. Local material extraction supports 12 languages with configurable and per-source detection.
 license: MIT
 metadata:
   version: "0.4.0"
@@ -30,6 +30,8 @@ Start with `status`; `uninitialized` is read-only, so run `init` once.
 Materials use `ingest-materials` and `hydrate-source`, which create a
 SourceEvidenceEnvelope without network access. NotebookLM MCP is an optional
 agent host; it normalizes a SourceEvidenceEnvelope and never owns canonical learner state.
+If `ingest-materials` returns `unclassified`, map its repeated labels to slots
+and apply them with `apply-lexicon`.
 Use `validate-curriculum` and `apply-curriculum` for
 idempotent curriculum changes.
 
