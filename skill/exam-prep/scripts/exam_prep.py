@@ -81,6 +81,50 @@ class LegacyStateDetected(ValueError):
     """A legacy state tree needs an explicit migration before target runtime use."""
 
 
+PRE_INIT_WORKSPACE_COMMANDS = frozenset({
+    "status",
+    "init",
+    "validate",
+    "validate-curriculum",
+})
+
+WORKSPACE_INDEPENDENT_COMMANDS = frozenset({
+    "migrate",
+    "draft-assessments",
+    "finalize-assessment-draft",
+})
+
+WORKSPACE_REQUIRES_INIT_COMMANDS = frozenset({
+    "load-syllabus",
+    "start",
+    "start-activity",
+    "finish-activity",
+    "discard-activity",
+    "activity-status",
+    "next",
+    "record-observation",
+    "review-due",
+    "mistakes",
+    "roadmap",
+    "exam",
+    "verify",
+    "rebuild",
+    "end-session",
+    "ingest-source-evidence",
+    "apply-curriculum",
+    "freeze-assessment",
+    "mint-assessments",
+    "update-exam-blueprint",
+    "ingest-materials",
+    "hydrate-source",
+    "apply-lexicon",
+    "extract-figures",
+    "figure",
+    "reveal-answer",
+    "cheatsheet",
+    "last-minute-review",
+    "plan",
+})
 LEGACY_STATE_MARKERS = (
     "course.json",
     "syllabus.json",
@@ -695,9 +739,6 @@ def main(argv: list[str] | None = None) -> int:
     store = _store(args.workspace)
     initialization_state, missing_files = _initialization_state(store)
 
-    if args.command == "apply-lexicon":
-        return _result(_apply_learned_lexicon(store, args.path, dry_run=args.dry_run))
-
     if args.command == "status" and initialization_state == "uninitialized":
         return _result({
             "status": "uninitialized",
@@ -713,16 +754,7 @@ def main(argv: list[str] | None = None) -> int:
             "missing_files": missing_files,
         })
 
-    if initialization_state != "initialized" and args.command not in {
-        "init",
-        "validate",
-        "validate-curriculum",
-        "status",
-        "ingest-materials",
-        "hydrate-source",
-        "extract-figures",
-        "figure",
-    }:
+    if initialization_state != "initialized" and args.command in WORKSPACE_REQUIRES_INIT_COMMANDS:
         return _result({
             "status": "workspace_not_initialized",
             "initialized": False,
@@ -730,6 +762,8 @@ def main(argv: list[str] | None = None) -> int:
             "missing_files": missing_files,
         })
 
+    if args.command == "apply-lexicon":
+        return _result(_apply_learned_lexicon(store, args.path, dry_run=args.dry_run))
     if args.command == "ingest-materials":
         result = ingest_materials(
             args.materials_dir,
