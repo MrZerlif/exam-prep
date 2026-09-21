@@ -7,8 +7,9 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass
+from functools import wraps
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable, TypeVar
 
 from .assessment import FrozenAssessment
 from .assessment_integrity import assert_pool_isolation, assess_attempt_evidence
@@ -18,6 +19,19 @@ from .schema_validation import (
     validate_observation_event,
     validate_observation_proposal,
 )
+from .workspace_lock import workspace_lock as acquire_workspace_lock
+
+
+_Result = TypeVar("_Result")
+
+
+def _workspace_locked(method: Callable[..., _Result]) -> Callable[..., _Result]:
+    @wraps(method)
+    def locked(self: "StudyStore", *args: Any, **kwargs: Any) -> _Result:
+        with self.workspace_lock():
+            return method(self, *args, **kwargs)
+
+    return locked
 
 
 # Fields append_observation adds to or overwrites on the canonical event
@@ -112,6 +126,12 @@ class StudyStore:
         self.recovery_path = self.state_path / "recovery"
         self.current_path = self.state_path / "current.json"
         self._log_diagnostics = {"partial_final_line": False, "sessions_log_partial_final_line": False}
+
+    def workspace_lock(self, *, timeout_seconds: float = 10.0):
+        return acquire_workspace_lock(
+            self.state_path / "workspace.lock",
+            timeout_seconds=timeout_seconds,
+        )
 
     def initialization_state(self) -> tuple[str, list[str]]:
         """Classify canonical state without creating or overwriting files."""
@@ -209,6 +229,7 @@ class StudyStore:
         )
         return assessments
 
+    @_workspace_locked
     def append_assessment(
         self, assessment: FrozenAssessment | dict[str, Any]
     ) -> AssessmentAppendResult:
@@ -243,10 +264,12 @@ class StudyStore:
         )
         return evidence
 
+    @_workspace_locked
     def append_source_evidence(self, evidence: dict[str, Any]) -> None:
         self.initialize()
         self._append_jsonl(self.source_evidence_path, evidence)
 
+    @_workspace_locked
     def append_session_summary(self, summary: dict[str, Any]) -> None:
         self.initialize()
         self._append_jsonl(self.sessions_log_path, summary)
@@ -256,6 +279,7 @@ class StudyStore:
         self.read_session_summaries()
         return dict(self._log_diagnostics)
 
+    @_workspace_locked
     def append_observation(
         self,
         proposal: dict[str, Any],
@@ -404,6 +428,7 @@ class StudyStore:
             "source_evidence_count": len(source_evidence),
         }
 
+    @_workspace_locked
     def commit_revision(
         self,
         derived: dict[str, Any],
