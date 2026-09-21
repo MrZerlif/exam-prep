@@ -8,7 +8,7 @@ from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from exam_prep import main
+from exam_prep import _parser, main
 from exam_prep_lib.storage import StudyStore
 
 
@@ -36,5 +36,18 @@ class MaterialCliTests(unittest.TestCase):
             self.assertEqual(0, repeated["appended"])
 
 
+    def test_ingest_parser_rejects_include_unclassified(self):
+        with self.assertRaises(SystemExit) as raised:
+            _parser().parse_args([
+                "ingest-materials", "materials", "--include-unclassified",
+            ])
+        self.assertEqual(2, raised.exception.code)
+
+    def test_draft_parser_still_accepts_include_unclassified(self):
+        args = _parser().parse_args([
+            "draft-assessments", "input.json", "--out", "draft.json",
+            "--include-unclassified",
+        ])
+        self.assertTrue(args.include_unclassified)
 if __name__ == "__main__":
     unittest.main()
