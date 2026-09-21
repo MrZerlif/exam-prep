@@ -532,21 +532,37 @@ def select_next_activity(
 ) -> dict[str, Any]:
     recent = set(recent_concept_ids or [])
     target_ids = normalize_syllabus(syllabus).targets
-    candidates = [
-        compute_priority(
+    candidates: list[dict[str, Any]] = []
+    for concept_id in target_ids:
+        candidate = compute_priority(
             concept_id, syllabus, concepts, reviews, course, now, budget_minutes
         )
-        for concept_id in target_ids
-    ]
+        availability = concepts.get(concept_id, {}).get("availability")
+        if availability is not None:
+            candidate["availability"] = availability
+        candidates.append(candidate)
     if not candidates:
         raise ValueError("syllabus has no concepts")
-    non_recent = [
+
+    available_candidates = [
         candidate
         for candidate in candidates
-        if candidate["concept_id"] not in recent
-        and concepts.get(candidate["concept_id"], {}).get("availability") != "prerequisite_blocked"
+        if candidate.get("availability") != "prerequisite_blocked"
     ]
-    pool = non_recent or candidates
+    if not available_candidates:
+        return {
+            "status": "no_available_activity",
+            "activity_type": "no_available_activity",
+            "score": 0.0,
+            "reason": "all_targets_prerequisite_blocked",
+        }
+
+    non_recent = [
+        candidate
+        for candidate in available_candidates
+        if candidate["concept_id"] not in recent
+    ]
+    pool = non_recent or available_candidates
     selected = max(pool, key=lambda item: (item["score"], item["concept_id"]))
     if selected["concept_id"] not in recent and recent:
         selected["reason"] += "; interleaved with a non-recent concept"
@@ -555,4 +571,3 @@ def select_next_activity(
         reviews.get(selected["concept_id"], {}),
     )
     return selected
-
