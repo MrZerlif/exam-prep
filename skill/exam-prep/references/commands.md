@@ -89,7 +89,8 @@ creates nothing - it is a normal refusal, not a failure, and the repair is
   never changes the exam date.
 - State-changing and overview commands accept opt-in `--include-next-hint`;
   no hint is emitted without the flag.
-- `next --minutes N` - pick one budget-fitting activity.
+- `next --minutes N` - pick one budget-fitting activity; `N` must be a
+  positive integer.
 - `roadmap` - full target list with mastery, review, and availability.
 - `review-due` - concepts with a due or overdue review.
 - `mistakes` - recurring, unresolved error patterns.
@@ -228,7 +229,8 @@ this rule.
 - `freeze-assessment <path>` - create one `FrozenAssessment` (spec below).
 - `mint-assessments <path>` - create a batch of `FrozenAssessment`s in one
   call (package format below).
-- `exam [--minutes N]` - assemble a mock exam: with a `purpose=mock` pool
+- `exam [--minutes N]` - assemble a mock exam (`N` must be a positive integer):
+  with a `purpose=mock` pool
   minted, blueprint-sized and timed tickets sampled with a
   session-id-seeded draw (not a sorted truncation - a repeat within the
   same session reproduces the same tickets, a new session draws a
