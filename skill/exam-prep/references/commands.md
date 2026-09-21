@@ -33,11 +33,16 @@ reports `uninitialized` and invites you to start a second, empty course.
 
 ## Before initialization
 
-Only `status`, `init`, `validate`, and `validate-curriculum` run on a
-workspace that has no `.exam-prep/` yet. Every other command returns
-`workspace_not_initialized` with the missing canonical files named, and
-creates nothing - it is a normal refusal, not a failure, and the repair is
-`init` (or `validate` when files are partially present), not a retry.
+The four workspace commands `status`, `init`, `validate`, and
+`validate-curriculum` are the only allowed operations on the current
+workspace before initialization. `migrate`, `draft-assessments`, and
+`finalize-assessment-draft` are separate standalone tools and are not
+gated by workspace initialization.
+
+Every other workspace command returns `workspace_not_initialized` with
+the missing canonical files named, and creates nothing - it is a normal
+refusal, not a failure, and the repair is `init` (or `validate` when
+files are partially present), not a retry.
 
 ## Lifecycle
 
