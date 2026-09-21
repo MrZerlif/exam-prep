@@ -26,6 +26,16 @@ class NextHintTests(unittest.TestCase):
             parsed = _parser().parse_args(shlex.split(hinted["next"]["command"]))
             self.assertEqual("next", parsed.command)
 
+    def test_next_before_init_returns_valid_json_without_traceback(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = main(["--workspace", str(root), "next"])
+            self.assertEqual(0, code)
+            payload = json.loads(output.getvalue())
+            self.assertEqual("workspace_not_initialized", payload["status"])
+            self.assertNotIn("traceback", output.getvalue().lower())
     @staticmethod
     def call(root: Path, *args: str) -> dict:
         output = io.StringIO()

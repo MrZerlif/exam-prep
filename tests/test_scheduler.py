@@ -323,5 +323,44 @@ class SchedulerTests(unittest.TestCase):
         self.assertEqual(result["concept_id"], "derivative_rules")
 
 
+    def test_prerequisite_blocked_target_never_wins_over_available_recent_target(self):
+        concepts = {
+            "chain_rule": {**concept({"conceptual": 0.1}), "availability": "prerequisite_blocked"},
+            "derivative_rules": {**concept({"conceptual": 0.4}), "availability": "available"},
+        }
+        result = select_next_activity(
+            SYLLABUS, concepts, {}, COURSE, NOW, 25,
+            recent_concept_ids=["derivative_rules"],
+        )
+        self.assertEqual("derivative_rules", result["concept_id"])
+        self.assertNotEqual("prerequisite_blocked", result.get("availability"))
+
+    def test_all_prerequisite_blocked_targets_return_no_available_activity(self):
+        concepts = {
+            "chain_rule": {**concept({"conceptual": 0.1}), "availability": "prerequisite_blocked"},
+            "derivative_rules": {**concept({"conceptual": 0.2}), "availability": "prerequisite_blocked"},
+        }
+        result = select_next_activity(SYLLABUS, concepts, {}, COURSE, NOW, 25)
+        self.assertEqual(
+            {
+                "status": "no_available_activity",
+                "activity_type": "no_available_activity",
+                "score": 0.0,
+                "reason": "all_targets_prerequisite_blocked",
+            },
+            result,
+        )
+
+    def test_interleaving_prefers_non_recent_available_target(self):
+        concepts = {
+            "chain_rule": {**concept({"conceptual": 0.2}), "availability": "available"},
+            "derivative_rules": {**concept({"conceptual": 0.4}), "availability": "available"},
+        }
+        result = select_next_activity(
+            SYLLABUS, concepts, {}, COURSE, NOW, 25,
+            recent_concept_ids=["chain_rule"],
+        )
+        self.assertEqual("derivative_rules", result["concept_id"])
+        self.assertNotEqual("prerequisite_blocked", result.get("availability"))
 if __name__ == "__main__":
     unittest.main()
