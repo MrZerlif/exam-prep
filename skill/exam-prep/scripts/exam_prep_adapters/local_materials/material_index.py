@@ -396,7 +396,6 @@ def ingest_materials(
     authority_map: Mapping[str, str] | None = None,
     max_excerpt_chars: int = 1200,
     max_file_bytes: int = MAX_FILE_BYTES,
-    include_unclassified: bool = False,
     extraction_mode: str = "scored",
     language: str | None = None,
 ) -> dict[str, Any]:

@@ -611,7 +611,6 @@ def _parser() -> argparse.ArgumentParser:
     ingest_materials_parser.add_argument("--dry-run", action="store_true")
     ingest_materials_parser.add_argument("--authority-override", action="append", default=[])
     ingest_materials_parser.add_argument("--max-excerpt-chars", type=int, default=1200)
-    ingest_materials_parser.add_argument("--include-unclassified", action="store_true")
     ingest_materials_parser.add_argument("--extraction-mode", choices=("legacy", "scored"), default="scored")
     hydrate_parser = sub.add_parser("hydrate-source")
     hydrate_parser.add_argument("source_id", nargs="+")
@@ -772,7 +771,6 @@ def main(argv: list[str] | None = None) -> int:
             dry_run=args.dry_run,
             authority_map=_authority_overrides(args.authority_override),
             max_excerpt_chars=args.max_excerpt_chars,
-            include_unclassified=args.include_unclassified,
             extraction_mode=args.extraction_mode,
         )
         return _result(result)
