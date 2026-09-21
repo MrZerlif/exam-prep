@@ -3,11 +3,13 @@ import io
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 import sys
 
 sys.path.insert(0, "skill/exam-prep/scripts")
 
+import exam_prep  # noqa: E402
 from exam_prep import (
     PRE_INIT_WORKSPACE_COMMANDS,
     WORKSPACE_INDEPENDENT_COMMANDS,
@@ -184,6 +186,19 @@ class InitializationLifecycleTests(unittest.TestCase):
         )
         self.assertEqual(commands, set().union(*categories))
         self.assertTrue(all(len([category for category in categories if command in category]) == 1 for command in commands))
+
+    def test_runtime_gate_uses_requires_init_category(self):
+        categorized_as_requiring_init = WORKSPACE_REQUIRES_INIT_COMMANDS | {"validate"}
+        with mock.patch.object(
+            exam_prep,
+            "WORKSPACE_REQUIRES_INIT_COMMANDS",
+            categorized_as_requiring_init,
+        ):
+            code, result = self.invoke("validate")
+
+        self.assertEqual(0, code)
+        self.assertEqual("workspace_not_initialized", result["status"])
+        self.assertFalse((self.root / ".exam-prep").exists())
 
     def test_standalone_commands_are_not_blocked_before_workspace_init(self):
         with tempfile.TemporaryDirectory() as directory:
