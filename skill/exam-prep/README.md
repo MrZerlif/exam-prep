@@ -18,6 +18,16 @@ being migrated. Workspace discovery accepts only `EXAM_PREP_WORKSPACE`, legacy
 `PROJECT_ROOT` and `WORKSPACE_ROOT` are ignored. `config/config.template.json`
 is illustrative documentation only; the runtime does not load it automatically.
 
+For engine-owned activity timing, call `start-activity ACTIVITY_ID`, optionally
+`finish-activity`, and then record a v2 observation with the same
+`activity_id`. Use `activity-status` to inspect an interrupted workflow and
+`discard-activity` when no observation will be recorded. The engine records
+only `elapsed_seconds`: `expected_seconds` remains `None`, so timing does not
+update the `speed` mastery dimension in this release. `end-session` persists an
+evaluation summary, while full `status` exposes `course_wide_calibration` and
+`status --compact` omits it. `next --minutes` and `exam --minutes` accept only
+positive integers.
+
 NotebookLM MCP is an optional P2 agent-host integration. When present, the host
 normalizes its returned evidence into a SourceEvidenceEnvelope and passes that
 data to the CLI. Connector availability is not consent: installation,
@@ -58,3 +68,7 @@ CurriculumProposal -> deterministic validation -> LearningTargets, prerequisite
 graph, exam-question mapping, capabilities, coverage report -> persisted
 syllabus. P2 integrations are additive. Core operation and canonical learner
 state remain local and deterministic when a provider is absent or fails.
+
+The deterministic engine, CLI, schemas, and persistence behavior are the v1.0
+baseline. Fatigue detection, workload-aware activity selection, and trusted
+expected-time evidence are not implemented yet.

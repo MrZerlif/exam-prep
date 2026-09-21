@@ -1,5 +1,8 @@
 # Exam Prep
 
+[![Tests](https://github.com/MrZerlif/exam-prep/actions/workflows/tests.yml/badge.svg)](https://github.com/MrZerlif/exam-prep/actions/workflows/tests.yml)
+[![Behavior](https://github.com/MrZerlif/exam-prep/actions/workflows/behavior.yml/badge.svg)](https://github.com/MrZerlif/exam-prep/actions/workflows/behavior.yml)
+
 An evidence-driven Agent Skill for preparing for one exam by a fixed date. It
 turns a learner's own materials and exam requirements into a local curriculum,
 records every assessable attempt, and uses a deterministic Python engine to
@@ -10,7 +13,8 @@ package lives in [`skill/exam-prep/`](skill/exam-prep/); learner data stays in a
 separate `.exam-prep/` directory inside the active study workspace.
 
 [Quick start](#quick-start) · [How it works](#how-it-works) ·
-[Daily workflow](#daily-workflow) · [Command reference](skill/exam-prep/references/commands.md) ·
+[Daily workflow](#daily-workflow) · [Activity timing](#activity-timing-and-evaluation) ·
+[Command reference](skill/exam-prep/references/commands.md) ·
 [Limitations](#current-limitations)
 
 ## Why use it?
@@ -118,9 +122,15 @@ After the workspace and curriculum exist, the common loop is:
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> status --compact
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> review-due
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> next --minutes 25
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> start-activity task-1
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> finish-activity
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> record-observation <observation.json>
 python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> end-session
 ```
+
+`next --minutes` and `exam --minutes` require a positive integer. The
+`activity_id` in a v2 observation proposal must match the identifier passed to
+`start-activity` for the measured time to be attached to that attempt.
 
 Only `record-observation` should add learner evidence. Build each v2 payload
 from the
@@ -142,6 +152,36 @@ Useful inspection and recovery commands include:
 
 The [command catalog](skill/exam-prep/references/commands.md) documents every
 subcommand, payload, workspace-resolution rule, and migration path.
+
+## Activity timing and evaluation
+
+Activity timing is owned by the engine rather than the agent. Start a timer
+before an assessable task, optionally finish it before recording the
+observation, and use `activity-status` when resuming after an interruption:
+
+```bash
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> activity-status
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> start-activity task-1
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> finish-activity
+python <skill-dir>/scripts/exam_prep.py --workspace <course-dir> record-observation <observation.json>
+```
+
+`record-observation` can also consume an active timer directly. Each measured
+activity can be consumed by at most one matching v2 observation. If the attempt
+will not be recorded, use `discard-activity`; `end-session` also discards any
+unconsumed activity so its time cannot leak into a later session.
+
+This release records only actual `elapsed_seconds`. `expected_seconds` remains
+`null`, so the `speed` mastery dimension stays unknown and does not affect
+scheduling or readiness. Fatigue detection and workload-aware activity
+selection are not implemented yet.
+
+`end-session` stores an `evaluation` summary in session history, including
+`active_study_seconds`, retries, recurring errors, delayed/transfer/mock scores,
+and confidence calibration. Full `status` adds
+`course_wide_calibration`; `status --compact` intentionally omits it.
+Calibration samples require an `assessment_result` with both `score` and
+`max_score`. An ordinary `outcome: "correct"` is not converted into a score.
 
 ## Mock exams
 
@@ -210,12 +250,15 @@ without it.
   require tutor judgment.
 - Photograph and handwriting workflows have not been tested in the recorded
   scenarios.
+- The engine does not yet infer fatigue or adapt `next` to workload state.
 - Releases are packaged by `.github/workflows/release.yml` when a v*.*.* tag
-  is pushed. The repository has no separate test-CI workflow; reuse and
-  distribution are covered by the [MIT license](LICENSE).
+  is pushed. `.github/workflows/tests.yml` runs the unit suite on Python 3.11
+  and 3.12, while `.github/workflows/behavior.yml` runs deterministic behavior
+  scenarios. Reuse and distribution are covered by the [MIT license](LICENSE).
 
-Treat the project as a developer-facing, experimental skill until the relevant
-host behavior and optional integrations have been independently exercised.
+The deterministic local engine, CLI, schemas, and persistence behavior form the
+v1.0 baseline. Agent-host behavior and optional integrations remain
+experimental until independently exercised.
 
 ## Repository layout
 

@@ -51,8 +51,12 @@ def build_readiness(store: StudyStore, validation: dict[str, Any]) -> dict[str, 
         reviews = recovered.review_queue if recovered else None
         if isinstance(reviews, dict) and any(item.get("review_status") in {"due", "overdue"} for item in reviews.get("items", {}).values()):
             reasons.append("overdue reviews remain")
-    except Exception:
-        pass
+    except Exception as exc:
+        reason = f"recovery check failed ({type(exc).__name__})"
+        detail = str(exc).strip()
+        if detail:
+            reason += f": {detail}"
+        reasons.append(reason)
     if blocking or not validation.get("valid"):
         verdict = "blocked"
     elif reasons:

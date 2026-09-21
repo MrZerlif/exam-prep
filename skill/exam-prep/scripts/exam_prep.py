@@ -486,6 +486,16 @@ def _result(value: object) -> int:
     return 0
 
 
+def _positive_int(value: str) -> int:
+    try:
+        parsed = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a positive integer") from exc
+    if parsed <= 0:
+        raise argparse.ArgumentTypeError("must be a positive integer")
+    return parsed
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="exam_prep")
     parser.add_argument(
@@ -517,7 +527,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     status_parser.add_argument("--include-next-hint", action="store_true")
     next_parser = sub.add_parser("next")
-    next_parser.add_argument("--minutes", type=int, default=25)
+    next_parser.add_argument("--minutes", type=_positive_int, default=25)
     record = sub.add_parser("record-observation")
     record.add_argument("path")
     record.add_argument("--include-next-hint", action="store_true")
@@ -527,7 +537,7 @@ def _parser() -> argparse.ArgumentParser:
     roadmap_parser = sub.add_parser("roadmap")
     roadmap_parser.add_argument("--include-next-hint", action="store_true")
     exam = sub.add_parser("exam")
-    exam.add_argument("--minutes", type=int, default=45)
+    exam.add_argument("--minutes", type=_positive_int, default=45)
     verify = sub.add_parser("verify")
     verify.add_argument("path")
     sub.add_parser("rebuild")
