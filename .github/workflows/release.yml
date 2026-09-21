@@ -20,6 +20,7 @@ jobs:
           (cd dist && zip -r exam-prep.zip exam-prep)
       - uses: softprops/action-gh-release@v2
         with:
+          name: ${{ github.ref_name }}
           generate_release_notes: true
           body: |
             Exam Prep is an evidence-driven Agent Skill with a deterministic Python engine for exam preparation.

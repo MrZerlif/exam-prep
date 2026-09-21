@@ -19,5 +19,9 @@ class ReleaseArtifactTests(unittest.TestCase):
         self.assertNotIn("tests ", workflow)
         self.assertIn("skill/exam-prep/scripts", workflow)
 
+    def test_release_title_is_exactly_the_version_tag(self):
+        workflow = (ROOT / ".github" / "workflows" / "release.yml").read_text(encoding="utf-8")
+        self.assertIn("name: ${{ github.ref_name }}", workflow)
+
 if __name__ == "__main__":
     unittest.main()
