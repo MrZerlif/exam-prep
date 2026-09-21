@@ -53,6 +53,7 @@ from exam_prep_lib.source_evidence import ingest_source_evidence
 from exam_prep_lib.storage import StudyStore
 from exam_prep_lib.target_normalization import normalize_syllabus
 from exam_prep_lib.verifier_registry import VerifierRegistry, verify_request
+from exam_prep_lib.workspace_lock import WorkspaceBusy
 from exam_prep_lib.workspace import discover_git_root, resolve_workspace
 from exam_prep_lib.readiness import build_readiness
 from exam_prep_lib.planner import build_cheatsheet, forecast_plan, last_minute_review
@@ -678,7 +679,12 @@ def _crop_values(value: str | None) -> tuple[float, float, float, float] | None:
     return parts
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    _workspace_lock_acquired: bool = False,
+    _workspace_lock_timeout_seconds: float = 10.0,
+) -> int:
     args = _parser().parse_args(argv)
     if args.command == "migrate":
         result = migrate_legacy_workspace(args.from_math_study)
@@ -763,6 +769,27 @@ def main(argv: list[str] | None = None) -> int:
             "workspace": str(store.root),
             "missing_files": missing_files,
         })
+
+    should_lock_workspace = (
+        args.command == "init"
+        or initialization_state != "uninitialized"
+    )
+    if should_lock_workspace and not _workspace_lock_acquired:
+        try:
+            with store.workspace_lock(
+                timeout_seconds=_workspace_lock_timeout_seconds
+            ):
+                return main(
+                    argv,
+                    _workspace_lock_acquired=True,
+                    _workspace_lock_timeout_seconds=_workspace_lock_timeout_seconds,
+                )
+        except WorkspaceBusy:
+            _print_json({
+                "status": "workspace_busy",
+                "workspace": str(store.root),
+            })
+            return 1
 
     if args.command == "apply-lexicon":
         return _result(_apply_learned_lexicon(store, args.path, dry_run=args.dry_run))
