@@ -753,15 +753,10 @@ def main(argv: list[str] | None = None) -> int:
             "missing_files": missing_files,
         })
 
-    if initialization_state != "initialized" and args.command not in {
-        "status",
-        "init",
-        "validate",
-        "validate-curriculum",
-        "migrate",
-        "draft-assessments",
-        "finalize-assessment-draft",
-    }:
+    if (
+        initialization_state != "initialized"
+        and args.command in WORKSPACE_REQUIRES_INIT_COMMANDS
+    ):
         return _result({
             "status": "workspace_not_initialized",
             "initialized": False,

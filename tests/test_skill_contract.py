@@ -9,7 +9,11 @@ ROOT = Path(__file__).parents[1]
 SKILL_ROOT = ROOT / "skill" / "exam-prep"
 sys.path.insert(0, str(SKILL_ROOT / "scripts"))
 
-from exam_prep import _parser  # noqa: E402
+from exam_prep import (  # noqa: E402
+    PRE_INIT_WORKSPACE_COMMANDS,
+    WORKSPACE_INDEPENDENT_COMMANDS,
+    _parser,
+)
 
 
 def _registered_commands() -> list[str]:
@@ -297,20 +301,9 @@ class SkillContractTests(unittest.TestCase):
         # workspace_not_initialized is a real engine response that survived in
         # neither SKILL.md nor any reference, so a tutor calling a stateful
         # command too early reads an undocumented status and cannot tell a
-        # normal refusal from a failure. The allowlist is read from the guard.
-        import inspect
-
-        from exam_prep import main
-
-        source = inspect.getsource(main)
-        guard = re.search(
-            r"initialization_state != \"initialized\" and args\.command not in \{(.+?)\}",
-            source,
-            re.S,
-        )
-        self.assertIsNotNone(guard, "could not read the pre-init allowlist from main()")
-        allowed = re.findall(r'"([a-z-]+)"', guard.group(1))
-        self.assertTrue(allowed, "pre-init allowlist parsed empty")
+        # normal refusal from a failure. Read the exported lifecycle policy,
+        # which is also what the runtime gate consumes.
+        allowed = sorted(PRE_INIT_WORKSPACE_COMMANDS | WORKSPACE_INDEPENDENT_COMMANDS)
         commands = (SKILL_ROOT / "references" / "commands.md").read_text(encoding="utf-8")
         self.assertIn("workspace_not_initialized", commands)
         missing = [name for name in allowed if not _mentions_command(commands, name)]
