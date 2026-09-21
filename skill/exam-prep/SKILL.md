@@ -3,7 +3,7 @@ name: exam-prep
 description: Use when a learner is preparing for an exam by a fixed date, needs a plan from their own materials, has limited time or weak prerequisites, repeats mistakes, or asks to resume persistent local progress. Local material extraction supports 12 languages with configurable and per-source detection.
 license: MIT
 metadata:
-  version: "0.5.0"
+  version: "1.0.0"
 ---
 
 # Exam Prep
