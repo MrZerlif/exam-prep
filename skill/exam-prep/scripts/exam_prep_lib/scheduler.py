@@ -53,7 +53,7 @@ def _configured_timezone(value: str | None) -> tzinfo:
         ) from exc
 
 
-def _exam_time(course: dict[str, Any], now: datetime) -> datetime | None:
+def exam_time(course: dict[str, Any], now: datetime) -> datetime | None:
     """Return the configured exam instant, or ``None`` when no date exists."""
     exam = course.get("exam", {})
     if not isinstance(exam, dict):
@@ -152,8 +152,8 @@ def build_review_queue(
         event = normalize_event(raw_event, normalized_syllabus)
         grouped.setdefault(event.get("target_id", event.get("concept_id", "")), []).append(event)
     cap = int(course.get("scheduler", {}).get("max_review_interval_hours", 72))
-    exam_time = _exam_time(course, now)
-    has_valid_exam_horizon = exam_time is not None and exam_time > now
+    parsed_exam_time = exam_time(course, now)
+    has_valid_exam_horizon = parsed_exam_time is not None and parsed_exam_time > now
     concept_metadata = normalized_syllabus.targets
     items: dict[str, dict[str, Any]] = {}
     for concept_id, concept_events in grouped.items():
@@ -194,12 +194,12 @@ def build_review_queue(
 
         last_time = _parse_time(last.get("recorded_at"), now)
         if has_valid_exam_horizon:
-            remaining_hours = max(0.0, (exam_time - now).total_seconds() / 3600)
+            remaining_hours = max(0.0, (parsed_exam_time - now).total_seconds() / 3600)
             urgency_cap = _urgency_cap_hours(remaining_hours)
             if urgency_cap < interval:
                 interval = max(MIN_INTERVAL_HOURS, urgency_cap)
                 reason_parts.append(f"compressed for {remaining_hours:.1f}h exam horizon")
-            due_at = min(last_time + timedelta(hours=interval), exam_time)
+            due_at = min(last_time + timedelta(hours=interval), parsed_exam_time)
         else:
             due_at = last_time + timedelta(hours=interval)
 
@@ -404,10 +404,10 @@ def compute_priority(
     exam = course.get("exam", {})
     required_dimensions = _required_mastery_dimensions(metadata, syllabus)
     gap = _mastery_gap(state, required_dimensions, _blueprint_dimension_weights(exam))
-    exam_time = _exam_time(course, now)
-    if exam_time is None:
-        exam_time = now + timedelta(days=7)
-    days_left = max(0.0, (exam_time - now).total_seconds() / 86400)
+    parsed_exam_time = exam_time(course, now)
+    if parsed_exam_time is None:
+        parsed_exam_time = now + timedelta(days=7)
+    days_left = max(0.0, (parsed_exam_time - now).total_seconds() / 86400)
     urgency = 1.0 + max(0.0, (7.0 - days_left) / 7.0)
     exam_value = _exam_value(metadata)
     prerequisites = metadata.get("prerequisites", [])

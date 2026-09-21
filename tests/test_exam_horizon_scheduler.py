@@ -10,7 +10,7 @@ sys.path.insert(0, "skill/exam-prep/scripts")
 
 from exam_prep_lib.scheduler import (  # noqa: E402
     _configured_timezone,
-    _exam_time,
+    exam_time,
     build_review_queue,
 )
 
@@ -56,16 +56,16 @@ class ExamHorizonSchedulerTests(unittest.TestCase):
         course = {
             "exam": {"date": "2026-09-14T10:00:00", "timezone": "+03:00"}
         }
-        parsed = _exam_time(course, NOW)
+        parsed = exam_time(course, NOW)
         self.assertEqual(
             datetime(2026, 9, 14, 7, 0, tzinfo=timezone.utc),
             parsed.astimezone(timezone.utc),
         )
 
     def test_exam_timezone_defaults_to_utc_and_preserves_aware_date(self):
-        naive = _exam_time({"exam": {"date": "2026-09-14T10:00:00"}}, NOW)
+        naive = exam_time({"exam": {"date": "2026-09-14T10:00:00"}}, NOW)
         self.assertEqual(timezone.utc, naive.tzinfo)
-        aware = _exam_time(
+        aware = exam_time(
             {"exam": {"date": "2026-09-14T10:00:00-04:00", "timezone": "+03:00"}},
             NOW,
         )
@@ -76,7 +76,7 @@ class ExamHorizonSchedulerTests(unittest.TestCase):
 
 
     def test_aware_exam_date_does_not_require_configured_timezone(self):
-        aware = _exam_time(
+        aware = exam_time(
             {"exam": {"date": "2026-09-14T10:00:00-04:00", "timezone": "Not/AZone"}},
             NOW,
         )
@@ -93,12 +93,12 @@ class ExamHorizonSchedulerTests(unittest.TestCase):
 
     def test_invalid_timezone_is_rejected(self):
         with self.assertRaises(ValueError):
-            _exam_time(
+            exam_time(
                 {"exam": {"date": "2026-09-14T10:00:00", "timezone": "+24:00"}},
                 NOW,
             )
         with self.assertRaises(ValueError):
-            _exam_time(
+            exam_time(
                 {"exam": {"date": "2026-09-14T10:00:00", "timezone": "Not/AZone"}},
                 NOW,
             )

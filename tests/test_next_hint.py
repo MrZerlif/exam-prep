@@ -4,13 +4,14 @@ import json
 import shlex
 import sys
 import unittest
+from datetime import datetime, timezone
 from contextlib import redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "skill" / "exam-prep" / "scripts"))
 
-from exam_prep import _parser, main
+from exam_prep import _next_hint, _parser, main
 
 
 class NextHintTests(unittest.TestCase):
@@ -35,5 +36,37 @@ class NextHintTests(unittest.TestCase):
         return json.loads(output.getvalue())
 
 
+    def test_naive_exam_date_with_named_timezone_does_not_crash(self):
+        now = datetime(2026, 9, 13, 12, tzinfo=timezone.utc)
+        result = _next_hint(
+            {"exam": {"date": "2026-09-14T12:00:00", "timezone": "Europe/Moscow"}},
+            {},
+            {},
+            now=now,
+        )
+        self.assertEqual(1, result["exam_in_days"])
+
+    def test_aware_exam_date_still_works(self):
+        now = datetime(2026, 9, 13, 12, tzinfo=timezone.utc)
+        result = _next_hint(
+            {"exam": {"date": "2026-09-14T12:00:00+03:00"}},
+            {},
+            {},
+            now=now,
+        )
+        self.assertEqual(1, result["exam_in_days"])
+
+    def test_missing_exam_date_preserves_none(self):
+        now = datetime(2026, 9, 13, 12, tzinfo=timezone.utc)
+        result = _next_hint({"exam": {"date": None}}, {}, {}, now=now)
+        self.assertIsNone(result["exam_in_days"])
+
+    def test_provided_now_makes_next_hint_deterministic(self):
+        course = {"exam": {"date": "2026-09-20T12:00:00", "timezone": "Europe/Moscow"}}
+        now = datetime(2026, 9, 13, 12, tzinfo=timezone.utc)
+        self.assertEqual(
+            _next_hint(course, {}, {}, now=now),
+            _next_hint(course, {}, {}, now=now),
+        )
 if __name__ == "__main__":
     unittest.main()
