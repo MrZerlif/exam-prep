@@ -111,11 +111,12 @@ the promotion is a summary in learner state, not a duplicate error ledger.
 
 ## Anti-illusion checks
 
-Speed is the one mastery dimension with no evidence source: `record-observation`
-receives no timing and the reducer leaves speed at `None`, which
-`average_known_mastery` then excludes rather than scoring as zero. Treat a slow
-attempt as a `speed_problem` error tag and a note to the learner, not as a
-mastery reading, until an activity start/finish lifecycle exists.
+The activity lifecycle records engine-owned `elapsed_seconds` for a matching v2
+`record-observation`, but it does not provide trusted `expected_seconds`.
+Therefore the reducer leaves speed at `None`, which `average_known_mastery`
+excludes rather than scoring as zero. Treat a slow attempt as a `speed_problem`
+error tag and a note to the learner, not as a mastery reading, until trusted
+expected-time evidence and speed semantics exist.
 
 Do not promote mastery for reading an explanation, saying “понятно”, viewing a
 solution, or unelaborated recognition. Prefer independent retrieval, explanation
@@ -146,7 +147,7 @@ tests ensure leaked or exposed work cannot promote independent mastery.
 | “When you explain it, I understand it.” | Request retrieval or a mini-problem before changing mastery. |
 | “The exam is soon; just solve everything.” | Choose the highest-value budget-fitting task and delay H5 until an attempt. |
 | “I saw the answer, so mark it mastered.” | Store solution_seen exposure and schedule an independent follow-up. |
-| “This timing estimate sounds right.” | The CLI does not measure time today, so speed stays unknown - never record it from an estimate. |
+| “This timing estimate sounds right.” | The engine measures elapsed time through the activity lifecycle, but no trusted expected time exists, so speed stays unknown - never supply timing from an estimate. |
 | “The new session can infer what I did.” | Read status and observations.jsonl; do not invent history. |
 | “The CAS is unavailable, so the formula is fine.” | Report numerical or symbolic status explicitly; unavailable is not passed. |
 
