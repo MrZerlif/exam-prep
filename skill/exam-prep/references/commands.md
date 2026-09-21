@@ -44,6 +44,18 @@ the missing canonical files named, and creates nothing - it is a normal
 refusal, not a failure, and the repair is `init` (or `validate` when
 files are partially present), not a retry.
 
+## Workspace concurrency
+
+`init` and every command operating on an initialized workspace take an
+exclusive lock for the whole command. This serializes both readers and writers,
+so a second agent cannot observe or create a half-finished revision. A command
+that cannot acquire the lock within 10 seconds returns `workspace_busy` with
+exit code 1. The persistent `.exam-prep/workspace.lock` file is normal: lock
+ownership belongs to the open process handle, not to the file's existence.
+
+The standalone tools `migrate`, `draft-assessments`, and
+`finalize-assessment-draft` do not participate in this workspace lock.
+
 ## Lifecycle
 
 - `init` - create the workspace once; repeating it is a safe no-op that
