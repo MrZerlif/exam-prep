@@ -58,11 +58,14 @@ class CliConcurrencyTests(unittest.TestCase):
         )
         process.start()
         start.set()
-        return process, result_queue
+        # The event has to outlive this helper: on POSIX its semaphore is
+        # unlinked as soon as the creating process drops the last reference,
+        # and the spawned child then cannot reopen it.
+        return process, start, result_queue
 
     def test_initialized_status_waits_for_workspace_transaction(self):
         with workspace_lock(self.lock_path):
-            process, result_queue = self._status_process(timeout_seconds=2.0)
+            process, _start, result_queue = self._status_process(timeout_seconds=2.0)
             with self.assertRaises(queue.Empty):
                 result_queue.get(timeout=0.25)
 
@@ -74,7 +77,7 @@ class CliConcurrencyTests(unittest.TestCase):
 
     def test_lock_timeout_returns_workspace_busy(self):
         with workspace_lock(self.lock_path):
-            process, result_queue = self._status_process(timeout_seconds=0.2)
+            process, _start, result_queue = self._status_process(timeout_seconds=0.2)
             code, payload = result_queue.get(timeout=3)
 
         process.join(timeout=3)
