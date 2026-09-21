@@ -40,6 +40,7 @@ from exam_prep_lib.curriculum import (
 from exam_prep_lib.assessment import FrozenAssessment
 from exam_prep_lib.scheduler import (
     build_review_queue,
+    exam_time,
     compute_priority,
     select_next_activity,
 )
@@ -271,34 +272,33 @@ def _compact_status(result: dict) -> dict:
     return compact
 
 
-def _next_hint(course: dict, session: dict, reviews: dict) -> dict[str, object]:
+def _next_hint(
+    course: dict,
+    session: dict,
+    reviews: dict,
+    *,
+    now: datetime | None = None,
+) -> dict[str, object]:
     due = sum(
         1
         for item in reviews.get("items", {}).values()
         if item.get("review_status") in {"due", "overdue"}
     )
-    exam_in_days = None
-    raw_exam = (course.get("exam") or {}).get("date")
-    if isinstance(raw_exam, str):
-        try:
-            exam_in_days = max(
-                0,
-                round(
-                    (
-                        datetime.fromisoformat(raw_exam.replace("Z", "+00:00"))
-                        - datetime.now(timezone.utc)
-                    ).total_seconds()
-                    / 86400
-                ),
-            )
-        except ValueError:
-            pass
+    current = now or datetime.now(timezone.utc)
+    try:
+        parsed_exam_time = exam_time(course, current)
+    except ValueError:
+        parsed_exam_time = None
+    exam_in_days = (
+        max(0, round((parsed_exam_time - current).total_seconds() / 86400))
+        if parsed_exam_time is not None
+        else None
+    )
     return {
         "command": "next --minutes 25",
         "why": f"review_due={due}, session {session.get('phase', 'idle')}",
         "exam_in_days": exam_in_days,
     }
-
 
 def _public_activity(syllabus: dict, selected: dict) -> dict:
     if not _is_v2_syllabus(syllabus):

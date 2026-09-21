@@ -24,7 +24,7 @@ from .storage import StudyStore
 from .target_normalization import normalize_event, normalize_syllabus
 from .assessment import FrozenAssessment
 from .provenance import source_ref_from_mapping
-from .scheduler import _exam_time
+from .scheduler import exam_time
 from .lexicon import available as available_languages, learned_languages, validate_learned
 
 # The value init used to write into every course.json. A workspace still
@@ -402,7 +402,7 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
     def check_exam_datetime():
         if course_issue:
             return "warning", "skipped: course.json could not be parsed"
-        _exam_time(course, datetime.now(timezone.utc))
+        exam_time(course, datetime.now(timezone.utc))
         return None
 
     add("exam_datetime", check_exam_datetime)
@@ -722,7 +722,7 @@ def run_validation(store: StudyStore) -> dict[str, Any]:
         items = (recovered.review_queue or {}).get("items", {})
         validation_now = datetime.now(timezone.utc)
         try:
-            exam_at = _exam_time(course, validation_now)
+            exam_at = exam_time(course, validation_now)
         except (TypeError, ValueError):
             # The named exam_datetime check reports the actionable error.
             exam_at = None
