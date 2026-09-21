@@ -1538,7 +1538,6 @@ def main(argv: list[str] | None = None) -> int:
                     ),
                 }
             summary["evaluation"] = summarize_evaluation(session_events)
-            summary["evaluation"] = summarize_evaluation(session_events)
             store.append_session_summary(summary)
         session = dict(session)
         # Deliberately leave current_target_id/current_task/last_attempt_*/
