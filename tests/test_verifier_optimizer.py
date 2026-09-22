@@ -97,6 +97,14 @@ class VerifierAndOptimizerTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "derivative"):
             verify_request({"kind": "derivative", "expression": "x**2"})
 
+    def test_numerical_verifier_rejects_non_string_fields(self):
+        with self.assertRaisesRegex(ValueError, "expression must be a string"):
+            verify_request({"kind": "derivative", "expression": 5, "derivative": "1"})
+        with self.assertRaisesRegex(ValueError, "variable must be a string"):
+            verify_request(
+                {"kind": "derivative", "expression": "x**2", "derivative": "2*x", "variable": 5}
+            )
+
     def test_source_aware_optimizer_exposes_coverage_and_authority(self):
         ranked = rank_source_aware_targets(
             {

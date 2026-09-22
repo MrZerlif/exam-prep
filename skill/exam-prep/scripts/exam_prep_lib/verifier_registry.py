@@ -39,6 +39,12 @@ class VerifierRegistry:
             if missing:
                 raise ValueError(f"{kind} verification requires {', '.join(missing)}")
             variable = request.get("variable", "x")
+            for field, value in (
+                *((name, request[name]) for name in required_fields[kind]),
+                ("variable", variable),
+            ):
+                if not isinstance(value, str):
+                    raise ValueError(f"{field} must be a string")
             samples = request.get("samples", list(DEFAULT_SAMPLES))
             tolerance = request.get("tolerance", DEFAULT_TOLERANCE)
             if kind == "antiderivative":
