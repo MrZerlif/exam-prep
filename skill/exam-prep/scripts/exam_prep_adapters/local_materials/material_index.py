@@ -316,8 +316,6 @@ def _course_language(
             issue = IngestIssue("unsupported_language", None, f"no lexicon is available for configured language {configured!r}", "gap")
             return "ru", {"value": configured, "source": "configured", "confidence": None}, issue
         return str(configured), {"value": configured, "source": course.get("language_source", "configured"), "confidence": course.get("language_confidence", 1.0)}, None
-    if course.get("language_detection_attempted"):
-        return "ru", {"value": None, "source": "unknown", "confidence": None}, IngestIssue("unsupported_language", None, "language detection confidence was below 0.6", "gap")
     sources = extract_sources(materials_dir)
     text = "\n".join(page.text for source in sources for page in source.pages)
     detected = detect(text, candidates=available())

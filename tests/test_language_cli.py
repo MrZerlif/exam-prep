@@ -52,6 +52,25 @@ class LanguageCliTests(unittest.TestCase):
         self.assertEqual(first["language"], second["language"])
         self.assertEqual(first["language_source"], second["language_source"])
 
+    def test_failed_detection_is_retried_when_materials_grow(self):
+        (self.materials / "notes.md").write_text("# notes\n", encoding="utf-8")
+        self.run_cli("init")
+        self.run_cli("ingest-materials", str(self.materials))
+        course_path = self.root / ".exam-prep" / "course.json"
+        first = json.loads(course_path.read_text(encoding="utf-8"))
+        self.assertIsNone(first["language"])
+        self.assertTrue(first["language_detection_attempted"])
+
+        (self.materials / "chapter.txt").write_text(
+            "The task and the proof are in this chapter. We will use the "
+            "definition in the course and in the exam.\n",
+            encoding="utf-8",
+        )
+        self.run_cli("ingest-materials", str(self.materials))
+        second = json.loads(course_path.read_text(encoding="utf-8"))
+        self.assertEqual("en", second["language"])
+        self.assertEqual("detected", second["language_source"])
+
     def test_each_source_keeps_its_own_detected_language(self):
         german = self.materials / "german.txt"
         english = self.materials / "english.txt"
