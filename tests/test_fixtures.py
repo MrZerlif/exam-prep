@@ -87,6 +87,27 @@ class FixtureTests(unittest.TestCase):
         self.assertEqual("example-exam", course["course_id"])
         self.assertEqual("Exam preparation", course["title"])
 
+    def test_command_input_examples_pass_their_own_validation(self):
+        from exam_prep_lib.assessment import FrozenAssessment
+        from exam_prep_lib.schema_validation import (
+            load_schema,
+            validate_document,
+            validate_observation_proposal,
+        )
+
+        examples = SKILL_ROOT / "examples"
+
+        def read(name):
+            return json.loads((examples / name).read_text(encoding="utf-8"))
+
+        # from_mapping raises ValueError on a stale spec_hash - exactly what
+        # freeze-assessment does with this file.
+        FrozenAssessment.from_mapping(read("assessment.json"))
+        validate_observation_proposal(read("observation-proposal.json"))
+        for name in ("example-syllabus.json", "mathematics-regression-syllabus.json"):
+            with self.subTest(name=name):
+                validate_document(read(name), load_schema("syllabus.schema.json"))
+
 
 if __name__ == "__main__":
     unittest.main()
