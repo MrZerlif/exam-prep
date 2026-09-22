@@ -32,9 +32,8 @@ A source is only "known" to `validate-curriculum`/`apply-curriculum` once it
 has been persisted to this workspace through `ingest-source-evidence`.
 Writing a `source_refs` entry inside the curriculum proposal itself does not
 register that source - it only declares an intended citation, which the
-engine checks against already-ingested evidence, not against itself. This is
-what `SKILL.md`'s "Proposal-declared refs do not establish source existence"
-means mechanically: an `unknown source ref` coverage gap is cleared by
-ingesting the source first, not by editing the proposal's own `source_refs`
-list (`references/commands.md`).
+engine checks against already-ingested evidence, not against itself. An
+`unknown source ref` coverage gap is cleared by ingesting the source first,
+not by editing the proposal's own `source_refs` list
+(`references/commands.md`).
 

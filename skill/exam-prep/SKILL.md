@@ -1,6 +1,6 @@
 ---
 name: exam-prep
-description: Use when a learner is preparing for an exam by a fixed date, needs a plan from their own materials, has limited time or weak prerequisites, repeats mistakes, or asks to resume persistent local progress. Local material extraction supports 12 languages with configurable and per-source detection.
+description: Use when a learner is preparing for an exam by a fixed date, needs a plan from their own materials, has limited time or weak prerequisites, repeats mistakes, or asks to resume persistent local progress.
 license: MIT
 metadata:
   version: "1.0.2"
@@ -14,9 +14,9 @@ engine validates evidence and persists mastery, reviews, priorities, and
 recovery state.
 
 Local material extraction supports `en`, `ru`, `de`, `fr`, `es`, `it`, `pt`,
-`pl`, `tr`, `uk`, `zh`, and `ja`. A course may configure its language, or the
-engine detects it once during the first `ingest-materials` run and records the
-result in `course.json`.
+`pl`, `tr`, `uk`, `zh`, and `ja`. Set the course language with
+`init --language`, or the engine detects it during `ingest-materials` and
+records it in `course.json`; each source also keeps its own detected language.
 
 ## Sources and lifecycle
 
@@ -37,12 +37,12 @@ idempotent curriculum changes.
 
 For continuation, read `status --compact`: `course`, `session`,
 `last_session_summary`, `targets`, `review_queue`, and `resume_point`. Use
-`roadmap` for full target metadata; close with `end-session`. `next
---minutes` assumes 25 when omitted.
+`roadmap` for full target metadata. Open a session with `start`, close it
+with `end-session`; `exam` runs a mock. `next --minutes` assumes 25 when
+omitted.
 
-Figures are derived assets. Open a prompt image before explaining it and show
-answer assets only after `reveal-answer`; the behavioral
-`answer_asset_leak` case is the safety gate.
+Figures are derived assets. Open a prompt image before explaining it. Show
+answer assets only through `reveal-answer`, never by reading asset files.
 
 ## attempt-first policy
 
@@ -63,13 +63,8 @@ After each assessable attempt, write one proposal from
 `assessment_id` binds the attempt; `task_id` does not. Do not supply
 engine-owned timing, session, independence, or hint fields.
 
-## Pressure and verification
-
-Attempt-first safeguards cover premature answer requests and pressure. Teaching
-or cram exposure is explicit and records `solution_seen`.
 Derivative/antiderivative checks belong to `references/verification.md`;
-do not imply broader numeric or
-symbolic answer checking.
+do not imply broader numeric or symbolic answer checking.
 
 ## References
 
@@ -78,6 +73,7 @@ Read `references/pedagogy.md` before the first attempt of a session.
 - Commands: `references/commands.md`
 - Tutoring and exposure: `references/pedagogy.md`
 - Budgets and exam mode: `references/exam-optimizer.md`
+- Materials and answer assets: `references/materials.md`
 - Source authority: `references/source-of-truth.md`
 - Verification: `references/verification.md`
 - Optional NotebookLM: `references/notebooklm-mcp.md`
