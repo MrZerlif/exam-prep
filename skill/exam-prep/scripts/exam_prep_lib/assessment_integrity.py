@@ -120,6 +120,16 @@ def assess_attempt_evidence(
             diagnostic="solution_exposure_downgraded",
             integrity="explicit_exposure",
         )
+    if is_attempt(event) and any(exposes_solution(prior) for prior in previous):
+        # Re-answering a question whose solution was already shown is
+        # reproduction, not independent retrieval; the independent follow-up
+        # has to be a structurally different assessment.
+        return AttemptEvidenceDecision(
+            accepted=True,
+            mastery_eligible=False,
+            diagnostic="attempt_after_solution_exposure",
+            integrity="post_exposure_attempt",
+        )
     return AttemptEvidenceDecision(
         accepted=True, mastery_eligible=True, integrity="frozen_attempt"
     )

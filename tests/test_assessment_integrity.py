@@ -574,6 +574,72 @@ class AssessmentIntegrityTests(unittest.TestCase):
             )
             self.assertTrue(decision.accepted)
 
+    def test_attempt_after_solution_exposure_is_downgraded(self):
+        frozen = FrozenAssessment.from_mapping(assessment())
+        link = {
+            "assessment_id": frozen.assessment_id,
+            "target_id": frozen.target_id,
+            "capability_id": frozen.capability_id,
+        }
+        decision = assess_attempt_evidence(
+            {**link, "outcome": "correct", "assistance": {"levels_revealed": []}},
+            frozen,
+            prior_events=[{**link, "outcome": "solution_seen", "solution_exposed": True}],
+        )
+        self.assertTrue(decision.accepted)
+        self.assertFalse(decision.mastery_eligible)
+        self.assertEqual("post_exposure_attempt", decision.integrity)
+        self.assertEqual("attempt_after_solution_exposure", decision.diagnostic)
+
+    def test_exposure_on_another_assessment_does_not_downgrade(self):
+        frozen = FrozenAssessment.from_mapping(assessment())
+        decision = assess_attempt_evidence(
+            {
+                "assessment_id": frozen.assessment_id,
+                "target_id": frozen.target_id,
+                "capability_id": frozen.capability_id,
+                "outcome": "correct",
+                "assistance": {"levels_revealed": []},
+            },
+            frozen,
+            prior_events=[{"assessment_id": "other", "outcome": "solution_seen"}],
+        )
+        self.assertEqual("frozen_attempt", decision.integrity)
+
+    def test_post_exposure_attempt_is_credited_as_heavily_scaffolded(self):
+        from exam_prep_lib.evaluation import summarize_evaluation
+        from exam_prep_lib.evidence_maturity import add_event_to_maturity, empty_evidence_maturity
+        from exam_prep_lib.reducer import event_assistance_band
+
+        event = {
+            "schema_version": 2,
+            "observation_id": "after-exposure",
+            "target_id": "algebra:linear",
+            "task_id": "assessment-1",
+            "capability_id": "independent_problem",
+            "task_type": "independent_problem",
+            "outcome": "correct",
+            "assessment_integrity": "post_exposure_attempt",
+            "assistance": {"levels_revealed": []},
+            "error_tags": [],
+            "recorded_at": "2026-09-23T10:00:00+00:00",
+        }
+        self.assertEqual("heavily_scaffolded", event_assistance_band(event))
+        result = reduce_learning_state(
+            {},
+            {"schema_version": 2, "learning_targets": [{"target_id": "algebra:linear"}]},
+            [event],
+            {},
+        )
+        state = result["targets"]["algebra:linear"]
+        self.assertEqual(0, state["evidence"]["independent_successes"])
+        self.assertEqual(1, state["evidence"]["hinted_successes"])
+        self.assertEqual(0, state["evidence_maturity"]["demonstrated"]["count"])
+        self.assertLess(state["mastery"]["procedural"], 0.22)
+        maturity = add_event_to_maturity(empty_evidence_maturity(), event)
+        self.assertEqual(0, maturity["demonstrated"]["count"])
+        self.assertIsNone(summarize_evaluation([event])["time_to_independent_success"])
+
     def test_new_v2_non_assessment_event_is_not_legacy_unfrozen(self):
         with tempfile.TemporaryDirectory() as tmp:
             store = StudyStore.for_exam_prep(Path(tmp))

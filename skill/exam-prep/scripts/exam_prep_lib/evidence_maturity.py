@@ -27,7 +27,7 @@ def _event_facets(
     if (
         event.get("outcome") == "solution_seen"
         or event.get("solution_exposed")
-        or event.get("assessment_integrity") == "explicit_exposure"
+        or event.get("assessment_integrity") in {"explicit_exposure", "post_exposure_attempt"}
         or assistance.get("full_solution_viewed")
     ):
         return set()

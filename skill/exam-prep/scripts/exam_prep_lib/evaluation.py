@@ -78,7 +78,7 @@ def summarize_evaluation(events: Iterable[Mapping[str, Any]]) -> dict[str, Any]:
             if event.get("outcome") == "correct"
             and not (event.get("assistance") or {}).get("levels_revealed")
             and not event.get("solution_exposed")
-            and event.get("assessment_integrity") != "explicit_exposure"
+            and event.get("assessment_integrity") not in {"explicit_exposure", "post_exposure_attempt"}
         ),
         None,
     )

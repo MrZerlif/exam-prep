@@ -96,6 +96,30 @@ class AnswerGatingTests(unittest.TestCase):
             outcomes = [e["outcome"] for e in StudyStore.for_exam_prep(root).read_complete_observations()]
             self.assertEqual(["solution_seen"], outcomes)
 
+    def test_reattempt_after_exposure_is_recorded_as_post_exposure(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._call(root, "init")
+            assessment = {
+                "assessment_id": "a1", "target_id": "t1", "capability_id": "calculation",
+                "prompt": "Compute x", "rubric": {}, "expected_evidence": [], "source_refs": [],
+                "difficulty": 0.5, "question_version": 1, "rubric_version": 1,
+            }
+            assessment_path = root / "assessment.json"
+            assessment_path.write_text(json.dumps(assessment), encoding="utf-8")
+            self._call(root, "freeze-assessment", str(assessment_path))
+            self._call(root, "reveal-answer", "a1", "--exposure")
+            correct = {
+                "schema_version": 2, "observation_id": "after-exposure-a1", "target_id": "t1",
+                "task_id": "a1", "capability_id": "calculation", "task_type": "calculation",
+                "outcome": "correct", "assistance": {"levels_revealed": []}, "error_tags": [],
+                "diagnostic_confidence": "high", "source_refs": [], "assessment_id": "a1",
+            }
+            proposal_path = root / "correct.json"
+            proposal_path.write_text(json.dumps(correct), encoding="utf-8")
+            recorded = self._call(root, "record-observation", str(proposal_path))
+            self.assertEqual("post_exposure_attempt", recorded["event"]["assessment_integrity"])
+
     @staticmethod
     def _call(root: Path, *args: str) -> dict:
         output = io.StringIO()
