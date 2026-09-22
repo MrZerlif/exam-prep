@@ -8,6 +8,7 @@ from exam_prep_lib import symbolic_backend  # noqa: E402
 from exam_prep_lib.verifier import (  # noqa: E402
     DEFAULT_SAMPLES,
     DEFAULT_TOLERANCE,
+    MAX_EXPRESSION_DEPTH,
     UnsafeExpression,
     verify_antiderivative,
     verify_derivative,
@@ -72,8 +73,23 @@ class VerifierTests(unittest.TestCase):
                     verify_derivative("x**2", "2*x", "x", samples, tolerance)
 
     def test_deeply_nested_expression_is_unsafe(self):
-        with self.assertRaises(UnsafeExpression):
-            verify_derivative("-" * 5000 + "x", "1", "x", [1.0], 1e-4)
+        for depth in (150, 1500, 5000):
+            with self.subTest(depth=depth):
+                with self.assertRaises(UnsafeExpression):
+                    verify_derivative("-" * depth + "x", "1", "x", [1.0], 1e-4)
+
+    def test_ordinary_nesting_is_still_accepted(self):
+        self.assertLess(40, MAX_EXPRESSION_DEPTH)
+        result = verify_derivative("-" * 40 + "x", "1", "x", [1.0, 2.0], 1e-4)
+        self.assertEqual("passed", result.status)
+        result = verify_derivative(
+            "sin(cos(exp(x)))",
+            "-cos(cos(exp(x)))*sin(exp(x))*exp(x)",
+            "x",
+            [0.1, 0.5],
+            1e-4,
+        )
+        self.assertEqual("passed", result.status)
 
     def test_default_samples_include_negative_inputs(self):
         self.assertTrue(any(sample < 0 for sample in DEFAULT_SAMPLES))

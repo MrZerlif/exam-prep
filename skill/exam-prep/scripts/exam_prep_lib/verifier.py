@@ -37,6 +37,7 @@ UNARY_OPERATORS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
 
 DEFAULT_SAMPLES: tuple[float, ...] = (-2.0, -1.0, -0.5, 0.5, 1.0, 2.0)
 DEFAULT_TOLERANCE = 1e-4
+MAX_EXPRESSION_DEPTH = 100
 
 
 def _checked_samples(samples: Any) -> list[float]:
@@ -65,6 +66,18 @@ def _checked_tolerance(tolerance: Any) -> float:
     return float(tolerance)
 
 
+def _tree_depth(tree: ast.Expression) -> int:
+    max_depth = 0
+    stack: list[tuple[ast.AST, int]] = [(tree, 1)]
+    while stack:
+        node, depth = stack.pop()
+        if depth > max_depth:
+            max_depth = depth
+        for child in ast.iter_child_nodes(node):
+            stack.append((child, depth + 1))
+    return max_depth
+
+
 def _tree(expression: str) -> ast.Expression:
     try:
         tree = ast.parse(expression, mode="eval")
@@ -72,6 +85,8 @@ def _tree(expression: str) -> ast.Expression:
         raise UnsafeExpression("invalid expression syntax") from exc
     except (RecursionError, MemoryError) as exc:
         raise UnsafeExpression("expression is nested too deeply") from exc
+    if _tree_depth(tree) > MAX_EXPRESSION_DEPTH:
+        raise UnsafeExpression("expression is nested too deeply")
     return tree
 
 
