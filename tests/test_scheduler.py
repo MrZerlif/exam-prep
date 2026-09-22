@@ -5,6 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, "skill/exam-prep/scripts")
 
+from exam_prep_lib import scheduler  # noqa: E402
 from exam_prep_lib.scheduler import (  # noqa: E402
     build_review_queue,
     compute_priority,
@@ -86,6 +87,38 @@ class SchedulerTests(unittest.TestCase):
     def test_failures_shorten_review_interval(self):
         queue = build_review_queue([event("incorrect")], {}, COURSE, NOW)
         self.assertLessEqual(queue["items"]["chain_rule"]["interval_hours"], 6)
+
+    def test_event_band_caps_post_exposure_attempt_and_flags_explicit_exposure(self):
+        # _event_band drives build_review_queue spacing; it must delegate to
+        # the reducer's event_assistance_band so a re-attempt after solution
+        # exposure is never scheduled as if it were independent.
+        post_exposure = {
+            "outcome": "correct",
+            "assessment_integrity": "post_exposure_attempt",
+            "assistance": {"levels_revealed": []},
+        }
+        explicit_exposure = {
+            "outcome": "correct",
+            "assessment_integrity": "explicit_exposure",
+            "assistance": {"levels_revealed": []},
+        }
+        plain_independent = {
+            "outcome": "correct",
+            "assistance": {"levels_revealed": []},
+        }
+        self.assertEqual("heavily_scaffolded", scheduler._event_band(post_exposure))
+        self.assertEqual("solution_seen", scheduler._event_band(explicit_exposure))
+        self.assertEqual("independent", scheduler._event_band(plain_independent))
+
+    def test_post_exposure_attempt_gets_shorter_review_interval_than_independent(self):
+        independent_queue = build_review_queue([event("correct")], {}, COURSE, NOW)
+        post_exposure_event = event("correct")
+        post_exposure_event["assessment_integrity"] = "post_exposure_attempt"
+        post_exposure_queue = build_review_queue([post_exposure_event], {}, COURSE, NOW)
+        self.assertLess(
+            post_exposure_queue["items"]["chain_rule"]["interval_hours"],
+            independent_queue["items"]["chain_rule"]["interval_hours"],
+        )
 
     def test_independent_delayed_recall_gets_longer_interval(self):
         queue = build_review_queue(
