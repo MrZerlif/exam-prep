@@ -109,7 +109,9 @@ The standalone tools `migrate`, `draft-assessments`, and
 - `reveal-answer <assessment-id> [--exposure]` - return answer assets only
   after an attempt (`correct`, `partial`, or `incorrect`; a `skipped`
   outcome is not an attempt), after an earlier recorded exposure, or with
-  `--exposure`, which records `solution_seen`.
+  `--exposure`. Every reveal that is not already covered by a recorded
+  exposure appends `solution_seen`, so the later retry on the same
+  assessment is a `post_exposure_attempt`.
 - `cheatsheet`, `last-minute-review`, and `plan` - deterministic derived
   review artifacts; `plan --days N --minutes-per-day M` is a forecast and
   never changes the exam date.
@@ -177,11 +179,14 @@ a target the mock does not cover, or once every ticket for that target is
 already linked.
 
 Once an assessment's solution has been exposed (`reveal-answer --exposure`,
-or a proposal with `solution_exposed`), every later attempt on the same
-`assessment_id` is recorded as `assessment_integrity: "post_exposure_attempt"`
-and credited at most as heavily scaffolded: it never counts as an independent
-success, evidence maturity, or a post-mortem `independent` band. Prove
-independence on a structurally different assessment instead.
+`reveal-answer` after an attempt, or a proposal with `solution_exposed`),
+every later attempt on the same `assessment_id` is recorded as
+`assessment_integrity: "post_exposure_attempt"` and credited at most as
+heavily scaffolded: it never counts as an independent success, evidence
+maturity, or a post-mortem `independent` band. Prove independence on a
+structurally different assessment instead. The classification happens when an
+attempt is recorded; logs written before v1.0.4 are not reclassified by
+`rebuild`.
 
 `score` is the share of *independently* correct tickets, not of correct ones:
 a ticket answered correctly after H1/H2 hints lands in `correct` but its

@@ -120,6 +120,58 @@ class AnswerGatingTests(unittest.TestCase):
             recorded = self._call(root, "record-observation", str(proposal_path))
             self.assertEqual("post_exposure_attempt", recorded["event"]["assessment_integrity"])
 
+    def test_reveal_after_attempt_records_exposure(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._freeze_a1(root)
+            self._record(root, "incorrect", "first-a1")
+            revealed = self._call(root, "reveal-answer", "a1")
+            self.assertEqual("answer_revealed", revealed["status"])
+            self.assertEqual(["incorrect", "solution_seen"], self._outcomes(root))
+            exposure = StudyStore.for_exam_prep(root).read_complete_observations()[-1]
+            self.assertEqual("answer revealed after an attempt", exposure["explicit_exposure_reason"])
+            recorded = self._record(root, "correct", "retry-a1")
+            self.assertEqual("post_exposure_attempt", recorded["event"]["assessment_integrity"])
+
+    def test_reveal_with_exposure_flag_after_attempt_records_exposure(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._freeze_a1(root)
+            self._record(root, "incorrect", "first-a1")
+            revealed = self._call(root, "reveal-answer", "a1", "--exposure")
+            self.assertEqual("answer_revealed", revealed["status"])
+            self.assertEqual(["incorrect", "solution_seen"], self._outcomes(root))
+            exposure = StudyStore.for_exam_prep(root).read_complete_observations()[-1]
+            self.assertEqual("user requested --exposure", exposure["explicit_exposure_reason"])
+            recorded = self._record(root, "correct", "retry-a1")
+            self.assertEqual("post_exposure_attempt", recorded["event"]["assessment_integrity"])
+
+    def _freeze_a1(self, root: Path) -> None:
+        self._call(root, "init")
+        assessment = {
+            "assessment_id": "a1", "target_id": "t1", "capability_id": "calculation",
+            "prompt": "Compute x", "rubric": {}, "expected_evidence": [], "source_refs": [],
+            "difficulty": 0.5, "question_version": 1, "rubric_version": 1,
+        }
+        assessment_path = root / "assessment.json"
+        assessment_path.write_text(json.dumps(assessment), encoding="utf-8")
+        self._call(root, "freeze-assessment", str(assessment_path))
+
+    def _record(self, root: Path, outcome: str, observation_id: str) -> dict:
+        proposal = {
+            "schema_version": 2, "observation_id": observation_id, "target_id": "t1",
+            "task_id": "a1", "capability_id": "calculation", "task_type": "calculation",
+            "outcome": outcome, "assistance": {"levels_revealed": []}, "error_tags": [],
+            "diagnostic_confidence": "high", "source_refs": [], "assessment_id": "a1",
+        }
+        proposal_path = root / f"{observation_id}.json"
+        proposal_path.write_text(json.dumps(proposal), encoding="utf-8")
+        return self._call(root, "record-observation", str(proposal_path))
+
+    @staticmethod
+    def _outcomes(root: Path) -> list[str]:
+        return [e["outcome"] for e in StudyStore.for_exam_prep(root).read_complete_observations()]
+
     @staticmethod
     def _call(root: Path, *args: str) -> dict:
         output = io.StringIO()
