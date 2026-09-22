@@ -2,7 +2,7 @@ import io
 import json
 import sys
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -37,11 +37,19 @@ class MaterialCliTests(unittest.TestCase):
 
 
     def test_ingest_parser_rejects_include_unclassified(self):
-        with self.assertRaises(SystemExit) as raised:
+        with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
             _parser().parse_args([
                 "ingest-materials", "materials", "--include-unclassified",
             ])
         self.assertEqual(2, raised.exception.code)
+
+    def test_max_excerpt_chars_must_be_positive(self):
+        for command in (["ingest-materials", "materials"], ["hydrate-source", "lecture.md#p1"]):
+            for value in ("0", "-5"):
+                with self.subTest(command=command[0], value=value):
+                    with redirect_stderr(io.StringIO()), self.assertRaises(SystemExit) as raised:
+                        _parser().parse_args([*command, "--max-excerpt-chars", value])
+                    self.assertEqual(2, raised.exception.code)
 
     def test_draft_parser_still_accepts_include_unclassified(self):
         args = _parser().parse_args([
