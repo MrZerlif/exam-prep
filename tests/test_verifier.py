@@ -6,6 +6,8 @@ sys.path.insert(0, "skill/exam-prep/scripts")
 
 from exam_prep_lib import symbolic_backend  # noqa: E402
 from exam_prep_lib.verifier import (  # noqa: E402
+    DEFAULT_SAMPLES,
+    DEFAULT_TOLERANCE,
     UnsafeExpression,
     verify_antiderivative,
     verify_derivative,
@@ -45,6 +47,38 @@ class VerifierTests(unittest.TestCase):
         result = symbolic_backend.verify({"kind": "derivative", "expression": "x**2"})
         self.assertIn(result["status"], {"unavailable", "passed", "failed", "inconclusive"})
         self.assertNotIn("sympy", result.get("backend", "").lower())
+
+    def test_fractional_power_of_negative_sample_is_skipped(self):
+        result = verify_derivative("x**(1/3)", "(1/3)*x**(-2/3)", "x", [-1.0, 1.0], 1e-4)
+        self.assertTrue(result.passed)
+        self.assertEqual(1, result.checks["finite_difference"]["samples"])
+
+    def test_complex_intermediate_never_reaches_abs(self):
+        result = verify_derivative("abs(x**0.5)", "0.5*abs(x)**(-0.5)", "x", [-4.0, -1.0], 1e-4)
+        self.assertEqual("inconclusive", result.status)
+
+    def test_invalid_samples_or_tolerance_raise_value_error(self):
+        cases = (
+            ([1.0], "abc"),
+            ([1.0], 0),
+            ([1.0], float("nan")),
+            (["a"], 1e-4),
+            ("1.0", 1e-4),
+            ([True], 1e-4),
+        )
+        for samples, tolerance in cases:
+            with self.subTest(samples=samples, tolerance=tolerance):
+                with self.assertRaises(ValueError):
+                    verify_derivative("x**2", "2*x", "x", samples, tolerance)
+
+    def test_deeply_nested_expression_is_unsafe(self):
+        with self.assertRaises(UnsafeExpression):
+            verify_derivative("-" * 5000 + "x", "1", "x", [1.0], 1e-4)
+
+    def test_default_samples_include_negative_inputs(self):
+        self.assertTrue(any(sample < 0 for sample in DEFAULT_SAMPLES))
+        result = verify_derivative("abs(x)", "1", "x", list(DEFAULT_SAMPLES), DEFAULT_TOLERANCE)
+        self.assertEqual("failed", result.status)
 
 
 if __name__ == "__main__":

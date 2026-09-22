@@ -70,6 +70,33 @@ class VerifierAndOptimizerTests(unittest.TestCase):
             self.assertEqual(0, code)
             self.assertEqual("unavailable", json.loads(output.getvalue())["status"])
 
+    def test_cli_verify_uses_shared_defaults_and_rejects_bad_input(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            with contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(0, main(["--workspace", tmp, "init"]))
+            request_path = Path(tmp) / "request.json"
+            request_path.write_text(
+                json.dumps({"kind": "derivative", "expression": "abs(x)", "derivative": "1"}),
+                encoding="utf-8",
+            )
+            output = io.StringIO()
+            with contextlib.redirect_stdout(output):
+                self.assertEqual(0, main(["--workspace", tmp, "verify", str(request_path)]))
+            payload = json.loads(output.getvalue())
+            self.assertEqual("failed", payload["status"])
+            self.assertEqual(1e-4, payload["checks"]["finite_difference"]["tolerance"])
+
+            request_path.write_text(
+                json.dumps({"kind": "derivative", "expression": "x**2", "derivative": "2*x", "tolerance": "abc"}),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                main(["--workspace", tmp, "verify", str(request_path)])
+
+    def test_numerical_verifier_names_missing_fields(self):
+        with self.assertRaisesRegex(ValueError, "derivative"):
+            verify_request({"kind": "derivative", "expression": "x**2"})
+
     def test_source_aware_optimizer_exposes_coverage_and_authority(self):
         ranked = rank_source_aware_targets(
             {

@@ -1472,8 +1472,6 @@ def main(
 
     if args.command == "verify":
         request = json.loads(Path(args.path).read_text(encoding="utf-8"))
-        request.setdefault("samples", [0.5, 1.0, 1.5])
-        request.setdefault("tolerance", 1e-4)
         raw_syllabus = request.get("syllabus")
         if not isinstance(raw_syllabus, dict):
             raw_syllabus = (

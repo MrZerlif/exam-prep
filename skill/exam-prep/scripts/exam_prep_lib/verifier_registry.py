@@ -16,31 +16,39 @@ class VerifierRegistry:
     def with_defaults(cls) -> "VerifierRegistry":
         from dataclasses import asdict
 
-        from .verifier import verify_antiderivative, verify_derivative
+        from .verifier import (
+            DEFAULT_SAMPLES,
+            DEFAULT_TOLERANCE,
+            verify_antiderivative,
+            verify_derivative,
+        )
+
+        required_fields = {
+            "derivative": ("expression", "derivative"),
+            "antiderivative": ("integrand", "antiderivative"),
+        }
 
         def numerical(request: dict[str, Any]) -> dict[str, Any]:
             kind = request.get("kind", "derivative")
-            if kind == "antiderivative":
-                result = verify_antiderivative(
-                    request["integrand"],
-                    request["antiderivative"],
-                    request.get("variable", "x"),
-                    request.get("samples", [-2.0, -1.0, 1.0, 2.0]),
-                    request.get("tolerance", 1e-3),
-                )
-            elif kind == "derivative":
-                result = verify_derivative(
-                    request["expression"],
-                    request["derivative"],
-                    request.get("variable", "x"),
-                    request.get("samples", [-2.0, -1.0, 1.0, 2.0]),
-                    request.get("tolerance", 1e-3),
-                )
-            else:
+            if kind not in required_fields:
                 return {
                     "status": "unavailable",
                     "reason": f"unsupported numerical verification kind: {kind}",
                 }
+            missing = [field for field in required_fields[kind] if field not in request]
+            if missing:
+                raise ValueError(f"{kind} verification requires {', '.join(missing)}")
+            variable = request.get("variable", "x")
+            samples = request.get("samples", list(DEFAULT_SAMPLES))
+            tolerance = request.get("tolerance", DEFAULT_TOLERANCE)
+            if kind == "antiderivative":
+                result = verify_antiderivative(
+                    request["integrand"], request["antiderivative"], variable, samples, tolerance
+                )
+            else:
+                result = verify_derivative(
+                    request["expression"], request["derivative"], variable, samples, tolerance
+                )
             return asdict(result)
 
         registry = cls()
