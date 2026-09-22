@@ -1098,11 +1098,15 @@ def main(
         if session.get("phase") == "exam":
             return _result({"status": "exam_reveal_forbidden", "assessment_id": args.assessment_id})
         events = [event for event in store.read_complete_observations() if event.get("assessment_id") == args.assessment_id]
-        released = any(is_attempt(event) or exposes_solution(event) for event in events)
-        if not released and not args.exposure:
+        attempted = any(is_attempt(event) for event in events)
+        exposed = any(exposes_solution(event) for event in events)
+        if not attempted and not exposed and not args.exposure:
             _print_json({"status": "attempt_required", "assessment_id": args.assessment_id})
             return 1
-        if not released and args.exposure:
+        # Any reveal is a solution exposure: unless one is already on record,
+        # log it so a later retry on this assessment is never credited as an
+        # independent attempt.
+        if not exposed:
             session, _changed = _activate_session(session)
             proposal = {
                 "schema_version": 2,
@@ -1118,7 +1122,9 @@ def main(
                 "source_refs": list(assessment.source_refs),
                 "assessment_id": assessment.assessment_id,
                 "solution_exposed": True,
-                "explicit_exposure_reason": "user requested --exposure",
+                "explicit_exposure_reason": (
+                    "user requested --exposure" if args.exposure else "answer revealed after an attempt"
+                ),
             }
             store.append_observation(proposal, session["session_id"], _now(), None, None, session_phase=session["phase"])
             _persist_learning(store, course, syllabus, learner, session)
