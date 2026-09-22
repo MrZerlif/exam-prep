@@ -58,9 +58,13 @@ The standalone tools `migrate`, `draft-assessments`, and
 
 ## Lifecycle
 
-- `init` - create the workspace once; repeating it is a safe no-op that
-  preserves canonical files.
-- `load-syllabus <path>` - load or replace the syllabus.
+- `init [--language CODE]` - create the workspace once; repeating it is a safe
+  no-op that preserves canonical files. `--language` (`en`, `ru`, `de`, `fr`,
+  `es`, `it`, `pt`, `pl`, `tr`, `uk`, `zh`, `ja`) fixes the course language
+  instead of detecting it.
+- `load-syllabus <path> [--language CODE]` - load or replace the syllabus;
+  `--language` also sets the course language, and is the way to change it
+  after it was detected.
 - `start` - open the active session, or resume the one already open.
 - `status` - snapshot: course, session, targets, review queue, recurring
   mistakes, pending action, capability/blueprint diagnostics, and resume point.
@@ -78,6 +82,9 @@ The standalone tools `migrate`, `draft-assessments`, and
   prints an ASCII summary.
 - `ingest-materials <materials-dir> [--mode lightweight|full] [--dry-run]` -
   build the derived material index; full mode hydrates every extracted page.
+  While the course has no language, every run detects one from all
+  extracted text; once detected or configured it never switches on its own.
+  Each source also records its own detected language.
 - `hydrate-source <source-id> [<source-id> ...] --materials-dir <dir>` -
   hydrate selected pages into the append-only source evidence log. Repeating
   the command is idempotent.
