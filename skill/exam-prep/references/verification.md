@@ -7,14 +7,20 @@ not a substitute for checking assumptions or explaining a proof.
 
 Use scripts/exam_prep.py verify for:
 
-- restricted safe expression parsing;
-- numeric samples away from singularities;
-- substitution and arithmetic recomputation;
-- denominator/domain checks;
+- restricted safe expression parsing: numbers, the request's variable, `pi`,
+  `e`, `+ - * / **`, and one-argument `sin`, `cos`, `tan`, `exp`, `log`,
+  `sqrt`, `fabs`, `abs`;
+- sample skipping: a sample is dropped when either side is undefined there
+  (division by zero, a `log`/`sqrt` domain error, a complex intermediate such
+  as a fractional power of a negative number, or a non-finite result);
 - derivative finite-difference comparison with local slopes;
 - antiderivative finite-difference comparison of the proposed antiderivative's
-  numerical derivative with the integrand;
-- numerical sanity checks.
+  numerical derivative with the integrand.
+
+Omitted `samples` default to `-2, -1, -0.5, 0.5, 1, 2`; omitted `tolerance`
+defaults to a relative `1e-4`. Invalid samples, tolerance, or missing
+expression fields are rejected as an error rather than reported as a failed
+check.
 
 An antiderivative finite-difference pass is numerical consistency evidence, not
 a symbolic proof. Report failed or inconclusive checks rather than inventing

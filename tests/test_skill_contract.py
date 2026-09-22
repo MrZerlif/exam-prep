@@ -215,6 +215,28 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("when true", pedagogy)
         self.assertIn("verbatim", pedagogy)
 
+    def test_references_quote_only_text_that_skill_md_contains(self):
+        # A reference once cited a SKILL.md sentence that had since been
+        # removed; the quote read as authoritative policy that no longer
+        # existed anywhere the tutor loads first.
+        skill = " ".join((SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").split())
+        for path in sorted((SKILL_ROOT / "references").glob("*.md")):
+            text = path.read_text(encoding="utf-8")
+            for quote in re.findall(r"`SKILL\.md`'s \"([^\"]+)\"", text):
+                with self.subTest(reference=path.name, quote=quote):
+                    self.assertIn(" ".join(quote.split()), skill)
+
+    def test_every_reference_file_is_linked_from_skill_md(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
+        for path in sorted((SKILL_ROOT / "references").glob("*.md")):
+            with self.subTest(reference=path.name):
+                self.assertIn(f"references/{path.name}", skill)
+
+    def test_description_states_triggers_only(self):
+        frontmatter = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").split("---", 2)[1]
+        description = re.search(r"^description: (.+)$", frontmatter, re.M).group(1)
+        self.assertTrue(description.startswith("Use when "))
+        self.assertEqual(1, description.count(". ") + description.endswith("."))
 
     def _live_status_keys(self) -> set[str]:
         """Top-level keys the engine actually returns, not a re-typed list."""
