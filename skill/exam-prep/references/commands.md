@@ -130,6 +130,9 @@ The standalone tools `migrate`, `draft-assessments`, and
 Timing is engine-owned. Only a v2 `record-observation` proposal whose `activity_id` matches the current activity receives `elapsed_seconds`; v1 proposals never consume activity timing. `expected_seconds` is not measured in this release and remains `None`.
 - `verify <path>` - derivative/antiderivative answer check
   (`references/verification.md`); unsupported kinds return `unavailable`.
+  Omitted `samples` default to `-2, -1, -0.5, 0.5, 1, 2` and `tolerance`
+  to `1e-4`; invalid values or missing expression fields are an error, not
+  a failed check.
 
 ### Linking an attempt to a frozen assessment
 

@@ -35,12 +35,43 @@ OPERATORS = {
 }
 UNARY_OPERATORS = {ast.UAdd: operator.pos, ast.USub: operator.neg}
 
+DEFAULT_SAMPLES: tuple[float, ...] = (-2.0, -1.0, -0.5, 0.5, 1.0, 2.0)
+DEFAULT_TOLERANCE = 1e-4
+
+
+def _checked_samples(samples: Any) -> list[float]:
+    if not isinstance(samples, (list, tuple)):
+        raise ValueError("samples must be a list of numbers")
+    checked: list[float] = []
+    for sample in samples:
+        if (
+            isinstance(sample, bool)
+            or not isinstance(sample, (int, float))
+            or not math.isfinite(sample)
+        ):
+            raise ValueError(f"sample {sample!r} is not a finite number")
+        checked.append(float(sample))
+    return checked
+
+
+def _checked_tolerance(tolerance: Any) -> float:
+    if (
+        isinstance(tolerance, bool)
+        or not isinstance(tolerance, (int, float))
+        or not math.isfinite(tolerance)
+        or tolerance <= 0
+    ):
+        raise ValueError(f"tolerance {tolerance!r} must be a positive finite number")
+    return float(tolerance)
+
 
 def _tree(expression: str) -> ast.Expression:
     try:
         tree = ast.parse(expression, mode="eval")
     except SyntaxError as exc:
         raise UnsafeExpression("invalid expression syntax") from exc
+    except (RecursionError, MemoryError) as exc:
+        raise UnsafeExpression("expression is nested too deeply") from exc
     return tree
 
 
@@ -64,7 +95,10 @@ def _evaluate(node: ast.AST, variable: str, value: float) -> float:
     if isinstance(node, ast.BinOp) and type(node.op) in OPERATORS:
         left = _evaluate(node.left, variable, value)
         right = _evaluate(node.right, variable, value)
-        return OPERATORS[type(node.op)](left, right)
+        result = OPERATORS[type(node.op)](left, right)
+        if isinstance(result, complex):
+            raise ValueError("expression leaves the real domain at this sample")
+        return result
     if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
         if node.func.id not in FUNCTIONS or node.keywords:
             raise UnsafeExpression("function or keyword is not allowed")
@@ -111,6 +145,8 @@ def _finite_difference(
     samples: list[float],
     tolerance: float,
 ) -> VerificationResult:
+    samples = _checked_samples(samples)
+    tolerance = _checked_tolerance(tolerance)
     left_tree = _tree(left_expression)
     right_tree = _tree(right_expression)
     errors: list[float] = []
