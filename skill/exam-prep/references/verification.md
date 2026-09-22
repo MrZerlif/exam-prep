@@ -9,7 +9,8 @@ Use scripts/exam_prep.py verify for:
 
 - restricted safe expression parsing: numbers, the request's variable, `pi`,
   `e`, `+ - * / **`, and one-argument `sin`, `cos`, `tan`, `exp`, `log`,
-  `sqrt`, `fabs`, `abs`, nested at most 100 levels deep;
+  `sqrt`, `fabs`, `abs`, at most 100 syntax-tree levels deep (a long chain
+  of `+`/`*` terms counts as nesting);
 - sample skipping: a sample is dropped when either side is undefined there
   (division by zero, a `log`/`sqrt` domain error, a complex intermediate such
   as a fractional power of a negative number, or a non-finite result);
