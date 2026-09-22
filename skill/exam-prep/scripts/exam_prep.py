@@ -38,6 +38,7 @@ from exam_prep_lib.curriculum import (
     validate_curriculum_proposal,
 )
 from exam_prep_lib.assessment import FrozenAssessment
+from exam_prep_lib.assessment_integrity import exposes_solution, is_attempt
 from exam_prep_lib.scheduler import (
     build_review_queue,
     exam_time,
@@ -1097,10 +1098,11 @@ def main(
         if session.get("phase") == "exam":
             return _result({"status": "exam_reveal_forbidden", "assessment_id": args.assessment_id})
         events = [event for event in store.read_complete_observations() if event.get("assessment_id") == args.assessment_id]
-        if not events and not args.exposure:
+        released = any(is_attempt(event) or exposes_solution(event) for event in events)
+        if not released and not args.exposure:
             _print_json({"status": "attempt_required", "assessment_id": args.assessment_id})
             return 1
-        if not events and args.exposure:
+        if not released and args.exposure:
             session, _changed = _activate_session(session)
             proposal = {
                 "schema_version": 2,
