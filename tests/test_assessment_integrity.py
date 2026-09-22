@@ -591,6 +591,42 @@ class AssessmentIntegrityTests(unittest.TestCase):
         self.assertEqual("post_exposure_attempt", decision.integrity)
         self.assertEqual("attempt_after_solution_exposure", decision.diagnostic)
 
+    def test_h5_hint_before_attempt_requires_explicit_reason(self):
+        frozen = FrozenAssessment.from_mapping(assessment())
+        with self.assertRaises(AssessmentIntegrityError):
+            assess_attempt_evidence(
+                {
+                    "assessment_id": frozen.assessment_id,
+                    "target_id": frozen.target_id,
+                    "capability_id": frozen.capability_id,
+                    "outcome": "correct",
+                    "assistance": {"levels_revealed": ["H5"], "full_solution_viewed": False},
+                },
+                frozen,
+                prior_events=[],
+            )
+
+    def test_attempt_after_prior_h5_hint_is_post_exposure(self):
+        frozen = FrozenAssessment.from_mapping(assessment())
+        link = {
+            "assessment_id": frozen.assessment_id,
+            "target_id": frozen.target_id,
+            "capability_id": frozen.capability_id,
+        }
+        decision = assess_attempt_evidence(
+            {**link, "outcome": "correct", "assistance": {"levels_revealed": []}},
+            frozen,
+            prior_events=[
+                {
+                    **link,
+                    "outcome": "incorrect",
+                    "assistance": {"levels_revealed": ["H5"], "full_solution_viewed": False},
+                }
+            ],
+        )
+        self.assertFalse(decision.mastery_eligible)
+        self.assertEqual("post_exposure_attempt", decision.integrity)
+
     def test_exposure_on_another_assessment_does_not_downgrade(self):
         frozen = FrozenAssessment.from_mapping(assessment())
         decision = assess_attempt_evidence(

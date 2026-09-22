@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Iterable
 
 from .assessment import FrozenAssessment
+from .reducer import derive_assistance_band
 
 
 class AssessmentIntegrityError(ValueError):
@@ -51,12 +52,15 @@ def is_attempt(event: dict[str, Any]) -> bool:
 
 
 def exposes_solution(event: dict[str, Any]) -> bool:
-    assistance = event.get("assistance") or {}
+    """Whether the event showed the learner the solution. The assistance
+    part goes through the reducer's one band definition, so an H5 hint
+    counts exactly as a full solution view does."""
+
     return bool(
         event.get("outcome") == "solution_seen"
-        or assistance.get("full_solution_viewed")
         or event.get("solution_exposed")
         or event.get("assessment_integrity") == "explicit_exposure"
+        or derive_assistance_band(event.get("assistance") or {}) == "solution_seen"
     )
 
 
