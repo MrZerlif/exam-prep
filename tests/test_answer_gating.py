@@ -146,6 +146,19 @@ class AnswerGatingTests(unittest.TestCase):
             recorded = self._record(root, "correct", "retry-a1")
             self.assertEqual("post_exposure_attempt", recorded["event"]["assessment_integrity"])
 
+    def test_correct_attempt_after_exposure_does_not_finish_the_task(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._freeze_a1(root)
+            self._call(root, "reveal-answer", "a1", "--exposure")
+            recorded = self._record(root, "correct", "after-exposure-a1")
+            self.assertEqual("post_exposure_attempt", recorded["event"]["assessment_integrity"])
+            self.assertFalse(recorded["session"]["current_task_done"])
+            self.assertNotEqual(
+                "choose the next budget-fitting activity",
+                recorded["session"]["pending_action"],
+            )
+
     def _freeze_a1(self, root: Path) -> None:
         self._call(root, "init")
         assessment = {

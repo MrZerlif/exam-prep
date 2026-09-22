@@ -179,7 +179,8 @@ a target the mock does not cover, or once every ticket for that target is
 already linked.
 
 Once an assessment's solution has been exposed (`reveal-answer --exposure`,
-`reveal-answer` after an attempt, or a proposal with `solution_exposed`),
+`reveal-answer` after an attempt, or a proposal with `solution_exposed`,
+`full_solution_viewed`, or an `H5` hint),
 every later attempt on the same `assessment_id` is recorded as
 `assessment_integrity: "post_exposure_attempt"` and credited at most as
 heavily scaffolded: it never counts as an independent success, evidence

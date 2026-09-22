@@ -30,7 +30,7 @@ from exam_prep_lib.diagnostics import (
     unlinked_exam_attempt_diagnostic,
     unlinked_exam_attempts,
 )
-from exam_prep_lib.reducer import MISTAKE_SUMMARIES, derive_assistance_band, event_assistance_band, reduce_learning_state
+from exam_prep_lib.reducer import MISTAKE_SUMMARIES, event_assistance_band, reduce_learning_state
 from exam_prep_lib.migration import migrate_legacy_workspace
 from exam_prep_lib.curriculum import (
     CurriculumValidationError,
@@ -312,16 +312,15 @@ def _public_activity(syllabus: dict, selected: dict) -> dict:
     return result
 
 
-def _attempt_is_done(proposal: dict) -> bool:
-    """An attempt closes out its task when it succeeded without help - the
-    same 'independent' band the reducer uses to count independent_successes.
-    Anything else (hinted, partial, incorrect, solution seen) still needs a
-    clean independent pass, so the task stays open to resume."""
+def _attempt_is_done(event: dict) -> bool:
+    """A recorded attempt closes out its task when it succeeded without
+    help - the same 'independent' band the reducer uses to count
+    independent_successes, read from the canonical event so engine-assigned
+    integrity (e.g. a post_exposure_attempt) is honoured. Anything else
+    (hinted, partial, incorrect, solution seen, retry after exposure) still
+    needs a clean independent pass, so the task stays open to resume."""
 
-    if proposal.get("outcome") != "correct":
-        return False
-    assistance = proposal.get("assistance") or {}
-    return derive_assistance_band(assistance) == "independent"
+    return event.get("outcome") == "correct" and event_assistance_band(event) == "independent"
 
 
 def _pending_action_for_attempt(target_id: str, proposal: dict, *, done: bool) -> str:
@@ -1312,7 +1311,7 @@ def main(
         else:
             session = dict(session)
         target_id = proposal.get("target_id", proposal.get("concept_id"))
-        done = _attempt_is_done(proposal)
+        done = _attempt_is_done(result.canonical_event)
         session.update(
             {
                 "current_target_id": target_id,
