@@ -9,7 +9,7 @@ from typing import Any, Iterable
 
 from .capabilities import AssessmentCapability, CapabilityRegistry
 from .evidence_maturity import FACETS
-from .reducer import DIMENSIONS, average_known_mastery, derive_assistance_band
+from .reducer import DIMENSIONS, average_known_mastery, event_assistance_band
 from .target_normalization import normalize_event, normalize_syllabus
 
 # Minimum interval floor so a review is never scheduled instantly/negatively
@@ -96,17 +96,19 @@ def _average_mastery(state: dict[str, Any]) -> float:
 
 
 def _event_band(event: dict[str, Any]) -> str:
-    """The reducer's ladder plus this scheduler's one extra signal.
+    """The band this scheduler spaces reviews by - the reducer's event-level
+    band, unchanged.
 
     This used to be a hand-copied duplicate of derive_assistance_band, which
     is how a log the reducer could not read stayed unreadable here too:
     rebuild got past the reducer and then died on the same record in review
-    scheduling. Delegating keeps one definition of what a band means, and
-    inherits its totality for events written under the permissive schema.
+    scheduling. Delegating to event_assistance_band keeps one definition of
+    what a band means, inherits its totality for events written under the
+    permissive schema, and inherits its post-exposure cap: a
+    post_exposure_attempt is never scheduled as if it were independent, and
+    solution_exposed/explicit_exposure still resolve to solution_seen.
     """
-    if event.get("solution_exposed"):
-        return "solution_seen"
-    return derive_assistance_band(event.get("assistance"))
+    return event_assistance_band(event)
 
 
 def _review_kind(task_type: str) -> str:
