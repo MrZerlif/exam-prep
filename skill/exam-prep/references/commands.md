@@ -100,7 +100,9 @@ The standalone tools `migrate`, `draft-assessments`, and
   [--scale 2.0]` / `figure <relative-path> <page> [--crop x0,y0,x1,y1]
   [--out <path>]` - derive hash-named prompt, answer, and reference assets.
 - `reveal-answer <assessment-id> [--exposure]` - return answer assets only
-  after an attempt, or after explicit exposure that records `solution_seen`.
+  after an attempt (`correct`, `partial`, or `incorrect`; a `skipped`
+  outcome is not an attempt), after an earlier recorded exposure, or with
+  `--exposure`, which records `solution_seen`.
 - `cheatsheet`, `last-minute-review`, and `plan` - deterministic derived
   review artifacts; `plan --days N --minutes-per-day M` is a forecast and
   never changes the exam date.

@@ -40,16 +40,23 @@ class AttemptEvidenceDecision:
     integrity: str = "frozen_attempt"
 
 
-def _is_attempt(event: dict[str, Any]) -> bool:
-    return event.get("outcome") in {"correct", "partial", "incorrect"}
+ATTEMPT_OUTCOMES = frozenset({"correct", "partial", "incorrect"})
 
 
-def _exposes_solution(event: dict[str, Any]) -> bool:
+def is_attempt(event: dict[str, Any]) -> bool:
+    """Learner production grading can judge; `skipped` and `solution_seen`
+    are not attempts and never release an answer."""
+
+    return event.get("outcome") in ATTEMPT_OUTCOMES
+
+
+def exposes_solution(event: dict[str, Any]) -> bool:
     assistance = event.get("assistance") or {}
     return bool(
         event.get("outcome") == "solution_seen"
         or assistance.get("full_solution_viewed")
         or event.get("solution_exposed")
+        or event.get("assessment_integrity") == "explicit_exposure"
     )
 
 
@@ -98,15 +105,15 @@ def assess_attempt_evidence(
         for prior in prior_events
         if prior.get("assessment_id") == assessment.assessment_id
     ]
-    attempted_before = any(_is_attempt(prior) for prior in previous)
-    exposes_solution = _exposes_solution(event)
+    attempted_before = any(is_attempt(prior) for prior in previous)
+    exposes = exposes_solution(event)
     explicit_reason = event.get("explicit_exposure_reason")
 
-    if exposes_solution and not attempted_before and not explicit_reason:
+    if exposes and not attempted_before and not explicit_reason:
         raise AssessmentIntegrityError(
             "assessment-linked solution exposure before attempt requires an explicit reason"
         )
-    if exposes_solution:
+    if exposes:
         return AttemptEvidenceDecision(
             accepted=True,
             mastery_eligible=False,

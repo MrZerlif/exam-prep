@@ -46,6 +46,56 @@ class AnswerGatingTests(unittest.TestCase):
             event = StudyStore.for_exam_prep(root).read_complete_observations()[-1]
             self.assertEqual("solution_seen", event["outcome"])
 
+    def test_skipped_outcome_does_not_unlock_answer_assets(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._call(root, "init")
+            assessment = {
+                "assessment_id": "a1", "target_id": "t1", "capability_id": "calculation",
+                "prompt": "Compute x", "rubric": {}, "expected_evidence": [], "source_refs": [],
+                "difficulty": 0.5, "question_version": 1, "rubric_version": 1,
+            }
+            assessment_path = root / "assessment.json"
+            assessment_path.write_text(json.dumps(assessment), encoding="utf-8")
+            self._call(root, "freeze-assessment", str(assessment_path))
+            skipped = {
+                "schema_version": 2, "observation_id": "skip-a1", "target_id": "t1",
+                "task_id": "a1", "capability_id": "calculation", "task_type": "calculation",
+                "outcome": "skipped", "assistance": {"levels_revealed": []}, "error_tags": [],
+                "diagnostic_confidence": "medium", "source_refs": [], "assessment_id": "a1",
+            }
+            proposal_path = root / "skipped.json"
+            proposal_path.write_text(json.dumps(skipped), encoding="utf-8")
+            self._call(root, "record-observation", str(proposal_path))
+
+            output = io.StringIO()
+            with redirect_stdout(output):
+                code = main(["--workspace", str(root), "reveal-answer", "a1"])
+            self.assertEqual(1, code)
+            self.assertEqual("attempt_required", json.loads(output.getvalue())["status"])
+
+            self._call(root, "reveal-answer", "a1", "--exposure")
+            event = StudyStore.for_exam_prep(root).read_complete_observations()[-1]
+            self.assertEqual("solution_seen", event["outcome"])
+
+    def test_answer_stays_released_after_recorded_exposure(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            self._call(root, "init")
+            assessment = {
+                "assessment_id": "a1", "target_id": "t1", "capability_id": "calculation",
+                "prompt": "Compute x", "rubric": {}, "expected_evidence": [], "source_refs": [],
+                "difficulty": 0.5, "question_version": 1, "rubric_version": 1,
+            }
+            assessment_path = root / "assessment.json"
+            assessment_path.write_text(json.dumps(assessment), encoding="utf-8")
+            self._call(root, "freeze-assessment", str(assessment_path))
+            self._call(root, "reveal-answer", "a1", "--exposure")
+            again = self._call(root, "reveal-answer", "a1")
+            self.assertEqual("answer_revealed", again["status"])
+            outcomes = [e["outcome"] for e in StudyStore.for_exam_prep(root).read_complete_observations()]
+            self.assertEqual(["solution_seen"], outcomes)
+
     @staticmethod
     def _call(root: Path, *args: str) -> dict:
         output = io.StringIO()
