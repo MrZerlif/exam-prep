@@ -16,7 +16,9 @@ manifest. Content labels are `[SOURCE]`, `[SUPPLEMENT]`, and `[GENERATED]`.
 Generated questions use `origin=model_generated` and remain practice-only.
 
 Answer assets live under `.exam-prep/assets/{prompt,answer,reference}` with
-hash-based names. Normal delivery never returns answer-role assets. The only
-explicit release is `reveal-answer <assessment_id> --exposure`, which records
-`solution_seen`; direct file reads remain outside the Python gate and are
-covered by the behavioral release case.
+hash-based names. Normal delivery never returns answer-role assets; they are
+released only through `reveal-answer <assessment_id>`: after an attempt, or
+before one with `--exposure`. Every release not already covered by a recorded
+exposure records `solution_seen`, so a later retry of that assessment is a
+`post_exposure_attempt`. Direct file reads remain outside the Python gate and
+are covered by the behavioral release case.
