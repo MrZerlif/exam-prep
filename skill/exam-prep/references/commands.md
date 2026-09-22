@@ -165,6 +165,13 @@ would be worse than an unlinked attempt. `end-session` repeats the total as
 a target the mock does not cover, or once every ticket for that target is
 already linked.
 
+Once an assessment's solution has been exposed (`reveal-answer --exposure`,
+or a proposal with `solution_exposed`), every later attempt on the same
+`assessment_id` is recorded as `assessment_integrity: "post_exposure_attempt"`
+and credited at most as heavily scaffolded: it never counts as an independent
+success, evidence maturity, or a post-mortem `independent` band. Prove
+independence on a structurally different assessment instead.
+
 `score` is the share of *independently* correct tickets, not of correct ones:
 a ticket answered correctly after H1/H2 hints lands in `correct` but its
 assistance band is `guided`, and only `independent` counts. Two correct

@@ -92,6 +92,35 @@ def derive_assistance_band(assistance: Any) -> str:
     return "independent" if stated else "guided"
 
 
+BAND_ORDER = ("independent", "lightly_scaffolded", "guided", "heavily_scaffolded", "solution_seen")
+POST_EXPOSURE_MAX_BAND = "heavily_scaffolded"
+
+
+def _effective_assistance(event: dict[str, Any]) -> Any:
+    assistance = event.get("assistance") or {}
+    if (
+        event.get("solution_exposed")
+        or event.get("assessment_integrity") == "explicit_exposure"
+    ):
+        assistance = {**assistance, "full_solution_viewed": True}
+    return assistance
+
+
+def event_assistance_band(event: dict[str, Any]) -> str:
+    """The band one canonical event is credited at.
+
+    A post_exposure_attempt reproduces a solution the learner has already
+    seen, so it never scores above heavily_scaffolded."""
+
+    band = derive_assistance_band(_effective_assistance(event))
+    if (
+        event.get("assessment_integrity") == "post_exposure_attempt"
+        and BAND_ORDER.index(band) < BAND_ORDER.index(POST_EXPOSURE_MAX_BAND)
+    ):
+        return POST_EXPOSURE_MAX_BAND
+    return band
+
+
 def average_known_mastery(mastery: dict[str, Any]) -> float:
     """Average mastery over dimensions with actual evidence, excluding any
     dimension (currently only speed) that is still None/unknown."""
@@ -233,13 +262,8 @@ def reduce_learning_state(
         add_event_to_maturity(state["evidence_maturity"], event, capability)
         if capability_resolution.warning and capability.capability_id not in unmapped_capability_events:
             unmapped_capability_events.append(capability.capability_id)
-        assistance = event.get("assistance") or {}
-        if (
-            event.get("solution_exposed")
-            or event.get("assessment_integrity") == "explicit_exposure"
-        ):
-            assistance = {**assistance, "full_solution_viewed": True}
-        assistance_band = derive_assistance_band(assistance)
+        assistance = _effective_assistance(event)
+        assistance_band = event_assistance_band(event)
         outcome = event.get("outcome", "skipped")
         signal = _outcome_signal(outcome)
         tags = event.get("error_tags", [])

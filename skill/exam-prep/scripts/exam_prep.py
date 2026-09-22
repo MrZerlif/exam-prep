@@ -30,7 +30,7 @@ from exam_prep_lib.diagnostics import (
     unlinked_exam_attempt_diagnostic,
     unlinked_exam_attempts,
 )
-from exam_prep_lib.reducer import MISTAKE_SUMMARIES, derive_assistance_band, reduce_learning_state
+from exam_prep_lib.reducer import MISTAKE_SUMMARIES, derive_assistance_band, event_assistance_band, reduce_learning_state
 from exam_prep_lib.migration import migrate_legacy_workspace
 from exam_prep_lib.curriculum import (
     CurriculumValidationError,
@@ -1585,7 +1585,7 @@ def main(
                             "attempted": last is not None,
                             "outcome": last.get("outcome") if last else None,
                             "assistance_band": (
-                                derive_assistance_band(last.get("assistance") or {})
+                                event_assistance_band(last)
                                 if last is not None
                                 else None
                             ),

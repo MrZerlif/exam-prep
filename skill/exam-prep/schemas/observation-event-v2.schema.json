@@ -46,7 +46,7 @@
         "assessment_spec_hash": {"type": "string", "minLength": 1}
       }
     },
-    "assessment_integrity": {"type": "string", "enum": ["frozen_attempt", "explicit_exposure", "not_assessment", "legacy_unfrozen", "invalid_downgraded"]},
+    "assessment_integrity": {"type": "string", "enum": ["frozen_attempt", "explicit_exposure", "post_exposure_attempt", "not_assessment", "legacy_unfrozen", "invalid_downgraded"]},
     "solution_exposed": {"type": "boolean"},
     "explicit_exposure_reason": {"type": ["string", "null"]},
     "exposure_metadata": {"type": "object", "additionalProperties": true},
