@@ -3,7 +3,7 @@ name: exam-prep
 description: Use when a learner is preparing for an exam by a fixed date, needs a plan from their own materials, has limited time or weak prerequisites, repeats mistakes, or asks to resume persistent local progress.
 license: MIT
 metadata:
-  version: "1.0.4"
+  version: "1.1.0"
 ---
 
 # Exam Prep
@@ -32,6 +32,8 @@ Evidence-driven tutoring for any academic or technical subject, backed by a dete
    only diagnostic exit to a full solution before learner production; preserve
    attempt-first when the learner asks to “just show”. Reading or exposure
    never raises mastery. Exam mode gives no unsolicited hints or early feedback.
+   Add each formulation you teach to the learner's `definitions.md`
+   (`references/materials.md`) and later ask for it without the file.
 6. Interpret typed, voice, and photo answers using `references/pedagogy.md`.
    Record one observation per block or target, not per arithmetic step. Use
    `record-observation` or `record-batch` and `--compact`; start activity timers
