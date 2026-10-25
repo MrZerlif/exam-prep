@@ -106,6 +106,8 @@ WORKSPACE_REQUIRES_INIT_COMMANDS = frozenset({
     "activity-status",
     "next",
     "record-observation",
+    "record-batch",
+    "triage",
     "review-due",
     "mistakes",
     "roadmap",
@@ -339,6 +341,89 @@ def _pending_action_for_attempt(target_id: str, proposal: dict, *, done: bool) -
     summaries = ", ".join(MISTAKE_SUMMARIES.get(tag, tag) for tag in tags)
     detail = f" ({summaries})" if summaries else ""
     return f"resume {target_id}: last attempt was {outcome}{detail}"
+
+
+def _record_observation_proposal(
+    store: StudyStore,
+    course: dict,
+    session: dict,
+    proposal: dict,
+) -> dict[str, object]:
+    """Pass one proposal through the canonical append path without saving a revision."""
+    session, _changed = _activate_session(session)
+    recorded_at = _now()
+    if proposal.get("schema_version") == 2:
+        consumption = consume_activity(
+            session,
+            proposal.get("activity_id"),
+            recorded_at,
+        )
+    else:
+        consumption = ActivityConsumption(
+            session=dict(session),
+            elapsed_seconds=None,
+            matched=False,
+        )
+
+    unlinked_diagnostic = unlinked_exam_attempt_diagnostic(
+        proposal,
+        session,
+        store.read_assessments(),
+        store.read_complete_observations(),
+    )
+    result = store.append_observation(
+        proposal,
+        session["session_id"],
+        recorded_at,
+        expected_seconds=None,
+        elapsed_seconds=consumption.elapsed_seconds,
+        session_phase=session["phase"],
+        exam_revision=int(course.get("exam", {}).get("revision", 1)),
+        exam_hash=StudyStore.hash_document(course.get("exam") or {}),
+    )
+    session = consumption.session if consumption.matched else dict(session)
+    target_id = proposal.get("target_id", proposal.get("concept_id"))
+    done = _attempt_is_done(result.canonical_event)
+    session.update(
+        {
+            "current_target_id": target_id,
+            "current_task": proposal["task_id"],
+            "current_task_done": done,
+            "last_attempt_outcome": proposal.get("outcome"),
+            "last_attempt_error_tags": list(proposal.get("error_tags") or []),
+            "pending_action": _pending_action_for_attempt(
+                target_id, proposal, done=done
+            ),
+        }
+    )
+    diagnostics = [unlinked_diagnostic] if unlinked_diagnostic is not None else []
+    return {
+        "append_result": result,
+        "session": session,
+        "target_id": target_id,
+        "diagnostics": diagnostics,
+        "status": "recorded" if result.appended else "already_recorded",
+    }
+
+
+def _compact_observation_result(
+    recorded: dict[str, object], syllabus: dict, concepts: dict
+) -> dict[str, object]:
+    result = recorded["append_result"]
+    event = result.canonical_event
+    raw_target_id = recorded["target_id"]
+    target_id = normalize_syllabus(syllabus).aliases.get(
+        str(raw_target_id), str(raw_target_id)
+    )
+    state = _derived_items(concepts).get(target_id, {})
+    return {
+        "status": recorded["status"],
+        "observation_id": result.observation_id,
+        "target_id": target_id,
+        "assistance_band": event_assistance_band(event),
+        "mastery_status": state.get("mastery_status", "unseen"),
+        "diagnostics": list(recorded["diagnostics"]),
+    }
 
 
 def _resume_point(syllabus: dict, derived: dict, session: dict) -> dict | None:
@@ -575,7 +660,13 @@ def _parser() -> argparse.ArgumentParser:
     next_parser.add_argument("--minutes", type=_positive_int, default=25)
     record = sub.add_parser("record-observation")
     record.add_argument("path")
+    record.add_argument("--compact", action="store_true")
     record.add_argument("--include-next-hint", action="store_true")
+    record_batch = sub.add_parser("record-batch")
+    record_batch.add_argument("path")
+    record_batch.add_argument("--compact", action="store_true")
+    triage = sub.add_parser("triage")
+    triage.add_argument("path")
     review_due_parser = sub.add_parser("review-due")
     review_due_parser.add_argument("--include-next-hint", action="store_true")
     sub.add_parser("mistakes")
@@ -1141,13 +1232,13 @@ def main(
         return _result({"status": "cheatsheet_written", "path": str(output_path.resolve())})
 
     if args.command == "last-minute-review":
-        payload = {"items": last_minute_review(syllabus, _derived_items(concepts), reviews, course, datetime.now(timezone.utc), 25)}
+        payload = {"items": last_minute_review(syllabus, _derived_items(concepts), reviews, course, datetime.now(timezone.utc), 25, self_ratings=learner.get("self_rating", {}))}
         if args.include_next_hint:
             payload["next"] = _next_hint(course, session, reviews)
         return _result(payload)
 
     if args.command == "plan":
-        payload = forecast_plan(syllabus, _derived_items(concepts), reviews, course, datetime.now(timezone.utc), days=args.days, minutes_per_day=args.minutes_per_day)
+        payload = forecast_plan(syllabus, _derived_items(concepts), reviews, course, datetime.now(timezone.utc), days=args.days, minutes_per_day=args.minutes_per_day, self_ratings=learner.get("self_rating", {}))
         if args.include_next_hint:
             payload["next"] = _next_hint(course, session, reviews)
         return _result(payload)
@@ -1262,6 +1353,7 @@ def main(
             course,
             datetime.now(timezone.utc),
             args.minutes,
+            self_ratings=learner.get("self_rating", {}),
         )
         return _result(
             {"budget_minutes": args.minutes, **_public_activity(syllabus, selected)}
@@ -1269,62 +1361,18 @@ def main(
 
     if args.command == "record-observation":
         proposal = json.loads(Path(args.path).read_text(encoding="utf-8"))
-        session, _changed = _activate_session(session)
-        recorded_at = _now()
-        if proposal.get("schema_version") == 2:
-            try:
-                consumption = consume_activity(
-                    session,
-                    proposal.get("activity_id"),
-                    recorded_at,
-                )
-            except ActivityStateError as exc:
-                _print_json({"status": "invalid_activity_state", "reason": str(exc)})
-                return 1
-        else:
-            consumption = ActivityConsumption(
-                session=dict(session),
-                elapsed_seconds=None,
-                matched=False,
-            )
-        # Computed before the append so "already linked" means the state this
-        # attempt arrived into. Never gates the write - see the function's
-        # docstring on why an unlinked attempt is still recorded.
-        unlinked_diagnostic = unlinked_exam_attempt_diagnostic(
-            proposal,
-            session,
-            store.read_assessments(),
-            store.read_complete_observations(),
-        )
-        result = store.append_observation(
-            proposal,
-            session["session_id"],
-            recorded_at,
-            expected_seconds=None,
-            elapsed_seconds=consumption.elapsed_seconds,
-            session_phase=session["phase"],
-            exam_revision=int(course.get("exam", {}).get("revision", 1)),
-            exam_hash=StudyStore.hash_document(course.get("exam") or {}),
-        )
-        if consumption.matched:
-            session = consumption.session
-        else:
-            session = dict(session)
-        target_id = proposal.get("target_id", proposal.get("concept_id"))
-        done = _attempt_is_done(result.canonical_event)
-        session.update(
-            {
-                "current_target_id": target_id,
-                "current_task": proposal["task_id"],
-                "current_task_done": done,
-                "last_attempt_outcome": proposal.get("outcome"),
-                "last_attempt_error_tags": list(proposal.get("error_tags") or []),
-                "pending_action": _pending_action_for_attempt(target_id, proposal, done=done),
-            }
-        )
+        try:
+            recorded = _record_observation_proposal(store, course, session, proposal)
+        except ActivityStateError as exc:
+            _print_json({"status": "invalid_activity_state", "reason": str(exc)})
+            return 1
+        session = recorded["session"]
+        result = recorded["append_result"]
         concepts, reviews, manifest = _persist_learning(
             store, course, syllabus, learner, session
         )
+        if args.compact:
+            return _result(_compact_observation_result(recorded, syllabus, concepts))
         payload = {
             "event": result.canonical_event,
             "appended": result.appended,
@@ -1335,11 +1383,111 @@ def main(
             ),
             "review_queue": reviews,
         }
-        if unlinked_diagnostic is not None:
-            payload["diagnostics"] = [unlinked_diagnostic]
+        if recorded["diagnostics"]:
+            payload["diagnostics"] = recorded["diagnostics"]
         if args.include_next_hint:
             payload["next"] = _next_hint(course, session, reviews)
         return _result(payload)
+    if args.command == "record-batch":
+        results: list[dict[str, object]] = []
+        recorded_rows: list[tuple[int, dict[str, object]]] = []
+        for line_number, raw_line in enumerate(
+            Path(args.path).read_text(encoding="utf-8").splitlines(), start=1
+        ):
+            try:
+                proposal = json.loads(raw_line)
+                if not isinstance(proposal, dict):
+                    raise ValueError("proposal must be a JSON object")
+                if proposal.get("schema_version") != 2:
+                    raise ValueError("record-batch requires a v2 proposal")
+                recorded = _record_observation_proposal(
+                    store, course, session, proposal
+                )
+                session = recorded["session"]
+                recorded_rows.append((line_number, recorded))
+                append_result = recorded["append_result"]
+                results.append(
+                    {
+                        "line": line_number,
+                        "status": recorded["status"],
+                        "observation_id": append_result.observation_id,
+                        "target_id": recorded["target_id"],
+                        "appended": append_result.appended,
+                        "event": append_result.canonical_event,
+                        "diagnostics": recorded["diagnostics"],
+                    }
+                )
+            except Exception as exc:
+                results.append(
+                    {
+                        "line": line_number,
+                        "status": "error",
+                        "error": str(exc),
+                    }
+                )
+
+        if recorded_rows:
+            concepts, reviews, manifest = _persist_learning(
+                store, course, syllabus, learner, session
+            )
+            if args.compact:
+                recorded_by_line = dict(recorded_rows)
+                compact_results = []
+                for item in results:
+                    line_number = item["line"]
+                    recorded = recorded_by_line.get(line_number)
+                    if recorded is None:
+                        compact_results.append(item)
+                    else:
+                        compact_results.append(
+                            {
+                                "line": line_number,
+                                **_compact_observation_result(
+                                    recorded, syllabus, concepts
+                                ),
+                            }
+                        )
+                results = compact_results
+            status = "batch_recorded"
+            payload: dict[str, object] = {"status": status, "results": results}
+            if not args.compact:
+                payload.update(
+                    {
+                        "revision": manifest.revision,
+                        "session": session,
+                        ("targets" if _is_v2_syllabus(syllabus) else "concepts"): _public_derived(
+                            syllabus, concepts
+                        ),
+                        "review_queue": reviews,
+                    }
+                )
+        else:
+            payload = {"status": "batch_failed", "results": results}
+            _print_json(payload)
+            return 1
+        return _result(payload)
+    if args.command == "triage":
+        triage = json.loads(Path(args.path).read_text(encoding="utf-8"))
+        if not isinstance(triage, dict) or set(triage) != {"ratings"}:
+            raise ValueError("triage file must contain only a ratings object")
+        raw_ratings = triage.get("ratings")
+        if not isinstance(raw_ratings, dict) or not raw_ratings:
+            raise ValueError("ratings must be a non-empty object")
+        target_ids = normalize_syllabus(syllabus).targets
+        ratings: dict[str, int] = {}
+        for raw_target_id, rating in raw_ratings.items():
+            target_id = str(raw_target_id)
+            if target_id not in target_ids:
+                raise ValueError(f"unknown target_id in triage: {target_id!r}")
+            if isinstance(rating, bool) or not isinstance(rating, int) or rating not in (0, 1, 2):
+                raise ValueError(f"rating for {target_id!r} must be 0, 1, or 2")
+            ratings[target_id] = rating
+        current_ratings = learner.get("self_rating", {})
+        merged_ratings = dict(current_ratings) if isinstance(current_ratings, dict) else {}
+        merged_ratings.update(ratings)
+        learner["self_rating"] = merged_ratings
+        _persist_learning(store, course, syllabus, learner, session)
+        return _result({"status": "triage_recorded", "ratings": merged_ratings})
     if args.command == "review-due":
         now = datetime.now(timezone.utc)
         due = {

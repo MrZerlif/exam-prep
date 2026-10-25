@@ -51,12 +51,30 @@ def last_minute_review(
     course: Mapping[str, Any],
     now: datetime,
     minutes: int,
+    *,
+    self_ratings: Mapping[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     items = []
     for target_id in normalize_syllabus(dict(syllabus)).targets:
         priority = compute_priority(target_id, dict(syllabus), dict(concepts), dict(reviews), dict(course), now, minutes)
         items.append({"target_id": target_id, **priority})
-    return sorted(items, key=lambda item: (-item["score"], item["target_id"]))
+    order = {
+        target_id: index
+        for index, target_id in enumerate(normalize_syllabus(dict(syllabus)).targets)
+    }
+    ratings = self_ratings or {}
+    return sorted(
+        items,
+        key=lambda item: (
+            -item["score"],
+            (
+                ratings.get(item["target_id"], 3)
+                if not _has_target_evidence(concepts.get(item["target_id"], {}))
+                else 0
+            ),
+            order[item["target_id"]],
+        ),
+    )
 
 
 def forecast_plan(
@@ -68,6 +86,7 @@ def forecast_plan(
     *,
     days: int = 1,
     minutes_per_day: int = 120,
+    self_ratings: Mapping[str, int] | None = None,
 ) -> dict[str, Any]:
     if days < 1 or minutes_per_day < 1:
         raise ValueError("days and minutes_per_day must be positive")
@@ -78,7 +97,16 @@ def forecast_plan(
         remaining = int(minutes_per_day)
         activities: list[dict[str, Any]] = []
         while remaining > 0 and normalized.targets:
-            selected = select_next_activity(dict(syllabus), dict(concepts), dict(reviews), dict(course), now + timedelta(days=offset), remaining, recent)
+            selected = select_next_activity(
+                dict(syllabus),
+                dict(concepts),
+                dict(reviews),
+                dict(course),
+                now + timedelta(days=offset),
+                remaining,
+                recent,
+                self_ratings=dict(self_ratings or {}),
+            )
             target_id = selected.get("concept_id", selected.get("target_id"))
             estimated = max(1, int(normalized.targets.get(target_id, {}).get("estimated_learning_minutes", min(25, remaining))))
             allocated = min(estimated, remaining)
@@ -90,4 +118,61 @@ def forecast_plan(
             if len(activities) >= len(normalized.targets):
                 break
         result.append({"day": offset + 1, "minutes": minutes_per_day - remaining, "activities": activities})
-    return {"days": result, "minutes_per_day": minutes_per_day, "horizon_days": days}
+    targets = normalized.targets
+    touched = sum(
+        1
+        for target_id in targets
+        if _has_target_evidence(concepts.get(target_id, {}))
+    )
+    available_minutes = _available_minutes(course, days, minutes_per_day)
+    total_targets = len(targets)
+    estimated_total = sum(
+        max(1.0, float(metadata.get("estimated_learning_minutes", 30)))
+        for metadata in targets.values()
+    )
+    coverage = {
+        "total_targets": total_targets,
+        "targets_touched": touched,
+        "targets_without_evidence": total_targets - touched,
+        "available_minutes": available_minutes,
+        "minutes_per_target": (
+            round(available_minutes / total_targets, 2) if total_targets else None
+        ),
+        "required_targets_per_hour": (
+            round(total_targets * 60 / available_minutes, 2)
+            if available_minutes > 0
+            else None
+        ),
+        "pace_at_risk": total_targets > 0 and estimated_total > available_minutes,
+    }
+    return {
+        "days": result,
+        "minutes_per_day": minutes_per_day,
+        "horizon_days": days,
+        "coverage": coverage,
+    }
+
+
+def _has_target_evidence(state: Mapping[str, Any]) -> bool:
+    evidence = state.get("evidence", {})
+    if isinstance(evidence, Mapping) and any(
+        isinstance(value, (int, float)) and value > 0
+        for value in evidence.values()
+    ):
+        return True
+    return state.get("mastery_status", "unseen") != "unseen"
+
+
+def _available_minutes(
+    course: Mapping[str, Any], days: int, minutes_per_day: int
+) -> int:
+    budget = course.get("time_budget", {})
+    available_by_day = budget.get("available_minutes_by_day") if isinstance(budget, Mapping) else None
+    if isinstance(available_by_day, Mapping) and available_by_day:
+        values = list(available_by_day.values())
+        if all(
+            isinstance(value, int) and not isinstance(value, bool) and value >= 0
+            for value in values
+        ):
+            return sum(values)
+    return days * minutes_per_day

@@ -531,9 +531,12 @@ def select_next_activity(
     now: datetime,
     budget_minutes: int,
     recent_concept_ids: Iterable[str] | None = None,
+    self_ratings: dict[str, int] | None = None,
 ) -> dict[str, Any]:
     recent = set(recent_concept_ids or [])
-    target_ids = normalize_syllabus(syllabus).targets
+    target_ids = list(normalize_syllabus(syllabus).targets)
+    target_order = {target_id: index for index, target_id in enumerate(target_ids)}
+    ratings = self_ratings or {}
     candidates: list[dict[str, Any]] = []
     for concept_id in target_ids:
         candidate = compute_priority(
@@ -565,7 +568,22 @@ def select_next_activity(
         if candidate["concept_id"] not in recent
     ]
     pool = non_recent or available_candidates
-    selected = max(pool, key=lambda item: (item["score"], item["concept_id"]))
+
+    def tie_break(item: dict[str, Any]) -> tuple[float, int, int]:
+        target_id = item["concept_id"]
+        state = concepts.get(target_id, {})
+        evidence = state.get("evidence", {})
+        has_evidence = state.get("mastery_status", "unseen") != "unseen" or (
+            isinstance(evidence, dict)
+            and any(
+                isinstance(value, (int, float)) and value > 0
+                for value in evidence.values()
+            )
+        )
+        rating = ratings.get(target_id, 3) if not has_evidence else 0
+        return (item["score"], -rating, -target_order[target_id])
+
+    selected = max(pool, key=tie_break)
     if selected["concept_id"] not in recent and recent:
         selected["reason"] += "; interleaved with a non-recent concept"
     selected["activity_type"] = _classify_activity(

@@ -68,6 +68,7 @@ The standalone tools `migrate`, `draft-assessments`, and
 - `start` - open the active session, or resume the one already open.
 - `status` - snapshot: course, session, targets, review queue, recurring
   mistakes, pending action, capability/blueprint diagnostics, and resume point.
+  Configured `course.exam.ticket_slots` are included in the course details.
   It does not return the syllabus document or full target titles; use `roadmap`
   when full target metadata is needed.
   `--compact` trims each target to availability/mastery_status/
@@ -114,7 +115,13 @@ The standalone tools `migrate`, `draft-assessments`, and
   assessment is a `post_exposure_attempt`.
 - `cheatsheet`, `last-minute-review`, and `plan` - deterministic derived
   review artifacts; `plan --days N --minutes-per-day M` is a forecast and
-  never changes the exam date.
+  never changes the exam date. Its `coverage` block reports total targets,
+  targets with/without evidence, available minutes, minutes per target,
+  required targets per hour, and whether the current pace is at risk. The
+  risk flag compares the sum of target learning-time estimates with the
+  available budget. When
+  `course.time_budget.available_minutes_by_day` is non-empty, its values set
+  the coverage budget; otherwise the plan arguments do.
 - State-changing and overview commands accept opt-in `--include-next-hint`;
   no hint is emitted without the flag.
 - `next --minutes N` - pick one budget-fitting activity; `N` must be a
@@ -122,10 +129,23 @@ The standalone tools `migrate`, `draft-assessments`, and
 - `roadmap` - full target list with mastery, review, and availability.
 - `review-due` - concepts with a due or overdue review.
 - `mistakes` - recurring, unresolved error patterns.
-- `record-observation <path>` - the only way learner evidence enters the
-  system; never hand-edit `observations.jsonl` or derived state. When the
-  attempt answers a frozen assessment, the proposal must carry
-  `assessment_id` (see below).
+- `record-observation <path> [--compact]` - the only way learner evidence
+  enters the system; never hand-edit `observations.jsonl` or derived state.
+  When the attempt answers a frozen assessment, the proposal must carry
+  `assessment_id` (see below). `--compact` returns only `status`,
+  `observation_id`, `target_id`, `assistance_band`, `mastery_status`, and
+  `diagnostics`.
+- `record-batch <path.jsonl> [--compact]` - submit one v2 proposal per line.
+  Each line is recorded through the same path as `record-observation`; its
+  result includes the line number, and a bad line does not cancel other
+  records. Repeating identical `observation_id` payloads is idempotent. The
+  learner snapshot and derived state are committed once after the batch.
+  Compact mode returns a small receipt per successful line while retaining
+  named line errors.
+- `triage <path.json>` - store learner self-ratings from
+  `{"ratings":{"<target_id>":0|1|2}}` in `learner.self_rating`. Ratings are
+  not evidence and do not change mastery. The scheduler uses them to order
+  ties between targets that have no evidence, with `0` ahead of `2`.
 - `end-session` - close the session; produces a summary, and a
   per-question post-mortem when the session was an `exam`.
 - `rebuild` - recompute derived state from the canonical observation log.

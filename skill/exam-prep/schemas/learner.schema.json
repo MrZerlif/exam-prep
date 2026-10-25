@@ -6,7 +6,11 @@
     "schema_version": {"type": "integer", "enum": [1]},
     "updated_at": {"type": "string"},
     "preferences": {"type": "object"},
-    "stable_patterns": {"type": "array", "items": {"type": "string"}}
+    "stable_patterns": {"type": "array", "items": {"type": "string"}},
+    "self_rating": {
+      "type": "object",
+      "additionalProperties": {"type": "integer", "enum": [0, 1, 2]}
+    }
   }
 }
 

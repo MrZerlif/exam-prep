@@ -8,6 +8,7 @@
     "explanation_length": "concise",
     "solution_policy": "delay_full_solution"
   },
-  "stable_patterns": []
+  "stable_patterns": [],
+  "self_rating": {}
 }
 

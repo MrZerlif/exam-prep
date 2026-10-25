@@ -22,6 +22,7 @@ def rank_source_aware_targets(
 ) -> list[dict[str, Any]]:
     ranked: list[dict[str, Any]] = []
     targets = normalize_syllabus(syllabus).targets
+    target_order = {target_id: index for index, target_id in enumerate(targets)}
     for target_id in targets:
         priority = compute_priority(
             target_id, syllabus, concepts, reviews, course, now, budget_minutes
@@ -62,7 +63,9 @@ def rank_source_aware_targets(
         )
         ranked.append(item)
     ranked.sort(
-        key=lambda item: (item["source_aware_score"], item["target_id"]),
-        reverse=True,
+        key=lambda item: (
+            -item["source_aware_score"],
+            target_order[item["target_id"]],
+        )
     )
     return ranked
