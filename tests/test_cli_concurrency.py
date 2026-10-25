@@ -84,7 +84,7 @@ class CliConcurrencyTests(unittest.TestCase):
         self.assertEqual(0, process.exitcode)
         self.assertEqual(1, code)
         self.assertEqual("workspace_busy", payload["status"])
-        self.assertEqual(str(self.root), payload["workspace"])
+        self.assertEqual(str(self.root.resolve()), payload["workspace"])
 
 
 if __name__ == "__main__":
