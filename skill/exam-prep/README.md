@@ -9,6 +9,33 @@ Run `python scripts/exam_prep.py status` first. A new workspace reports
 files. If status reports `incomplete_workspace`, run `validate` and repair the
 missing canonical input explicitly; initialization never overwrites it.
 
+## Tutor turn contract
+
+Give the learner the subject response and a ready next task before doing
+service work. For a familiar operation, send 3–8 practice tasks together, then
+record one observation per block or target rather than per arithmetic step.
+Use `record-batch` and `--compact` for low-overhead results; open activity
+timers only when elapsed time matters.
+
+Outside exam mode, after “I do not remember” or one failed attempt to start,
+show the source wording, conditions, and a short example immediately. Record
+`solution_seen` at H5, then give a structurally different recall task after
+several minutes. A “just show me” request does not trigger this diagnostic
+exit. Exposure and reading do not raise mastery. Exam mode gives no unsolicited
+hints or early feedback.
+
+At course start, collect `triage` ratings for every target in one message and
+run `plan`. Show total exam questions, completed questions, remaining
+coverage, and required pace. Refresh `coverage` after the first practice block
+and when the budget changes. For mixed tickets, route theory and problems by
+`course.exam.ticket_slots`.
+
+Read `references/pedagogy.md` for voice, photo, correction, and track rules;
+`references/exam-optimizer.md` for triage and coverage; and
+`references/materials.md` for the source-linked `definitions.md` recall bank.
+Use `references/verification.md` for ready `verify` examples for derivatives
+and antiderivatives.
+
 Runtime state always lives in .exam-prep/, including the trusted source
 manifest at .exam-prep/sources.json. The legacy math-study/state/ layout
 is not auto-migrated; run the explicit migration command when needed. Legacy
@@ -40,8 +67,8 @@ The test suite is not part of this package. It lives in the source repository
 from that repository's root, not from an installed copy:
 
 ~~~bash
-python -m unittest discover -s tests -t .
-python tests/scenarios/run_scenarios.py --deterministic
+python3.12 -m unittest discover -s tests -t .
+python3.12 tests/scenarios/run_scenarios.py --deterministic
 ~~~
 
 Deterministic engine tests check runtime behavior and persistence only.

@@ -10,6 +10,24 @@ The local extractor handles DOCX, PPTX, Markdown, text, RST, HTML, and optional
 PDF backends. It records extractor/backend versions and a configuration hash.
 Missing optional PDF support is an `unsupported_page` gap, not a fatal import.
 
+## Formulations bank
+
+Keep a compact `definitions.md` in the learner's working folder. Add entries
+as topics are studied, each with:
+
+~~~text
+question → exact source wording and conditions → natural read-aloud
+         → source title and page
+~~~
+
+Use the teacher-approved source and preserve its wording, notation, hypotheses,
+and page locator. If the exact wording is unavailable, mark the gap instead of
+reconstructing a quotation. Add only topics the learner has studied; keep the
+file useful for closed-book recall rather than turning it into full notes.
+After a break, choose a ready question from this bank and ask for reproduction
+without looking. Reading or reading aloud is exposure, not evidence of
+retention; record a later independent reproduction separately.
+
 Authority and provenance are independent. File names do not establish
 `official_exam_list` or `teacher_material`; use an explicit override or trusted
 manifest. Content labels are `[SOURCE]`, `[SUPPLEMENT]`, and `[GENERATED]`.

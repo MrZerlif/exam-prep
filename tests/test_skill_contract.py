@@ -40,6 +40,7 @@ class SkillContractTests(unittest.TestCase):
         required_phrases = (
             "status", "initialized", "validate-curriculum", "apply-curriculum",
             "record-observation", "observations.jsonl", "attempt-first", "full solution",
+            "triage", "ticket_slots", "record-batch", "--compact", "3–8", "next task",
             "references/pedagogy.md", "references/exam-optimizer.md",
             "references/verification.md", "references/source-of-truth.md",
             "references/notebooklm-mcp.md",

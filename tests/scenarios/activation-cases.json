@@ -12,6 +12,11 @@
       "should_activate": true
     },
     {
+      "id": "returning_after_break_exam",
+      "prompt": "Я не занимался математикой шесть месяцев, скоро пересдача на 66 вопросов, осталось 31 час, и я многое не помню. Помоги подготовиться.",
+      "should_activate": true
+    },
+    {
       "id": "limited_time_weak_prerequisites",
       "prompt": "До экзамена пять дней, база слабая, а сегодня есть только 20 минут. Что учить первым?",
       "should_activate": true

@@ -37,6 +37,31 @@ class PressureRunnerTests(unittest.TestCase):
             set(release_case_ids()),
         )
 
+    def test_trial_cases_are_in_the_pressure_manifest_with_explicit_rubrics(self):
+        required_ids = {
+            "w3_returning_learner_forgets",
+            "w3_2x_waiting_complaint",
+            "w3_voice_self_correction",
+            "w3_wrong_error_cause_antiderivative",
+            "w3_66_questions_shrinking_budget",
+            "w3_formulations_and_delayed_return",
+        }
+        cases = {case["id"]: case for case in load_cases()}
+        self.assertTrue(required_ids.issubset(cases))
+        for case_id in required_ids:
+            with self.subTest(case_id=case_id):
+                case = cases[case_id]
+                self.assertTrue(case["release_gate"])
+                self.assertTrue(case["pass_criteria"])
+                self.assertTrue(case["forbidden_behavior"])
+                packet = build_prompt_packet(
+                    case=case, variant="skill", repetition=1, skill_text="SKILL"
+                )
+                self.assertEqual(case["pass_criteria"], packet["rubric"]["pass_criteria"])
+                self.assertEqual(
+                    case["forbidden_behavior"], packet["rubric"]["forbidden_behavior"]
+                )
+
     def test_skill_variant_contains_skill_and_case(self):
         packet = build_prompt_packet(
             case=load_case("one_mistake_show_answer"),

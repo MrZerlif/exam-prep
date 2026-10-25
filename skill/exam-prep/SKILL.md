@@ -8,67 +8,54 @@ metadata:
 
 # Exam Prep
 
-Evidence-driven tutoring for any academic or technical subject with a
-deterministic state engine. LLM produces structured observation proposals; the
-engine validates evidence and persists mastery, reviews, priorities, and
-recovery state.
+Evidence-driven tutoring for any academic or technical subject, backed by a deterministic state engine. LLM produces structured observation proposals; the engine validates evidence and stores it.
 
-Local material extraction supports `en`, `ru`, `de`, `fr`, `es`, `it`, `pt`,
-`pl`, `tr`, `uk`, `zh`, and `ja`. Set the course language with
-`init --language`, or the engine detects it during `ingest-materials` and
-records it in `course.json`; each source also keeps its own detected language.
+## Turn recipe
 
-## Sources and lifecycle
+1. Give the learner the subject answer or explanation and a ready next task
+   before running service commands. Use blocks of 3–8 tasks for familiar
+   operations.
+2. For continuation, read `status --compact`: `course`, `session`,
+   `last_session_summary`, `targets`, `review_queue`, and `resume_point`. Use
+   `roadmap` for full target metadata. Start an uninitialized workspace with
+   `init`; `status` alone is read-only. `next --minutes` assumes 25 when omitted.
+3. At course start, ask for `triage` ratings for all targets in one message.
+   Run `plan` and show total questions, completed questions, and required pace.
+   Refresh `coverage` after the first practice block and whenever the budget changes.
+4. Select the track from `course.exam.question_model`: `ticket_list` for theory
+   tickets, the problem ladder for `problem_set`, `mixed`, `open`, or unset.
+   Use `course.exam.ticket_slots` to route theory and problem slots separately.
+5. When a learner says “I do not remember” or cannot begin once outside exam
+   mode, end diagnosis and immediately give the exact source formulation with
+   its conditions and a short example. Record `solution_seen` at H5, then give
+   a structurally different recall task after several minutes. This is the
+   only diagnostic exit to a full solution before learner production; preserve
+   attempt-first when the learner asks to “just show”. Reading or exposure
+   never raises mastery. Exam mode gives no unsolicited hints or early feedback.
+6. Interpret typed, voice, and photo answers using `references/pedagogy.md`.
+   Record one observation per block or target, not per arithmetic step. Use
+   `record-observation` or `record-batch` and `--compact`; start activity timers
+   only when timing matters. Use the proposal schema and example below.
+   For exam tickets, `assessment_id` binds each attempt; `task_id` alone does
+   not. Close sessions with `end-session`.
 
+Run `python <skill-dir>/scripts/exam_prep.py [--workspace PATH] <command>`.
 Learning targets and the workspace are the stable record. `observations.jsonl`
-is canonical; never hand-edit derived state. Prefer teacher material and
-official exam lists, and surface conflicts.
+is canonical; never hand-edit derived state. Prefer teacher materials and
+official exam lists, and surface conflicts. Use
+`validate-curriculum` and `apply-curriculum` for curriculum changes. For an
+observation, follow `schemas/observation-proposal-v2.schema.json` and
+`examples/observation-proposal.json`; the engine owns timing, session,
+independence, and hint fields. Derivative/antiderivative checks belong to
+`references/verification.md`. Keep mastery, review status, and prerequisite
+availability distinct.
 
-Run:
-`python <skill-dir>/scripts/exam_prep.py [--workspace PATH] <command>`.
-Start with `status`; `uninitialized` is read-only, so run `init` once.
-Materials use `ingest-materials` and `hydrate-source`, which create a
-SourceEvidenceEnvelope without network access. NotebookLM MCP is an optional
-agent host; it normalizes a SourceEvidenceEnvelope and never owns canonical learner state.
-If `ingest-materials` returns `unclassified`, map its repeated labels to slots
-and apply them with `apply-lexicon`.
-Use `validate-curriculum` and `apply-curriculum` for
-idempotent curriculum changes.
-
-For continuation, read `status --compact`: `course`, `session`,
-`last_session_summary`, `targets`, `review_queue`, and `resume_point`. Use
-`roadmap` for full target metadata. Open a session with `start`, close it
-with `end-session`; `exam` runs a mock. `next --minutes` assumes 25 when
-omitted.
-
-Figures are derived assets. Open a prompt image before explaining it. Show
-answer assets only through `reveal-answer`, never by reading asset files.
-
-## attempt-first policy
-
-Select the track from `course.exam.question_model`: `ticket_list` uses ticket
-recitation; `problem_set`, `mixed`, `open`, or unset use the problem ladder.
-Every track requires learner production before evaluation. Preserve the last
-valid step, identify the first invalid transformation, and ask for repair.
-
-Use H0-H5 assistance. Diagnostic mode never reveals a premature answer or
-full solution merely because the learner asks once. Teaching or cram exposure
-requires an explicit request, records `solution_seen`, does not raise
-independent mastery, and is followed by a structurally different attempt.
-Exam mode gives no unsolicited hints or early feedback. The Python engine cannot prevent conversational leakage; tutor policy must.
-
-After each assessable attempt, write one proposal from
-`schemas/observation-proposal-v2.schema.json` through `record-observation`;
-`examples/observation-proposal.json` is valid. For exam tickets,
-`assessment_id` binds the attempt; `task_id` does not. Do not supply
-engine-owned timing, session, independence, or hint fields.
-
-Derivative/antiderivative checks belong to `references/verification.md`;
-do not imply broader numeric or symbolic answer checking.
+NotebookLM MCP is an optional agent host; it normalizes a SourceEvidenceEnvelope
+and never owns canonical learner state.
 
 ## References
 
-Read `references/pedagogy.md` before the first attempt of a session.
+Read pedagogy before the first attempt; load other references when needed.
 
 - Commands: `references/commands.md`
 - Tutoring and exposure: `references/pedagogy.md`
@@ -77,5 +64,3 @@ Read `references/pedagogy.md` before the first attempt of a session.
 - Source authority: `references/source-of-truth.md`
 - Verification: `references/verification.md`
 - Optional NotebookLM: `references/notebooklm-mcp.md`
-
-Keep mastery, review status, and prerequisite availability distinct.

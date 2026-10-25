@@ -18,6 +18,33 @@ Use scripts/exam_prep.py verify for:
 - antiderivative finite-difference comparison of the proposed antiderivative's
   numerical derivative with the integrand.
 
+Save one of these minimal request objects as a JSON file and pass its path to
+`verify`:
+
+Derivative:
+
+```json
+{
+  "kind": "derivative",
+  "expression": "x**2",
+  "derivative": "2*x",
+  "variable": "x",
+  "samples": [0.5, 1.5]
+}
+```
+
+Antiderivative:
+
+```json
+{
+  "kind": "antiderivative",
+  "integrand": "2*x",
+  "antiderivative": "x**2",
+  "variable": "x",
+  "samples": [0.5, 1.5]
+}
+```
+
 Omitted `samples` default to `-2, -1, -0.5, 0.5, 1, 2`; omitted `tolerance`
 defaults to a relative `1e-4`. Invalid samples, tolerance, or missing
 expression fields are rejected as an error rather than reported as a failed

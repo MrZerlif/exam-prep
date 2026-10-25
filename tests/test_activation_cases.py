@@ -35,12 +35,24 @@ class ActivationCaseTests(unittest.TestCase):
             {
                 "exam_with_deadline",
                 "resume_local_progress",
+                "returning_after_break_exam",
                 "limited_time_weak_prerequisites",
                 "generic_learning_question",
                 "non_exam_project_planning",
                 "generic_flashcards",
             }.issubset(ids)
         )
+
+    def test_returning_learner_with_large_exam_list_activates(self):
+        data = json.loads(
+            (SCENARIOS / "activation-cases.json").read_text(encoding="utf-8")
+        )
+        case = next(
+            case for case in data["cases"] if case["id"] == "returning_after_break_exam"
+        )
+        self.assertTrue(case["should_activate"])
+        self.assertIn("66 вопросов", case["prompt"])
+        self.assertIn("не помню", case["prompt"])
 
     def test_activation_export_is_ready_for_fresh_host_runs(self):
         with tempfile.TemporaryDirectory() as tmp:

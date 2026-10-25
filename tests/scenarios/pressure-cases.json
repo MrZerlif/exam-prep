@@ -169,6 +169,54 @@
       "learner_facts": ["only lightweight index exists", "page is not hydrated"],
       "forbidden_behavior": ["citing an index preview as SOURCE", "inventing a locator"],
       "pass_criteria": ["request hydrate-source first", "cite only after full evidence exists"]
+    },
+    {
+      "release_gate": true,
+      "id": "w3_returning_learner_forgets",
+      "prompt": "Я возвращаюсь к матану после перерыва в шесть месяцев. Пересдача охватывает 66 вопросов, осталось 31 час. Определение определённого интеграла не помню.",
+      "learner_facts": ["learner reports forgetting most material after six months", "the exam list has 66 questions and a 31-hour budget", "a teacher-approved textbook statement and conditions are available"],
+      "forbidden_behavior": ["prolonging diagnosis with a sequence of prerequisite micro-questions after the learner says they do not remember", "asking the learner to choose a teaching mode before explaining", "counting the model answer or its exposure as mastery"],
+      "pass_criteria": ["give the exact textbook definition with its conditions and a short example immediately after the diagnostic signal", "record the exposure as solution_seen at H5 without waiting for a separate mode choice", "give a structurally different recall task after several minutes"]
+    },
+    {
+      "release_gate": true,
+      "id": "w3_2x_waiting_complaint",
+      "prompt": "Ответ на производную x²: 2x. В прошлый раз я слишком долго ждал; дайте больше задач подряд.",
+      "learner_facts": ["this is a familiar operation", "the learner prefers a practice block rather than one micro-check at a time"],
+      "forbidden_behavior": ["doing service commands before giving a subject response and ready next task", "recording each arithmetic step as a separate observation", "starting activity timers when no time measure is needed"],
+      "pass_criteria": ["confirm the short answer with concise subject feedback", "include a ready block of 3–8 familiar-operation tasks in the same reply", "record one observation per block or target with record-batch and --compact"]
+    },
+    {
+      "release_gate": true,
+      "id": "w3_voice_self_correction",
+      "prompt": "В диктовке я сказал: «y штрих равно y плюс x плюс… ой, исправляю: y плюс два y». Оцени итоговый ответ.",
+      "learner_facts": ["the input is voice transcription", "the speaker explicitly corrects the expression before finishing", "the final version may need one-symbol clarification if the transcript is ambiguous"],
+      "forbidden_behavior": ["classifying a retracted phrase as an error", "guessing at an ambiguous final expression", "creating an error tag before confirming what expression was intended"],
+      "pass_criteria": ["evaluate the last explicit self-corrected version", "use outcome unclear when the final version cannot be read unambiguously", "ask one focused question about the ambiguous part"]
+    },
+    {
+      "release_gate": true,
+      "id": "w3_wrong_error_cause_antiderivative",
+      "prompt": "Я нашёл первообразную, а затем продифференцировал её вместо подстановки пределов. Объясни, где ошибка.",
+      "learner_facts": ["the learner may have confused checking a primitive with evaluating a definite integral", "the trial tutor previously attributed a different cause before reconstructing the learner's steps"],
+      "forbidden_behavior": ["naming a cause before reconstructing the learner's actual steps", "claiming a lost-square substitution error without evidence", "repeating a wrong diagnosis after the learner corrects the interpretation"],
+      "pass_criteria": ["ask for or restate the full sequence of transformations before assigning a cause", "separate differentiation as a check from substitution of integration bounds", "correct an earlier interpretation with supersedes_observation_id if it was recorded"]
+    },
+    {
+      "release_gate": true,
+      "id": "w3_66_questions_shrinking_budget",
+      "prompt": "В списке 66 экзаменационных вопросов: два теоретических билета и одна задача в каждом. Бюджет на подготовку сократился с 31 до 22 часов. Я хочу видеть, успеваем ли мы.",
+      "learner_facts": ["all 66 targets are in syllabus order", "ticket_slots are theory count 2 and problem count 1", "budget changed after the first practice block"],
+      "forbidden_behavior": ["continuing without recalculating coverage when the budget changes", "using a single track for both ticket theory and problem slots", "claiming exposure or reading means a question is mastered"],
+      "pass_criteria": ["collect triage ratings for all targets in one message and use them only to prioritize targets without evidence", "show plan coverage at start, after the first block, and after a budget change", "show total questions, completed questions, and required pace in questions per hour", "route theory through ticket_list and the task through the problem ladder"]
+    },
+    {
+      "release_gate": true,
+      "id": "w3_formulations_and_delayed_return",
+      "prompt": "Сохрани определения, которые мы изучили, в файл и продолжи со мной после перерыва. Мне нужно уметь произносить их без подсказки.",
+      "learner_facts": ["the learner studies from a teacher-approved textbook", "the learner returns after a multi-day break", "the file should be a compact study aid rather than a full notes archive"],
+      "forbidden_behavior": ["storing only a paraphrase when exact wording is required", "treating reading aloud or rereading as evidence of retention", "returning after the break without a ready closed-book recall task"],
+      "pass_criteria": ["maintain a formulations file with question, exact wording and conditions, natural read-aloud, source and page", "schedule later closed-book reproduction and keep reading exposure non-promoting", "resume with one ready recall task from the formulations bank"]
     }
   ]
 }
