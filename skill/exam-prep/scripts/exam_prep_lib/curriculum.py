@@ -126,6 +126,41 @@ def _effective_source_ref(
     return unresolved
 
 
+def _target_source_ref(
+    value: Any, source_by_id: Mapping[str, Mapping[str, Any]]
+) -> Any:
+    source_id = _source_id(value)
+    if source_id is None:
+        return value
+    base = source_by_id.get(source_id)
+    if base is None:
+        return value
+    if isinstance(value, str):
+        return dict(base)
+
+    # A target citation can narrow a source to its own page or section. Keep
+    # that locator while retaining trusted authority/provider metadata from
+    # the source-level catalog entry.
+    normalized = normalize_source_refs([value])
+    if not normalized:
+        return dict(base)
+    merged = dict(base)
+    for field in (
+        "locator",
+        "raw_locator",
+        "location",
+        "title",
+        "excerpt",
+        "content_hash",
+        "artifact_id",
+        "retrieved_at",
+        "version",
+    ):
+        if field in value:
+            merged[field] = normalized[0].get(field)
+    return merged
+
+
 def _read_runtime_json(store: StudyStore, name: str, default: dict[str, Any]) -> dict[str, Any]:
     path = store.state_path / name
     if not path.exists():
@@ -404,7 +439,7 @@ def build_syllabus_from_proposal(
         target = dict(raw_target)
         target_id = str(target["target_id"])
         target["source_refs"] = [
-            source_by_id.get(str(_source_id(ref)), ref)
+            _target_source_ref(ref, source_by_id)
             for ref in target.get("source_refs", [])
         ]
         targets.append(target)
