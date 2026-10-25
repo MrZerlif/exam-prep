@@ -5,11 +5,13 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "skill" / "exam-prep" / "scripts"))
 
+import exam_prep  # noqa: E402
 from exam_prep import main  # noqa: E402
 from exam_prep_lib.defaults import default_course  # noqa: E402
 from exam_prep_lib.schema_validation import load_schema, validate_document  # noqa: E402
@@ -153,6 +155,109 @@ class W2CliTests(unittest.TestCase):
         self.assertEqual(2, len(self.observations()))
         self.assertEqual([True, True], [row["appended"] for row in first["results"]])
         self.assertEqual([False, False], [row["appended"] for row in second["results"]])
+
+    def test_record_batch_replay_preserves_newer_resume_point_and_activity(self):
+        first = proposal("replayed-activity", "z-first")
+        first["activity_id"] = "reused"
+        path = self.root / "replayed.jsonl"
+        path.write_text(json.dumps(first) + "\n", encoding="utf-8")
+
+        self.cli("start-activity", "reused")
+        self.cli("record-batch", str(path))
+        newer = self.write_proposal(proposal("newer-resume", "a-second"))
+        self.cli("record-observation", str(newer))
+        self.cli("start-activity", "reused")
+
+        replay = self.cli("record-batch", str(path))
+        session = self.cli("start")["session"]
+
+        self.assertFalse(replay["results"][0]["appended"])
+        self.assertEqual("active", self.cli("activity-status")["status"])
+        self.assertEqual("a-second", session["current_target_id"])
+        self.assertEqual("task-newer-resume", session["current_task"])
+
+    def test_record_batch_retry_restores_resume_point_after_append_crash(self):
+        item = proposal("crashed-batch", "z-first")
+        path = self.root / "crashed.jsonl"
+        path.write_text(json.dumps(item) + "\n", encoding="utf-8")
+
+        persist_learning = exam_prep._persist_learning
+
+        def crash_after_append(store, *args, **kwargs):
+            appended = any(
+                event.get("observation_id") == item["observation_id"]
+                for event in store.read_complete_observations()
+            )
+            if appended:
+                raise RuntimeError("simulated crash")
+            return persist_learning(store, *args, **kwargs)
+
+        with patch("exam_prep._persist_learning", side_effect=crash_after_append):
+            with self.assertRaisesRegex(RuntimeError, "simulated crash"):
+                self.cli("record-batch", str(path))
+
+        retry = self.cli("record-batch", str(path))
+        session = self.cli("start")["session"]
+
+        self.assertFalse(retry["results"][0]["appended"])
+        self.assertEqual("z-first", session["current_target_id"])
+        self.assertEqual("task-crashed-batch", session["current_task"])
+        self.assertTrue(session["current_task_done"])
+
+    def test_record_batch_retry_recovers_pending_activity_after_append_crash(self):
+        previous = proposal("prior-pending-cursor", "z-first")
+        previous["task_id"] = "repeated-task"
+        self.cli("record-observation", str(self.write_proposal(previous)))
+        self.cli("start-activity", "pending-recovery")
+        self.cli("finish-activity")
+        item = proposal("crashed-pending", "z-first")
+        item["task_id"] = "repeated-task"
+        item["activity_id"] = "pending-recovery"
+        path = self.root / "crashed-pending.jsonl"
+        path.write_text(json.dumps(item) + "\n", encoding="utf-8")
+
+        persist_learning = exam_prep._persist_learning
+
+        def crash_after_append(store, *args, **kwargs):
+            appended = any(
+                event.get("observation_id") == item["observation_id"]
+                for event in store.read_complete_observations()
+            )
+            if appended:
+                raise RuntimeError("simulated crash")
+            return persist_learning(store, *args, **kwargs)
+
+        with patch("exam_prep._persist_learning", side_effect=crash_after_append):
+            with self.assertRaisesRegex(RuntimeError, "simulated crash"):
+                self.cli("record-batch", str(path))
+
+        retry = self.cli("record-batch", str(path))
+
+        self.assertFalse(retry["results"][0]["appended"])
+        self.assertEqual("idle", self.cli("activity-status")["status"])
+
+    def test_record_batch_replay_preserves_newer_pending_activity_with_reused_id(self):
+        item = proposal("pending-replay", "z-first")
+        item["activity_id"] = "reused-pending"
+        path = self.root / "pending-replay.jsonl"
+        path.write_text(json.dumps(item) + "\n", encoding="utf-8")
+
+        with patch("exam_prep._now", return_value="2026-01-01T00:00:00+00:00"):
+            self.cli("start-activity", "reused-pending")
+        with patch("exam_prep._now", return_value="2026-01-01T00:00:00.500000+00:00"):
+            self.cli("finish-activity")
+        with patch("exam_prep._now", return_value="2026-01-01T00:00:01+00:00"):
+            self.cli("record-batch", str(path))
+
+        with patch("exam_prep._now", return_value="2026-01-01T00:00:02+00:00"):
+            self.cli("start-activity", "reused-pending")
+        with patch("exam_prep._now", return_value="2026-01-01T00:00:02.500000+00:00"):
+            self.cli("finish-activity")
+
+        replay = self.cli("record-batch", str(path))
+
+        self.assertFalse(replay["results"][0]["appended"])
+        self.assertEqual("pending", self.cli("activity-status")["status"])
 
     def test_record_batch_compact_returns_small_receipts_and_keeps_line_errors(self):
         item = proposal("compact-batch-1", "z-first")

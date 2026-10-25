@@ -343,6 +343,27 @@ def _pending_action_for_attempt(target_id: str, proposal: dict, *, done: bool) -
     return f"resume {target_id}: last attempt was {outcome}{detail}"
 
 
+def _apply_attempt_to_session(
+    session: dict, proposal: dict, event: dict
+) -> dict:
+    target_id = proposal.get("target_id", proposal.get("concept_id"))
+    done = _attempt_is_done(event)
+    updated = dict(session)
+    updated.update(
+        {
+            "current_target_id": target_id,
+            "current_task": proposal["task_id"],
+            "current_task_done": done,
+            "last_attempt_outcome": proposal.get("outcome"),
+            "last_attempt_error_tags": list(proposal.get("error_tags") or []),
+            "pending_action": _pending_action_for_attempt(
+                target_id, proposal, done=done
+            ),
+        }
+    )
+    return updated
+
+
 def _record_observation_proposal(
     store: StudyStore,
     course: dict,
@@ -350,6 +371,125 @@ def _record_observation_proposal(
     proposal: dict,
 ) -> dict[str, object]:
     """Pass one proposal through the canonical append path without saving a revision."""
+    prior_events = store.read_complete_observations()
+    existing_event = next(
+        (
+            event
+            for event in prior_events
+            if event.get("observation_id") == proposal.get("observation_id")
+        ),
+        None,
+    )
+    if existing_event is not None:
+        # Replay through storage with the original engine-owned fields so it
+        # still validates the proposal and detects conflicting payloads.
+        result = store.append_observation(
+            proposal,
+            str(existing_event.get("session_id") or session["session_id"]),
+            str(existing_event.get("recorded_at") or _now()),
+            expected_seconds=existing_event.get("expected_seconds"),
+            elapsed_seconds=existing_event.get("elapsed_seconds"),
+            session_phase=(
+                "exam" if existing_event.get("assessment_purpose") == "mock" else "study"
+            ),
+            exam_revision=existing_event.get("exam_revision"),
+            exam_hash=existing_event.get("exam_hash"),
+        )
+        replay_session = dict(session)
+        target_id = proposal.get("target_id", proposal.get("concept_id"))
+        done = _attempt_is_done(result.canonical_event)
+        same_session_events = [
+            event
+            for event in prior_events
+            if event.get("session_id") == existing_event.get("session_id")
+        ]
+        # Only reconcile the newest event for a session. Replaying an older
+        # row must not move the resume pointer back past a later observation.
+        is_latest_for_session = bool(
+            same_session_events
+            and same_session_events[-1].get("observation_id")
+            == existing_event.get("observation_id")
+        )
+        same_or_unstarted_session = session.get("session_id") in (
+            "",
+            existing_event.get("session_id"),
+        )
+        cursor_matches_event = (
+            session.get("current_target_id") == target_id
+            and session.get("current_task") == proposal.get("task_id")
+            and session.get("current_task_done") == done
+            and session.get("last_attempt_outcome") == proposal.get("outcome")
+            and list(session.get("last_attempt_error_tags") or [])
+            == list(proposal.get("error_tags") or [])
+        )
+        restore_resume_point = (
+            is_latest_for_session
+            and same_or_unstarted_session
+            and not cursor_matches_event
+        )
+        activity_id = proposal.get("activity_id")
+        started_at = session.get("active_activity_started_at")
+        event_recorded_at = existing_event.get("recorded_at")
+        if (
+            proposal.get("schema_version") == 2
+            and activity_id is not None
+            and is_latest_for_session
+            and session.get("session_id") == existing_event.get("session_id")
+        ):
+            if (
+                session.get("active_activity_id") == activity_id
+                and isinstance(started_at, str)
+                and isinstance(event_recorded_at, str)
+            ):
+                try:
+                    timer_start = datetime.fromisoformat(
+                        started_at.replace("Z", "+00:00")
+                    )
+                    event_time = datetime.fromisoformat(
+                        event_recorded_at.replace("Z", "+00:00")
+                    )
+                    timer_is_original = timer_start < event_time
+                except (TypeError, ValueError):
+                    timer_is_original = False
+                if timer_is_original:
+                    consumption = consume_activity(
+                        session, activity_id, event_recorded_at
+                    )
+                    if consumption.matched:
+                        replay_session = consumption.session
+            elif (
+                # Pending timers have no timestamp, so match both their ID
+                # and recorded duration, then use revision history to
+                # distinguish this timer from a later reused ID.
+                session.get("pending_activity_id") == activity_id
+                and session.get("pending_activity_elapsed_seconds")
+                == existing_event.get("elapsed_seconds")
+                and isinstance(existing_event.get("elapsed_seconds"), int)
+                and not isinstance(existing_event.get("elapsed_seconds"), bool)
+                and store.pending_activity_predates_event(
+                    str(existing_event.get("session_id") or ""),
+                    activity_id,
+                    existing_event["elapsed_seconds"],
+                    event_recorded_at or _now(),
+                )
+            ):
+                consumption = consume_activity(
+                    session, activity_id, event_recorded_at or _now()
+                )
+                if consumption.matched:
+                    replay_session = consumption.session
+        if restore_resume_point:
+            replay_session = _apply_attempt_to_session(
+                replay_session, proposal, result.canonical_event
+            )
+        return {
+            "append_result": result,
+            "session": replay_session,
+            "target_id": target_id,
+            "diagnostics": [],
+            "status": "already_recorded",
+        }
+
     session, _changed = _activate_session(session)
     recorded_at = _now()
     if proposal.get("schema_version") == 2:
@@ -369,7 +509,7 @@ def _record_observation_proposal(
         proposal,
         session,
         store.read_assessments(),
-        store.read_complete_observations(),
+        prior_events,
     )
     result = store.append_observation(
         proposal,
@@ -383,19 +523,7 @@ def _record_observation_proposal(
     )
     session = consumption.session if consumption.matched else dict(session)
     target_id = proposal.get("target_id", proposal.get("concept_id"))
-    done = _attempt_is_done(result.canonical_event)
-    session.update(
-        {
-            "current_target_id": target_id,
-            "current_task": proposal["task_id"],
-            "current_task_done": done,
-            "last_attempt_outcome": proposal.get("outcome"),
-            "last_attempt_error_tags": list(proposal.get("error_tags") or []),
-            "pending_action": _pending_action_for_attempt(
-                target_id, proposal, done=done
-            ),
-        }
-    )
+    session = _apply_attempt_to_session(session, proposal, result.canonical_event)
     diagnostics = [unlinked_diagnostic] if unlinked_diagnostic is not None else []
     return {
         "append_result": result,

@@ -7,6 +7,7 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime
 from functools import wraps
 from pathlib import Path
 from typing import Any, Callable, TypeVar
@@ -215,6 +216,87 @@ class StudyStore:
         events, partial = self._read_complete_jsonl(self.observations_path, "observation")
         self._log_diagnostics["partial_final_line"] = partial
         return events
+
+    def pending_activity_predates_event(
+        self,
+        session_id: str,
+        activity_id: str,
+        elapsed_seconds: int,
+        recorded_at: str,
+    ) -> bool:
+        """Whether the current pending timer generation was saved before an event.
+
+        Session snapshots retain the active timer's start time in the revision
+        immediately before `finish-activity` turns it into a pending timer.
+        Following that history distinguishes an append-crash snapshot from a
+        later timer that reused the same ID and duration.
+        """
+
+        self.initialize()
+        generation_started_at = None
+        activity_state: tuple[str, str | None, int | None] | None = None
+        revisions = sorted(
+            (
+                path
+                for path in self.revisions_path.iterdir()
+                if path.is_dir() and path.name.isdigit()
+            ),
+            key=lambda path: int(path.name),
+        )
+        for path in revisions:
+            recovered = self._load_revision(path)
+            if recovered is None:
+                continue
+            snapshot = recovered.session
+            if snapshot.get("session_id") != session_id:
+                activity_state = None
+                generation_started_at = None
+                continue
+
+            active_id = snapshot.get("active_activity_id")
+            if active_id is not None:
+                if active_id == activity_id:
+                    generation_started_at = snapshot.get("active_activity_started_at")
+                    activity_state = ("active", activity_id, None)
+                else:
+                    activity_state = ("active", active_id, None)
+                    generation_started_at = None
+                continue
+
+            pending_id = snapshot.get("pending_activity_id")
+            pending_elapsed = snapshot.get("pending_activity_elapsed_seconds")
+            if pending_id is not None:
+                next_state = ("pending", pending_id, pending_elapsed)
+                if (
+                    pending_id == activity_id
+                    and pending_elapsed == elapsed_seconds
+                    and activity_state
+                    not in {
+                        ("active", activity_id, None),
+                        ("pending", activity_id, elapsed_seconds),
+                    }
+                ):
+                    generation_started_at = None
+                elif pending_id != activity_id or pending_elapsed != elapsed_seconds:
+                    generation_started_at = None
+                activity_state = next_state
+            else:
+                activity_state = ("idle", None, None)
+                generation_started_at = None
+
+        if (
+            activity_state != ("pending", activity_id, elapsed_seconds)
+            or not isinstance(generation_started_at, str)
+        ):
+            return False
+        try:
+            timer_start = datetime.fromisoformat(
+                generation_started_at.replace("Z", "+00:00")
+            )
+            event_time = datetime.fromisoformat(recorded_at.replace("Z", "+00:00"))
+            return timer_start < event_time
+        except (TypeError, ValueError):
+            return False
 
     def read_session_summaries(self) -> list[dict[str, Any]]:
         self.initialize()
