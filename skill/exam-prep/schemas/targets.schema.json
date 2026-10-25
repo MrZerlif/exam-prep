@@ -7,7 +7,22 @@
   "properties": {
     "schema_version": {"type": "integer", "enum": [2]},
     "derived_from_revision": {"type": "integer", "minimum": 0},
-    "targets": {"type": "object", "additionalProperties": true},
+    "targets": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "mastery_status_details": {
+            "type": "object",
+            "required": ["missing"],
+            "properties": {
+              "missing": {"type": "array", "items": {"type": "string"}}
+            },
+            "additionalProperties": false
+          }
+        }
+      }
+    },
     "aliases": {"type": "object", "additionalProperties": {"type": "string"}}
   }
 }

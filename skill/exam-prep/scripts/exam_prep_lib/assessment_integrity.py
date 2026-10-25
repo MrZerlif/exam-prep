@@ -45,8 +45,8 @@ ATTEMPT_OUTCOMES = frozenset({"correct", "partial", "incorrect"})
 
 
 def is_attempt(event: dict[str, Any]) -> bool:
-    """Learner production grading can judge; `skipped` and `solution_seen`
-    are not attempts and never release an answer."""
+    """Learner production grading can judge; unclear, skipped and
+    solution_seen observations are not attempts."""
 
     return event.get("outcome") in ATTEMPT_OUTCOMES
 
@@ -104,10 +104,17 @@ def assess_attempt_evidence(
     if supplied_hash is not None and supplied_hash != assessment.spec_hash:
         raise AssessmentIntegrityError("event assessment spec hash does not match frozen assessment")
 
+    prior_records = list(prior_events)
+    superseded_ids = {
+        record["supersedes_observation_id"]
+        for record in [*prior_records, event]
+        if isinstance(record.get("supersedes_observation_id"), str)
+    }
     previous = [
         prior
-        for prior in prior_events
+        for prior in prior_records
         if prior.get("assessment_id") == assessment.assessment_id
+        and prior.get("observation_id") not in superseded_ids
     ]
     attempted_before = any(is_attempt(prior) for prior in previous)
     exposes = exposes_solution(event)
@@ -123,6 +130,13 @@ def assess_attempt_evidence(
             mastery_eligible=False,
             diagnostic="solution_exposure_downgraded",
             integrity="explicit_exposure",
+        )
+    if event.get("outcome") == "unclear":
+        return AttemptEvidenceDecision(
+            accepted=True,
+            mastery_eligible=False,
+            diagnostic="unclear_outcome_not_scored",
+            integrity="frozen_attempt",
         )
     if is_attempt(event) and any(exposes_solution(prior) for prior in previous):
         # Re-answering a question whose solution was already shown is

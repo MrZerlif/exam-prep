@@ -7,7 +7,11 @@ from typing import Any
 
 from .capabilities import CapabilityRegistry, MASTERY_DIMENSIONS
 from .defaults import DEFAULT_RECURRING_MISTAKE_POLICY
-from .evidence_maturity import add_event_to_maturity, empty_evidence_maturity
+from .evidence_maturity import (
+    add_event_to_maturity,
+    empty_evidence_maturity,
+    non_superseded_events,
+)
 from .target_normalization import normalize_event, normalize_syllabus
 
 DIMENSIONS = MASTERY_DIMENSIONS
@@ -166,10 +170,10 @@ def _mastery_status(
     state: dict[str, Any],
     required_dimensions: tuple[str, ...] | None = None,
     requires_transfer: bool = True,
-) -> str:
+) -> tuple[str, list[str]]:
     evidence = state["evidence"]
     if not any(evidence.values()):
-        return "unseen"
+        return "unseen", []
     dimensions = required_dimensions or SCORED_AT_START
     values = [
         state["mastery"].get(dimension)
@@ -179,24 +183,33 @@ def _mastery_status(
     average = sum(values) / len(values) if values else 0.0
     transfer_evidence = evidence["transfer_successes"] + evidence["exam_successes"]
     if evidence["solution_views"] and not evidence["independent_successes"]:
-        return "learning"
+        return "learning", []
     if (
         average >= 0.85
         and evidence["independent_successes"] >= 3
         and (not requires_transfer or evidence["transfer_successes"] >= 2)
     ):
-        return "mastered"
-    if (
+        candidate = "mastered"
+    elif (
         average >= 0.55
         and evidence["independent_successes"] >= 2
         and (not requires_transfer or transfer_evidence >= 1)
     ):
-        return "exam_ready"
-    if evidence["failures"] and average < 0.45:
-        return "weak"
-    if evidence["independent_successes"] or evidence["hinted_successes"]:
-        return "practicing"
-    return "learning"
+        candidate = "exam_ready"
+    elif evidence["failures"] and average < 0.45:
+        candidate = "weak"
+    elif evidence["independent_successes"] or evidence["hinted_successes"]:
+        candidate = "practicing"
+    else:
+        candidate = "learning"
+
+    maturity = state["evidence_maturity"]
+    has_retention_or_transfer = (
+        maturity["retained"]["count"] > 0 or maturity["transferred"]["count"] > 0
+    )
+    if candidate in {"practicing", "exam_ready", "mastered"} and not has_retention_or_transfer:
+        return "learning", ["retained_or_transferred"]
+    return candidate, []
 
 
 def _target_capability_semantics(
@@ -242,8 +255,10 @@ def reduce_learning_state(
         for concept_id in normalized_syllabus.targets
     }
     mistake_sessions: dict[tuple[str, str], set[str]] = defaultdict(set)
-    for raw_event in events:
+    for raw_event in non_superseded_events(events):
         event = normalize_event(raw_event, normalized_syllabus)
+        if event.get("outcome") == "unclear":
+            continue
         concept_id = event.get("target_id")
         if concept_id not in concepts:
             continue
@@ -380,9 +395,11 @@ def reduce_learning_state(
         required_dimensions, requires_transfer = _target_capability_semantics(
             target, capability_registry
         )
-        state["mastery_status"] = _mastery_status(
+        status, missing = _mastery_status(
             state, required_dimensions, requires_transfer
         )
+        state["mastery_status"] = status
+        state["mastery_status_details"] = {"missing": missing}
         state["recurring_mistakes"].sort(key=lambda item: (-item["count"], item["tag"]))
 
     for concept_id, state in concepts.items():

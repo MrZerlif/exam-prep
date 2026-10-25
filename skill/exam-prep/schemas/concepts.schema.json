@@ -33,6 +33,14 @@
             "type": "string",
             "enum": ["unseen", "learning", "practicing", "weak", "exam_ready", "mastered"]
           },
+          "mastery_status_details": {
+            "type": "object",
+            "required": ["missing"],
+            "properties": {
+              "missing": {"type": "array", "items": {"type": "string"}}
+            },
+            "additionalProperties": false
+          },
           "availability": {
             "type": "string",
             "enum": ["available", "prerequisite_blocked"]

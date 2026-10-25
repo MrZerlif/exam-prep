@@ -49,8 +49,13 @@
         "partial",
         "incorrect",
         "skipped",
-        "solution_seen"
+        "solution_seen",
+        "unclear"
       ]
+    },
+    "supersedes_observation_id": {
+      "type": "string",
+      "minLength": 1
     },
     "assistance": {
       "type": "object",

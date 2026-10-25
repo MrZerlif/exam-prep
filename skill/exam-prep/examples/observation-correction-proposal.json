@@ -1,0 +1,20 @@
+{
+  "schema_version": 2,
+  "observation_id": "obs-example-0002",
+  "supersedes_observation_id": "obs-example-0001",
+  "target_id": "core-definition",
+  "task_id": "definition-001",
+  "capability_id": "definition_recall",
+  "task_type": "definition_recall",
+  "outcome": "unclear",
+  "assistance": {
+    "requested": false,
+    "levels_revealed": ["H0"],
+    "scaffold_types": [],
+    "partial_transformation_shown": false,
+    "full_solution_viewed": false
+  },
+  "error_tags": [],
+  "diagnostic_confidence": "low",
+  "source_refs": []
+}

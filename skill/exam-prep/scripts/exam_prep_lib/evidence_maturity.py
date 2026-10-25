@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
-from typing import Any, Iterable
+from typing import Any, Iterable, Mapping
 
 from .capabilities import AssessmentCapability
 
 
 FACETS = ("demonstrated", "retained", "transferred")
+
+
+def non_superseded_events(
+    events: Iterable[Mapping[str, Any]],
+) -> list[Mapping[str, Any]]:
+    """Return journal events whose interpretations have not been replaced."""
+
+    records = [event for event in events if isinstance(event, Mapping)]
+    superseded_ids = {
+        event["supersedes_observation_id"]
+        for event in records
+        if isinstance(event.get("supersedes_observation_id"), str)
+    }
+    return [event for event in records if event.get("observation_id") not in superseded_ids]
 
 
 def empty_evidence_maturity() -> dict[str, dict[str, Any]]:
@@ -71,7 +85,7 @@ def add_event_to_maturity(
 
 def derive_evidence_maturity(events: Iterable[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     maturity = empty_evidence_maturity()
-    for event in events:
+    for event in non_superseded_events(events):
         add_event_to_maturity(maturity, event)
     return maturity
 

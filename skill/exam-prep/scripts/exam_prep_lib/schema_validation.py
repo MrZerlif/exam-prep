@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 
 class SchemaError(ValueError):
@@ -139,7 +139,11 @@ def load_schema(name: str) -> dict[str, Any]:
         return json.load(handle)
 
 
-def validate_observation_proposal(document: dict[str, Any]) -> None:
+def validate_observation_proposal(
+    document: dict[str, Any],
+    *,
+    known_observation_ids: Iterable[str] | None = None,
+) -> None:
     if not isinstance(document, dict):
         raise SchemaError("$", "observation proposal must be an object")
     for field in ENGINE_OWNED_PROPOSAL_FIELDS:
@@ -151,6 +155,20 @@ def validate_observation_proposal(document: dict[str, Any]) -> None:
         else "observation-proposal.schema.json"
     )
     validate_document(document, load_schema(schema_name))
+    supersedes_id = document.get("supersedes_observation_id")
+    if supersedes_id is not None:
+        if supersedes_id == document.get("observation_id"):
+            raise SchemaError("$.supersedes_observation_id", "an observation cannot supersede itself")
+        if known_observation_ids is None:
+            raise SchemaError(
+                "$.supersedes_observation_id",
+                "known observation IDs are required to validate this reference",
+            )
+        if supersedes_id not in set(known_observation_ids):
+            raise SchemaError(
+                "$.supersedes_observation_id",
+                f"unknown observation ID {supersedes_id!r}",
+            )
 
 
 def validate_observation_event(document: dict[str, Any]) -> None:
