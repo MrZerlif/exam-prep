@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from functools import wraps
 from pathlib import Path
-from typing import Any, Callable, TypeVar
+from typing import Any, Callable, Iterable, TypeVar
 
 from .assessment import FrozenAssessment
 from .assessment_integrity import assert_pool_isolation, assess_attempt_evidence
@@ -55,6 +55,7 @@ ENGINE_OWNED_OBSERVATION_FIELDS = frozenset(
         "timestamp",
         "expected_seconds",
         "elapsed_seconds",
+        "elapsed_includes_recording_delay",
         "assessment_spec_hash",
         "assessment_purpose",
         "assessment_integrity",
@@ -372,8 +373,12 @@ class StudyStore:
         session_phase: str = "study",
         exam_revision: int | None = None,
         exam_hash: str | None = None,
+        elapsed_includes_recording_delay: bool = False,
+        known_observation_ids: Iterable[str] | None = None,
     ) -> AppendResult:
-        validate_observation_proposal(proposal)
+        validate_observation_proposal(
+            proposal, known_observation_ids=known_observation_ids
+        )
         assessment_id = proposal.get("assessment_id")
         integrity_decision = None
         frozen = None
@@ -403,6 +408,10 @@ class StudyStore:
                 "elapsed_seconds": elapsed_seconds,
             }
         )
+        if canonical.get("schema_version") == 2:
+            canonical["elapsed_includes_recording_delay"] = (
+                elapsed_includes_recording_delay
+            )
         if integrity_decision is not None:
             canonical["assessment_spec_hash"] = frozen.spec_hash
             canonical["assessment_purpose"] = frozen.purpose

@@ -22,6 +22,7 @@ ENGINE_OWNED_PROPOSAL_FIELDS = {
     "timestamp",
     "expected_seconds",
     "elapsed_seconds",
+    "elapsed_includes_recording_delay",
     "assessment_integrity",
     "assessment_spec_hash",
     "canonical_assessment_hash",

@@ -14,8 +14,9 @@ H5 show and explain the complete solution
 ~~~
 
 H0 is independent evidence. H1 is lightly scaffolded; H2–H3 guided; H4
-heavily scaffolded; H5 or a full solution view is `solution_seen`. The engine
-owns independence and hint fields. Exposure does not raise mastery.
+heavily scaffolded; H5 or a full solution view is `solution_seen`. Record the
+assistance actually given; the engine derives the assistance band and
+independence classification. Exposure does not raise mastery.
 
 ## Give the learner a useful turn
 

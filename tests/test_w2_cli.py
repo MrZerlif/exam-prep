@@ -118,7 +118,7 @@ class W2CliTests(unittest.TestCase):
         self.assertEqual("compact-1", result["observation_id"])
         self.assertEqual("z-first", result["target_id"])
         self.assertEqual("independent", result["assistance_band"])
-        self.assertEqual("practicing", result["mastery_status"])
+        self.assertEqual("learning", result["mastery_status"])
         self.assertEqual([], result["diagnostics"])
 
     def test_record_batch_isolates_bad_lines_and_persists_one_revision(self):

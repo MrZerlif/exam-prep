@@ -141,7 +141,12 @@ The standalone tools `migrate`, `draft-assessments`, and
   records. Repeating identical `observation_id` payloads is idempotent. The
   learner snapshot and derived state are committed once after the batch.
   Compact mode returns a small receipt per successful line while retaining
-  named line errors.
+  named line errors. A line may use `outcome: "unclear"` when the answer
+  cannot be read reliably. A correction may set
+  `supersedes_observation_id` to an existing event ID (including one recorded
+  by an earlier successful line in this batch); the old event remains in the
+  log but is ignored when deriving learning and evaluation state. Unknown IDs
+  are rejected for that line.
 - `triage <path.json>` - store learner self-ratings from
   `{"ratings":{"<target_id>":0|1|2}}` in `learner.self_rating`. Ratings are
   not evidence and do not change mastery. The scheduler uses them to order
@@ -162,7 +167,7 @@ The standalone tools `migrate`, `draft-assessments`, and
 - `discard-activity` - clear active, pending, or invalid activity state without measuring open time. It returns `activity_discarded` or `no_activity`; exit code is always `0`.
 - `activity-status` - inspect the current `idle`, `active`, or `pending` state; an unreadable or contradictory snapshot returns `invalid_activity_state` with exit code `1`, otherwise exit code is `0`.
 
-Timing is engine-owned. Only a v2 `record-observation` proposal whose `activity_id` matches the current activity receives `elapsed_seconds`; v1 proposals never consume activity timing. `expected_seconds` is not measured in this release and remains `None`.
+Timing is engine-owned. Only a v2 proposal whose `activity_id` matches the current activity receives `elapsed_seconds`; v1 proposals never consume activity timing. If the timer is still active when the observation is recorded, the canonical event includes `elapsed_includes_recording_delay: true`; evaluation excludes that interval from `active_study_seconds` and reports it separately. This is an engine-owned event field and must not be sent in a proposal. `expected_seconds` is not measured in this release and remains `None`.
 
 ### Linking an attempt to a frozen assessment
 
@@ -229,14 +234,23 @@ Required on every v2 proposal:
 `task_id`, `capability_id`, `task_type`, `outcome`, `assistance`,
 `error_tags`, `diagnostic_confidence`, `source_refs`.
 
+`outcome` is one of `correct`, `partial`, `incorrect`, `skipped`,
+`solution_seen`, or `unclear`. `unclear` records an unreadable or ambiguous
+answer without treating it as success, failure, or mastery evidence.
+
 Tutor-supplied optional fields: `learner_self_confidence` (only when the
 learner states it), `learner_explanation`, `assessment_id` (above),
-`solution_exposed`, `explicit_exposure_reason`, `activity_id`. The schema
-is the complete list; anything outside it is rejected.
+`solution_exposed`, `explicit_exposure_reason`, `activity_id`, and
+`supersedes_observation_id`. The last field names a previously recorded
+observation whose interpretation this one corrects; the old canonical event
+is retained, while reducer and evaluation ignore it. A missing or unknown ID
+is a validation error. The schema is the complete list; anything outside it
+is rejected.
 
 A proposal carrying any of these engine-owned fields at its own top level
 is rejected with `engine-owned field is not accepted from LLM`: `recorded_at`,
 `session_id`, `timestamp`, `expected_seconds`, `elapsed_seconds`,
+`elapsed_includes_recording_delay`,
 `assessment_integrity`, `assessment_spec_hash`,
 `canonical_assessment_hash`, `derived_evidence_maturity`, `independence`,
 `exposure_classification`, `verifier_result`. The engine owns the clock,

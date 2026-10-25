@@ -45,8 +45,9 @@ is canonical; never hand-edit derived state. Prefer teacher materials and
 official exam lists, and surface conflicts. Use
 `validate-curriculum` and `apply-curriculum` for curriculum changes. For an
 observation, follow `schemas/observation-proposal-v2.schema.json` and
-`examples/observation-proposal.json`; the engine owns timing, session,
-independence, and hint fields. Derivative/antiderivative checks belong to
+`examples/observation-proposal.json`; record the assistance actually given,
+and let the engine add timing/session data and derive independence.
+Derivative/antiderivative checks belong to
 `references/verification.md`. Keep mastery, review status, and prerequisite
 availability distinct.
 

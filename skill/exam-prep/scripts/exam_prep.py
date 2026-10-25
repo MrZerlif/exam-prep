@@ -389,6 +389,14 @@ def _record_observation_proposal(
             str(existing_event.get("recorded_at") or _now()),
             expected_seconds=existing_event.get("expected_seconds"),
             elapsed_seconds=existing_event.get("elapsed_seconds"),
+            elapsed_includes_recording_delay=bool(
+                existing_event.get("elapsed_includes_recording_delay", False)
+            ),
+            known_observation_ids={
+                str(event["observation_id"])
+                for event in prior_events
+                if isinstance(event.get("observation_id"), str)
+            },
             session_phase=(
                 "exam" if existing_event.get("assessment_purpose") == "mock" else "study"
             ),
@@ -517,6 +525,12 @@ def _record_observation_proposal(
         recorded_at,
         expected_seconds=None,
         elapsed_seconds=consumption.elapsed_seconds,
+        elapsed_includes_recording_delay=consumption.elapsed_includes_recording_delay,
+        known_observation_ids={
+            str(event["observation_id"])
+            for event in prior_events
+            if isinstance(event.get("observation_id"), str)
+        },
         session_phase=session["phase"],
         exam_revision=int(course.get("exam", {}).get("revision", 1)),
         exam_hash=StudyStore.hash_document(course.get("exam") or {}),

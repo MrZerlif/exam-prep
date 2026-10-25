@@ -151,6 +151,54 @@ class SkillContractTests(unittest.TestCase):
         )
         self.assertIn("examples/observation-proposal.json", commands)
 
+    def test_documented_flags_and_w1_observation_fields_match_cli_and_schemas(self):
+        import json
+
+        from exam_prep_lib.schema_validation import load_schema
+
+        docs = "\n".join(
+            path.read_text(encoding="utf-8")
+            for path in [
+                SKILL_ROOT / "SKILL.md",
+                *sorted((SKILL_ROOT / "references").glob("*.md")),
+            ]
+        )
+        parser = _parser()
+        cli_flags = {
+            option
+            for action in parser._actions
+            for option in action.option_strings
+        }
+        for action in parser._actions:
+            if isinstance(action, argparse._SubParsersAction):
+                cli_flags.update(
+                    option
+                    for child in action.choices.values()
+                    for child_action in child._actions
+                    for option in child_action.option_strings
+                )
+        documented_flags = set(re.findall(r"(?<![\w`])--[a-z][a-z0-9-]*", docs))
+        self.assertEqual([], sorted(documented_flags - cli_flags))
+
+        proposal_schema = load_schema("observation-proposal-v2.schema.json")
+        event_schema = load_schema("observation-event-v2.schema.json")
+        outcome_values = proposal_schema["properties"]["outcome"]["enum"]
+        self.assertIn("unclear", outcome_values)
+        self.assertIn("supersedes_observation_id", proposal_schema["properties"])
+        self.assertIn("supersedes_observation_id", event_schema["properties"])
+        self.assertIn("elapsed_includes_recording_delay", event_schema["properties"])
+
+        commands = (SKILL_ROOT / "references" / "commands.md").read_text(
+            encoding="utf-8"
+        )
+        for outcome in outcome_values:
+            self.assertIn(f"`{outcome}`", commands)
+        for field in (
+            "supersedes_observation_id",
+            "elapsed_includes_recording_delay",
+        ):
+            self.assertIn(f"`{field}`", commands)
+
     def test_commands_reference_documents_the_entrypoint_and_workspace_order(self):
         # Audit finding 4: every command was written bare (status, init)
         # and the workspace precedence lived only in READMEs the tutor never

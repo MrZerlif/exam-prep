@@ -255,13 +255,16 @@ class ActivityLifecycleTests(unittest.TestCase):
         self.assertEqual("pending", ended["discarded_activity"]["previous_state"])
         self.assertEqual(17, ended["discarded_activity"]["discarded_elapsed_seconds"])
 
-    def test_end_session_summary_attributes_elapsed_study_time(self):
+    def test_end_session_summary_excludes_recording_delay_from_active_time(self):
         self.ready()
         self.at(T0, "start-activity", "task-1")
         ended = self.record_at(T17, v2_proposal("obs-summary", "task-1"))
         self.assertEqual(17, ended["event"]["elapsed_seconds"])
         session_end = self.ok("end-session")
-        self.assertEqual(17, session_end["summary"]["evaluation"]["active_study_seconds"])
+        evaluation = session_end["summary"]["evaluation"]
+        self.assertEqual(0, evaluation["active_study_seconds"])
+        self.assertEqual(17, evaluation["recording_delay_seconds"])
+        self.assertEqual(1, evaluation["recording_delay_event_count"])
 
     def test_new_session_does_not_link_old_activity(self):
         self.ready()
