@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
 from .provenance import provenance_label
-from .scheduler import compute_priority, select_next_activity
+from .scheduler import _configured_timezone, compute_priority, select_next_activity
 from .target_normalization import normalize_syllabus
 
 
@@ -124,7 +124,9 @@ def forecast_plan(
         for target_id in targets
         if _has_target_evidence(concepts.get(target_id, {}))
     )
-    available_minutes = _available_minutes(course, days, minutes_per_day)
+    available_minutes, budget_dates = _available_minutes(
+        course, now, days, minutes_per_day
+    )
     total_targets = len(targets)
     estimated_total = sum(
         max(1.0, float(metadata.get("estimated_learning_minutes", 30)))
@@ -135,6 +137,7 @@ def forecast_plan(
         "targets_touched": touched,
         "targets_without_evidence": total_targets - touched,
         "available_minutes": available_minutes,
+        "budget_dates": budget_dates,
         "minutes_per_target": (
             round(available_minutes / total_targets, 2) if total_targets else None
         ),
@@ -164,15 +167,64 @@ def _has_target_evidence(state: Mapping[str, Any]) -> bool:
 
 
 def _available_minutes(
-    course: Mapping[str, Any], days: int, minutes_per_day: int
-) -> int:
+    course: Mapping[str, Any], now: datetime, days: int, minutes_per_day: int
+) -> tuple[int, list[str]]:
+    exam = course.get("exam", {})
+    exam = exam if isinstance(exam, Mapping) else {}
+    planning = course.get("planning", {})
+    planning = planning if isinstance(planning, Mapping) else {}
+    intake = course.get("intake", {})
+    intake = intake if isinstance(intake, Mapping) else {}
+    configured_timezone = (
+        exam.get("timezone") or planning.get("timezone") or intake.get("timezone")
+    )
+    tz = _configured_timezone(configured_timezone)
+    current_time = now if now.tzinfo is not None else now.replace(tzinfo=timezone.utc)
+    today = current_time.astimezone(tz).date()
+
+    exam_date = None
+    raw_exam_date = exam.get("date")
+    if isinstance(raw_exam_date, str) and raw_exam_date:
+        try:
+            parsed_exam_date = datetime.fromisoformat(
+                raw_exam_date.replace("Z", "+00:00")
+            )
+            if parsed_exam_date.tzinfo is None:
+                exam_date = parsed_exam_date.date()
+            else:
+                exam_date = parsed_exam_date.astimezone(tz).date()
+        except ValueError:
+            exam_date = None
+
+    def in_window(day: date) -> bool:
+        return day >= today and (exam_date is None or day <= exam_date)
+
     budget = course.get("time_budget", {})
     available_by_day = budget.get("available_minutes_by_day") if isinstance(budget, Mapping) else None
     if isinstance(available_by_day, Mapping) and available_by_day:
-        values = list(available_by_day.values())
         if all(
             isinstance(value, int) and not isinstance(value, bool) and value >= 0
-            for value in values
+            for value in available_by_day.values()
         ):
-            return sum(values)
-    return days * minutes_per_day
+            dated_budgets: list[tuple[date, int]] = []
+            for key, value in available_by_day.items():
+                if not isinstance(key, str):
+                    continue
+                try:
+                    day = date.fromisoformat(key)
+                except ValueError:
+                    continue
+                if in_window(day):
+                    dated_budgets.append((day, value))
+            dated_budgets.sort()
+            return (
+                sum(value for _, value in dated_budgets),
+                [day.isoformat() for day, _ in dated_budgets],
+            )
+
+    fallback_dates = [today + timedelta(days=offset) for offset in range(days)]
+    fallback_dates = [day for day in fallback_dates if in_window(day)]
+    return (
+        len(fallback_dates) * minutes_per_day,
+        [day.isoformat() for day in fallback_dates],
+    )

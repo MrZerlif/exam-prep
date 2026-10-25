@@ -121,7 +121,13 @@ The standalone tools `migrate`, `draft-assessments`, and
   risk flag compares the sum of target learning-time estimates with the
   available budget. When
   `course.time_budget.available_minutes_by_day` is non-empty, its values set
-  the coverage budget; otherwise the plan arguments do.
+  the coverage budget, but only for dated entries from today through the exam
+  date inclusive. The date window uses `course.exam.timezone`, then
+  `course.planning.timezone` or `course.intake.timezone`, and defaults to UTC.
+  Today counts as a full day: the budget does not subtract hours that have
+  already passed. The `coverage.budget_dates` list shows which dates were
+  counted. If no valid daily course budget is available, the plan arguments
+  set the budget for forecast days within the same date window.
 - State-changing and overview commands accept opt-in `--include-next-hint`;
   no hint is emitted without the flag.
 - `next --minutes N` - pick one budget-fitting activity; `N` must be a

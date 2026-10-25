@@ -4,6 +4,7 @@ import json
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import patch
 
@@ -326,7 +327,11 @@ class W2CliTests(unittest.TestCase):
         self.cli("record-observation", str(observation))
         course_path = self.root / ".exam-prep" / "course.json"
         course = json.loads(course_path.read_text(encoding="utf-8"))
-        course["time_budget"]["available_minutes_by_day"] = {"day-1": 60, "day-2": 60}
+        today = datetime.now(timezone.utc).date()
+        course["time_budget"]["available_minutes_by_day"] = {
+            today.isoformat(): 60,
+            (today + timedelta(days=1)).isoformat(): 60,
+        }
         course_path.write_text(json.dumps(course), encoding="utf-8")
 
         result = self.cli("plan", "--days", "2", "--minutes-per-day", "30")
@@ -337,6 +342,7 @@ class W2CliTests(unittest.TestCase):
                 "targets_touched": 1,
                 "targets_without_evidence": 2,
                 "available_minutes": 120,
+                "budget_dates": [today.isoformat(), (today + timedelta(days=1)).isoformat()],
                 "minutes_per_target": 40,
                 "required_targets_per_hour": 1.5,
                 "pace_at_risk": False,

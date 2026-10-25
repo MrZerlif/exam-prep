@@ -3,6 +3,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -126,6 +127,7 @@ class TrialFlowTests(unittest.TestCase):
                 "targets_touched": 0,
                 "targets_without_evidence": 5,
                 "available_minutes": 40,
+                "budget_dates": [datetime.now(timezone.utc).date().isoformat()],
                 "minutes_per_target": 8,
                 "required_targets_per_hour": 7.5,
                 "pace_at_risk": True,

@@ -70,12 +70,58 @@ class W2PlanningTests(unittest.TestCase):
                 "targets_touched": 1,
                 "targets_without_evidence": 1,
                 "available_minutes": 30,
+                "budget_dates": ["2026-10-26"],
                 "minutes_per_target": 15,
                 "required_targets_per_hour": 4.0,
                 "pace_at_risk": True,
             },
             result["coverage"],
         )
+
+    def test_course_budget_only_counts_dates_from_today_through_exam(self):
+        course = {
+            **COURSE,
+            "exam": {"date": "2026-10-30", "timezone": "Europe/Moscow"},
+            "time_budget": {
+                "available_minutes_by_day": {
+                    "2026-10-24": 120,
+                    "2026-10-25": 120,
+                    "2026-10-26": 300,
+                    "2026-10-27": 300,
+                    "2026-10-28": 300,
+                    "2026-10-29": 300,
+                    "2026-10-30": 300,
+                    "2026-10-31": 300,
+                }
+            },
+        }
+        fixed_now = datetime(2026, 10, 26, 0, tzinfo=timezone.utc)
+
+        result = forecast_plan(SYLLABUS, {}, {}, course, fixed_now)
+
+        self.assertEqual(1500, result["coverage"]["available_minutes"])
+        self.assertEqual(
+            ["2026-10-26", "2026-10-27", "2026-10-28", "2026-10-29", "2026-10-30"],
+            result["coverage"]["budget_dates"],
+        )
+
+    def test_planning_timezone_sets_budget_start_date_when_exam_timezone_is_absent(self):
+        course = {
+            **COURSE,
+            "planning": {"timezone": "America/Los_Angeles"},
+            "time_budget": {
+                "available_minutes_by_day": {
+                    "2026-10-24": 100,
+                    "2026-10-25": 100,
+                    "2026-10-26": 100,
+                }
+            },
+        }
+
+        result = forecast_plan(SYLLABUS, {}, {}, course, NOW)
+
+        self.assertEqual(200, result["coverage"]["available_minutes"])
+        self.assertEqual(["2026-10-25", "2026-10-26"], result["coverage"]["budget_dates"])
 
 
 if __name__ == "__main__":
