@@ -24,6 +24,7 @@ class ActivityConsumption:
     session: dict[str, Any]
     elapsed_seconds: int | None
     matched: bool
+    elapsed_includes_recording_delay: bool = False
 
 
 _ACTIVITY_FIELDS = (
@@ -170,7 +171,9 @@ def consume_activity(session: Mapping[str, Any], activity_id: str | None, record
         return ActivityConsumption(result, None, False)
     if state == "active":
         elapsed = elapsed_seconds(started_at, recorded_at)
+        elapsed_includes_recording_delay = True
     else:
         elapsed = pending_elapsed
+        elapsed_includes_recording_delay = False
     _clear_activity(result)
-    return ActivityConsumption(result, elapsed, True)
+    return ActivityConsumption(result, elapsed, True, elapsed_includes_recording_delay)
