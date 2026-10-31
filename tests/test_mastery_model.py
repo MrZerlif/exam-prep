@@ -34,11 +34,12 @@ def event(
     outcome="correct",
     error_tags=None,
     session_id="session-1",
+    recorded_at="2026-09-13T15:30:00+00:00",
 ):
     return {
         "schema_version": 1,
         "observation_id": observation_id,
-        "recorded_at": "2026-09-13T15:30:00+00:00",
+        "recorded_at": recorded_at,
         "session_id": session_id,
         "concept_id": "chain_rule",
         "task_id": observation_id,
@@ -82,6 +83,10 @@ class SpeedEvidenceTests(unittest.TestCase):
             events.append(event(observation_id=f"obs-transfer-{i}", task_type="transfer"))
         for i in range(8):
             events.append(event(observation_id=f"obs-recall-{i}", task_type="definition_recall"))
+        events.extend([
+            event(observation_id="obs-delayed-1", task_type="delayed_recall", recorded_at="2026-09-13T23:30:00+00:00", session_id="delayed-1"),
+            event(observation_id="obs-delayed-2", task_type="delayed_recall", recorded_at="2026-09-14T23:30:00+00:00", session_id="delayed-2"),
+        ])
         result = reduce_learning_state(COURSE, SYLLABUS, events, {})
         state = result["concepts"]["chain_rule"]
         self.assertIsNone(state["mastery"]["speed"])

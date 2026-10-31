@@ -44,6 +44,25 @@
     },
     "time_budget": {"type": "object"},
     "source_policy": {"type": "object"},
+    "readiness_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "target_score_fraction"],
+      "properties": {
+        "version": {"type": "integer", "enum": [1]},
+        "target_score_fraction": {"type": ["number", "null"], "exclusiveMinimum": 0, "maximum": 1}
+      }
+    },
+    "retention_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "first_check_after_hours", "subsequent_check_after_hours"],
+      "properties": {
+        "version": {"type": "integer", "enum": [1]},
+        "first_check_after_hours": {"type": "number", "exclusiveMinimum": 0},
+        "subsequent_check_after_hours": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
     "scheduler": {
       "type": "object",
       "additionalProperties": false,

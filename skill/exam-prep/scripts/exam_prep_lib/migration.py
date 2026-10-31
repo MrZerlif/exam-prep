@@ -274,6 +274,8 @@ def migrate_legacy_workspace(legacy_workspace: str | Path) -> MigrationResult:
     course.setdefault("exam", runtime_course["exam"])
     course.setdefault("time_budget", runtime_course["time_budget"])
     course.setdefault("source_policy", runtime_course["source_policy"])
+    course.setdefault("retention_policy", runtime_course["retention_policy"])
+    course.setdefault("readiness_policy", runtime_course["readiness_policy"])
     course.setdefault("scheduler", runtime_course["scheduler"])
     learner = dict(_read_json(source / "learner.json", {}))
     learner_defaults = default_learner(datetime.now(timezone.utc).isoformat())

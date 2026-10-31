@@ -99,6 +99,12 @@ _DEFAULT_COURSE = {
         ],
         "conflicts": "flag_for_user",
     },
+    "readiness_policy": {"version": 1, "target_score_fraction": None},
+    "retention_policy": {
+        "version": 1,
+        "first_check_after_hours": 8,
+        "subsequent_check_after_hours": 24,
+    },
     "scheduler": {
         "mode": "exam_cram",
         "max_review_interval_hours": 72,

@@ -2,23 +2,25 @@
 
 ## Start with the whole course
 
-At course start, ask the learner to rate all targets in one message, then
-submit `triage <path.json>` with
-`{"ratings": {"target-001": 0, "target-002": 1, "target-003": 2}}`:
-`0` do not know, `1` remember vaguely, or `2` know. Store these as
-`self_rating`; they are not evidence and do not change mastery. Use ratings
-only to order targets that have no evidence. Break ties by syllabus order,
-then respect prerequisites and source importance.
+Triage is optional. Invite self-ratings only when useful; accept a partial
+`triage <path.json>` object such as
+`{"ratings": {"target-001": 0, "target-003": 2}}`, or skip triage and start
+teaching. `0` means do not know, `1` remember vaguely, `2` know. Ratings are
+not evidence and do not change mastery. Use volunteered ratings only to order
+targets without evidence; omitted targets remain unknown. Break ties by syllabus
+order, then respect prerequisites and source importance.
 
 Run `plan` with the current budget and read its `coverage` block. It reports
-total targets, targets with evidence, targets without evidence, available
+`total_targets`, `targets_started`, `targets_without_evidence`, available
 minutes, minutes per target, required targets per hour, and `pace_at_risk`.
-At the start, after the first practice block, and whenever the budget changes,
-refresh the plan and show the learner total questions on the exam, completed
-questions, remaining coverage, available time, and required pace in questions
-per hour. Use the course's `available_minutes_by_day` when present; otherwise
-use the stated plan arguments. Name a pace risk as soon as `pace_at_risk` is
-true, then explain the highest-value budget-fitting choice.
+Started topics are not completed questions. `exam_question_count` is shown
+separately when configured. At the start, after the first practice block, and
+whenever the budget changes, refresh the plan and show total questions when
+configured, topics started, remaining topic coverage, available time, and
+required pace in targets per hour.
+Use the course's `available_minutes_by_day` when present; otherwise use the
+stated plan arguments. Name a pace risk as soon as `pace_at_risk` is true, then
+explain the highest-value budget-fitting choice.
 
 ## Prioritize useful work
 
@@ -59,6 +61,9 @@ and ask the learner to choose the method before calculating.
 `exam` is stateful and blueprint-driven. Use its `question_count`,
 `time_limit_minutes` or `per_question_minutes`, `delivery`,
 `follow_up_questions`, and `grading_criteria`. Give no unsolicited hints and
-minimal feedback until submission or stop. At the end, grade against the
-blueprint and report each ticket's attempt and result. Keep exam evidence and
-the post-mortem; do not replace them with study exposure.
+minimal feedback until submission or stop. Use `end-session` after submission;
+use `end-session --stopped` when the learner stops early, even if all items have
+answers. A stopped attempt is preserved for post-mortem but cannot qualify as a
+full mock. Grade against the blueprint and report each ticket's attempt and
+result. Keep exam evidence and the post-mortem; do not replace them with study
+exposure.

@@ -58,6 +58,41 @@ class SkillContractTests(unittest.TestCase):
         self.assertIn("observations.jsonl", text)
         self.assertIn("record-observation", text)
 
+    def test_exam_optimizer_has_optional_triage_and_separate_question_coverage(self):
+        optimizer = (SKILL_ROOT / "references" / "exam-optimizer.md").read_text(
+            encoding="utf-8"
+        ).casefold()
+        readme = (SKILL_ROOT / "README.md").read_text(encoding="utf-8").casefold()
+        pedagogy = (SKILL_ROOT / "references" / "pedagogy.md").read_text(
+            encoding="utf-8"
+        ).casefold()
+        self.assertIn("triage is optional", optimizer)
+        self.assertIn("accept a partial", optimizer)
+        self.assertIn("skip triage", optimizer)
+        self.assertIn("topics started", optimizer)
+        self.assertNotIn("show the learner total questions on the exam, completed", optimizer)
+        self.assertIn("end-session --stopped", optimizer)
+        self.assertIn("triage is optional", readme)
+        self.assertIn("topics started separately", readme)
+        self.assertNotIn("triage ratings for every target", readme)
+        self.assertNotIn("completed questions", readme)
+        for text in (readme, pedagogy):
+            self.assertNotIn("one failed attempt to start, show", text)
+            self.assertNotIn("request does not trigger this diagnostic exit", text)
+
+    def test_no_attempt_teaching_is_recorded_without_fabricating_success(self):
+        skill = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8").casefold()
+        readme = (SKILL_ROOT / "README.md").read_text(encoding="utf-8").casefold()
+        pedagogy = (SKILL_ROOT / "references" / "pedagogy.md").read_text(
+            encoding="utf-8"
+        ).casefold()
+        self.assertIn("record no-attempt teaching as `solution_seen`", skill)
+        self.assertIn("record target exposure", readme)
+        self.assertIn("`solution_seen`, never as success", readme)
+        self.assertIn("record that target exposure with `record-observation`", pedagogy)
+        self.assertIn("without inventing a response", pedagogy)
+        self.assertNotIn("require a check", pedagogy)
+
     def test_skill_links_operational_references(self):
         text = (SKILL_ROOT / "SKILL.md").read_text(encoding="utf-8")
         for reference in (

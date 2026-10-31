@@ -57,6 +57,7 @@ ENGINE_OWNED_OBSERVATION_FIELDS = frozenset(
         "elapsed_seconds",
         "elapsed_includes_recording_delay",
         "assessment_spec_hash",
+        "assessment_question_hash",
         "assessment_purpose",
         "assessment_integrity",
         "exam_revision",
@@ -216,6 +217,25 @@ class StudyStore:
         self.initialize()
         events, partial = self._read_complete_jsonl(self.observations_path, "observation")
         self._log_diagnostics["partial_final_line"] = partial
+        return events
+
+    def read_learning_observations(self) -> list[dict[str, Any]]:
+        """Resolve legacy content hashes in memory, leaving canonical bytes intact."""
+        events = self.read_complete_observations()
+        missing = [
+            event for event in events
+            if event.get("assessment_id") is not None
+            and event.get("assessment_question_hash") is None
+        ]
+        if missing:
+            frozen_by_id = {
+                item["assessment_id"]: FrozenAssessment.from_mapping(item)
+                for item in self.read_assessments() if "assessment_id" in item
+            }
+            for event in missing:
+                frozen = frozen_by_id.get(event["assessment_id"])
+                if frozen is not None:
+                    event["assessment_question_hash"] = frozen.question_hash
         return events
 
     def pending_activity_predates_event(
@@ -393,11 +413,20 @@ class StudyStore:
                 raise AssessmentConflict(
                     f"observation references unknown assessment_id {assessment_id!r}"
                 )
+            prior_events = self.read_learning_observations()
+            from .capabilities import CapabilityRegistry
+            from .reducer import is_theory_recall
+            syllabus_path = self.state_path / "syllabus.json"
+            syllabus = json.loads(syllabus_path.read_text(encoding="utf-8")) if syllabus_path.exists() else {}
             integrity_decision = assess_attempt_evidence(
                 proposal,
                 frozen,
-                prior_events=self.read_complete_observations(),
+                prior_events=prior_events,
                 session_phase=session_phase,
+                allow_content_recall=(
+                    frozen.purpose in {"practice", "retest"}
+                    and is_theory_recall(proposal, CapabilityRegistry.from_syllabus(syllabus))
+                ),
             )
         canonical = dict(proposal)
         canonical.update(
@@ -414,6 +443,7 @@ class StudyStore:
             )
         if integrity_decision is not None:
             canonical["assessment_spec_hash"] = frozen.spec_hash
+            canonical["assessment_question_hash"] = frozen.question_hash
             canonical["assessment_purpose"] = frozen.purpose
             canonical["assessment_integrity"] = integrity_decision.integrity
         elif canonical.get("schema_version") == 2:

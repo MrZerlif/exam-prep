@@ -30,7 +30,13 @@ from exam_prep_lib.diagnostics import (
     unlinked_exam_attempt_diagnostic,
     unlinked_exam_attempts,
 )
-from exam_prep_lib.reducer import MISTAKE_SUMMARIES, event_assistance_band, reduce_learning_state
+from exam_prep_lib.reducer import (
+    EVIDENCE_POLICY_REVISION,
+    MISTAKE_SUMMARIES,
+    effective_learning_events,
+    event_assistance_band,
+    reduce_learning_state,
+)
 from exam_prep_lib.migration import migrate_legacy_workspace
 from exam_prep_lib.curriculum import (
     CurriculumValidationError,
@@ -56,8 +62,8 @@ from exam_prep_lib.target_normalization import normalize_syllabus
 from exam_prep_lib.verifier_registry import VerifierRegistry, verify_request
 from exam_prep_lib.workspace_lock import WorkspaceBusy
 from exam_prep_lib.workspace import discover_git_root, resolve_workspace
-from exam_prep_lib.readiness import build_readiness
-from exam_prep_lib.planner import build_cheatsheet, forecast_plan, last_minute_review
+from exam_prep_lib.readiness import build_learner_exam_readiness, build_readiness, blueprint_hash, mock_blueprint_coverage
+from exam_prep_lib.planner import build_adaptive_guidance, build_cheatsheet, forecast_plan, last_minute_review
 from exam_prep_adapters.local_materials.material_index import (
     hydrate_sources,
     ingest_materials,
@@ -250,6 +256,8 @@ def _compact_status(result: dict) -> dict:
             entry = {
                 "availability": state.get("availability"),
                 "mastery_status": state.get("mastery_status"),
+                "progress": state.get("progress"),
+                "delayed_confirmations": state.get("delayed_confirmations"),
             }
             if state.get("recurring_mistakes"):
                 entry["recurring_mistakes"] = state["recurring_mistakes"]
@@ -629,7 +637,7 @@ def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
     """
     course = _read_json(store.state_path / "course.json", default_course())
     syllabus = _read_json(store.state_path / "syllabus.json", default_syllabus())
-    events = store.read_complete_observations()
+    events = store.read_learning_observations()
     current_id = events[-1]["observation_id"] if events else None
 
     recovered = store.try_recover()
@@ -675,7 +683,8 @@ def load_state(store: StudyStore) -> tuple[dict, dict, dict, dict, dict, dict]:
         else:
             canonical_inputs_changed = False
         needs_materialization = (
-            applied_line != len(events)
+            recovered.derived.get("evidence_policy_revision") != EVIDENCE_POLICY_REVISION
+            or applied_line != len(events)
             or applied_id != current_id
             or concept_ids != syllabus_ids
             or course_changed
@@ -729,7 +738,7 @@ def _persist_learning(
     learner: dict,
     session: dict,
 ) -> tuple[dict, dict, object]:
-    events = store.read_complete_observations()
+    events = store.read_learning_observations()
     revision = store.next_revision()
     concepts = reduce_learning_state(course, syllabus, events, _reduction_policy(course, revision))
     now = datetime.now(timezone.utc)
@@ -825,6 +834,7 @@ def _parser() -> argparse.ArgumentParser:
     validate_parser.add_argument("--include-next-hint", action="store_true")
     end_session_parser = sub.add_parser("end-session")
     end_session_parser.add_argument("--include-next-hint", action="store_true")
+    end_session_parser.add_argument("--stopped", action="store_true", help="mark an exam attempt as stopped before submission")
     migrate = sub.add_parser("migrate")
     migrate.add_argument("--from-math-study", required=True)
     ingest = sub.add_parser("ingest-source-evidence")
@@ -1440,7 +1450,7 @@ def main(
         return _result(status)
     if args.command == "status":
         session_history = store.read_session_summaries()
-        all_events = store.read_complete_observations()
+        all_events = store.read_learning_observations()
         source_language_counts: dict[str, int] = {}
         material_index_path = store.state_path / "material_index.json"
         if material_index_path.exists():
@@ -1481,6 +1491,21 @@ def main(
             "course_wide_calibration": summarize_evaluation(
                 all_events
             )["confidence_calibration"],
+            "exam_question_count": (course.get("exam") or {}).get("question_count"),
+            "topic_progress": {
+                "started": sum(bool(item.get("progress", {}).get("started")) for item in _derived_items(concepts).values()),
+                "independent_correct": sum(bool(item.get("progress", {}).get("independent_correct")) for item in _derived_items(concepts).values()),
+                "confirmed_after_break": sum(bool(item.get("progress", {}).get("confirmed_after_break")) for item in _derived_items(concepts).values()),
+                "exam_ready": sum(bool(item.get("progress", {}).get("exam_ready")) for item in _derived_items(concepts).values()),
+                "target_count": len(_derived_items(concepts)),
+            },
+            "learner_exam_readiness": build_learner_exam_readiness(
+                course,
+                syllabus,
+                concepts,
+                [item.get("learner_mock_attempt") for item in session_history if item.get("learner_mock_attempt")],
+                all_events,
+            ),
             "resume_point": _resume_point(syllabus, concepts, session),
         }
         if args.include_next_hint:
@@ -1497,8 +1522,26 @@ def main(
             args.minutes,
             self_ratings=learner.get("self_rating", {}),
         )
+        activity = _public_activity(syllabus, selected)
+        selected_target = activity.get("target_id", activity.get("concept_id"))
+        previous = next(
+            (
+                event for event in reversed(effective_learning_events(
+                    store.read_learning_observations(), course, syllabus,
+                ))
+                if event.get("target_id", event.get("concept_id")) == selected_target
+                and event.get("outcome") in {"correct", "partial", "incorrect", "solution_seen"}
+            ),
+            None,
+        )
+        metadata = normalize_syllabus(syllabus).targets.get(selected_target, {})
+        guidance = build_adaptive_guidance(
+            previous,
+            args.minutes,
+            float(metadata.get("estimated_learning_minutes", 30)),
+        )
         return _result(
-            {"budget_minutes": args.minutes, **_public_activity(syllabus, selected)}
+            {"budget_minutes": args.minutes, **activity, **guidance}
         )
 
     if args.command == "record-observation":
@@ -1613,8 +1656,11 @@ def main(
         if not isinstance(triage, dict) or set(triage) != {"ratings"}:
             raise ValueError("triage file must contain only a ratings object")
         raw_ratings = triage.get("ratings")
-        if not isinstance(raw_ratings, dict) or not raw_ratings:
-            raise ValueError("ratings must be a non-empty object")
+        if not isinstance(raw_ratings, dict):
+            raise ValueError("ratings must be an object")
+        if not raw_ratings:
+            current_ratings = learner.get("self_rating", {})
+            return _result({"status": "triage_skipped", "ratings": current_ratings if isinstance(current_ratings, dict) else {}})
         target_ids = normalize_syllabus(syllabus).targets
         ratings: dict[str, int] = {}
         for raw_target_id, rating in raw_ratings.items():
@@ -1740,6 +1786,9 @@ def main(
                 "time_budget_minutes": budget_minutes,
                 "pending_action": "submit or stop the mock exam for post-mortem",
                 "mock_assessment_ids": [ticket["assessment_id"] for ticket in tickets],
+                "mock_exam_revision": exam_blueprint.get("revision", 1),
+                "mock_exam_hash": blueprint_hash(exam_blueprint),
+                "mock_time_limit_minutes": exam_blueprint.get("time_limit_minutes"),
             }
         )
         # Anchors which of this session's observations belong to the mock, so
@@ -1759,6 +1808,7 @@ def main(
                 "follow_up_questions": bool(exam_blueprint.get("follow_up_questions", False)),
                 "grading_criteria": exam_blueprint.get("grading_criteria"),
                 "tickets": tickets,
+                "blueprint_coverage": mock_blueprint_coverage(exam_blueprint, tickets, syllabus),
                 "no_unsolicited_hints": True,
                 "minimal_feedback_until_submission": True,
                 "session_id": session.get("session_id"),
@@ -1787,7 +1837,7 @@ def main(
         return _result(result)
 
     if args.command == "rebuild":
-        events = store.read_complete_observations()
+        events = store.read_learning_observations()
         revision = store.next_revision() - 1
         rebuilt = reduce_learning_state(course, syllabus, events, _reduction_policy(course, revision))
         rebuilt_reviews = build_review_queue(
@@ -1811,7 +1861,9 @@ def main(
         active_id = session.get("session_id")
         if session.get("phase") in ("study", "exam") and active_id:
             session_events = [
-                event for event in store.read_complete_observations()
+                event for event in effective_learning_events(
+                    store.read_learning_observations(), course, syllabus,
+                )
                 if event.get("session_id") == active_id
             ]
             concept_ids = sorted(
@@ -1875,6 +1927,7 @@ def main(
                         {
                             "assessment_id": assessment_id,
                             "target_id": last.get("target_id") if last else None,
+                            "capability_id": last.get("capability_id") if last else None,
                             "attempted": last is not None,
                             "outcome": last.get("outcome") if last else None,
                             "assistance_band": (
@@ -1882,6 +1935,13 @@ def main(
                                 if last is not None
                                 else None
                             ),
+                            "attempt_count": len(matching),
+                            "assessment_integrity": last.get("assessment_integrity") if last else None,
+                            "assessment_spec_hash": last.get("assessment_spec_hash") if last else None,
+                            "assessment_question_hash": last.get("assessment_question_hash") if last else None,
+                            "assessment_result": last.get("assessment_result") if last else None,
+                            "exam_revision": last.get("exam_revision") if last else None,
+                            "exam_hash": last.get("exam_hash") if last else None,
                         }
                     )
                 correct_independent = sum(
@@ -1903,6 +1963,71 @@ def main(
                     "unlinked_attempts": unlinked_exam_attempts(
                         session, store.read_assessments(), session_events
                     ),
+                }
+                started_at = session.get("mock_started_at")
+                ended_at = _now()
+                try:
+                    start_time = datetime.fromisoformat(started_at.replace("Z", "+00:00")) if isinstance(started_at, str) else None
+                    end_time = datetime.fromisoformat(ended_at.replace("Z", "+00:00"))
+                except ValueError:
+                    start_time = end_time = None
+                elapsed_seconds = (end_time - start_time).total_seconds() if start_time and end_time and start_time.tzinfo and end_time.tzinfo else None
+                mock_limit = session.get("mock_time_limit_minutes")
+                all_attempted = bool(mock_assessment_ids) and all(question["attempted"] for question in questions)
+                all_independent_frozen = all(
+                    question["outcome"] in {"correct", "partial", "incorrect"}
+                    and question["assistance_band"] == "independent"
+                    and question.get("assessment_integrity") == "frozen_attempt"
+                    and question.get("attempt_count") == 1
+                    for question in questions
+                )
+                blueprint_matches = all(
+                    question.get("exam_revision") == session.get("mock_exam_revision")
+                    and question.get("exam_hash") == session.get("mock_exam_hash")
+                    for question in questions if question["attempted"]
+                )
+                timed = (
+                    isinstance(mock_limit, (int, float))
+                    and not isinstance(mock_limit, bool)
+                    and mock_limit > 0
+                    and elapsed_seconds is not None
+                    and 0 <= elapsed_seconds <= mock_limit * 60
+                )
+                scored = []
+                for question in questions:
+                    result = question.get("assessment_result")
+                    score = result.get("score") if isinstance(result, dict) else None
+                    maximum = result.get("max_score") if isinstance(result, dict) else None
+                    if (
+                        isinstance(score, (int, float)) and not isinstance(score, bool)
+                        and isinstance(maximum, (int, float)) and not isinstance(maximum, bool)
+                        and maximum > 0 and 0 <= score <= maximum
+                    ):
+                        scored.append((float(score), float(maximum)))
+                scoring_complete = len(scored) == len(mock_assessment_ids)
+                coverage = mock_blueprint_coverage(course.get("exam") or {}, questions, syllabus)
+                summary["learner_mock_attempt"] = {
+                    "session_id": active_id,
+                    "disposition": "stopped" if args.stopped else "submitted",
+                    "started_at": started_at,
+                    "ended_at": ended_at,
+                    "elapsed_seconds": elapsed_seconds,
+                    "time_limit_minutes": mock_limit,
+                    "blueprint_revision": session.get("mock_exam_revision"),
+                    "blueprint_hash": session.get("mock_exam_hash"),
+                    "assessment_ids": list(mock_assessment_ids),
+                    "assessment_hashes": [
+                        question["assessment_question_hash"]
+                        for question in questions if question.get("assessment_question_hash")
+                    ],
+                    "questions": questions,
+                    "score_fraction": (
+                        round(sum(score for score, _maximum in scored) / sum(maximum for _score, maximum in scored), 4)
+                        if scoring_complete and scored else None
+                    ),
+                    "scoring_complete": scoring_complete,
+                    "blueprint_coverage": coverage,
+                    "valid": bool(not args.stopped and all_attempted and all_independent_frozen and blueprint_matches and timed and scoring_complete and coverage["complete"]),
                 }
             summary["evaluation"] = summarize_evaluation(session_events)
             store.append_session_summary(summary)

@@ -46,8 +46,8 @@ def spec(assessment_id, prompt, purpose="mock"):
     }
 
 
-def observation(observation_id, assessment_id, outcome="correct"):
-    return {
+def observation(observation_id, assessment_id, outcome="correct", assessment_result=None):
+    result = {
         "schema_version": 2,
         "observation_id": observation_id,
         "target_id": "tickets-course",
@@ -61,6 +61,9 @@ def observation(observation_id, assessment_id, outcome="correct"):
         "source_refs": [],
         "assessment_id": assessment_id,
     }
+    if assessment_result is not None:
+        result["assessment_result"] = assessment_result
+    return result
 
 
 class MockExamBlueprintTests(unittest.TestCase):
@@ -164,6 +167,7 @@ class MockExamBlueprintTests(unittest.TestCase):
 
         result = self.cli("end-session")
         post_mortem = result["summary"]["post_mortem"]
+        self.assertFalse(result["summary"]["learner_mock_attempt"]["valid"])
         self.assertEqual(3, post_mortem["total_questions"])
         self.assertEqual(2, post_mortem["attempted"])
         self.assertEqual(1, post_mortem["correct_independent"])
@@ -177,6 +181,42 @@ class MockExamBlueprintTests(unittest.TestCase):
         self.assertEqual("incorrect", by_id["ticket-2"]["outcome"])
         self.assertFalse(by_id["ticket-3"]["attempted"])
         self.assertIsNone(by_id["ticket-3"]["outcome"])
+
+    def test_cli_records_full_timed_mock_as_rederived_attempt_evidence(self):
+        self.ready_with_ticket_pool(pool_size=3)
+        self.set_exam_blueprint(question_count=2, time_limit_minutes=30)
+        result = self.cli("exam")
+        for index, ticket in enumerate(result["tickets"]):
+            self.cli(
+                "record-observation",
+                str(self.write(f"mock-{index}.json", observation(f"mock-attempt-{index}", ticket["assessment_id"], assessment_result={"score": 1, "max_score": 1}))),
+            )
+        ended = self.cli("end-session")
+        attempt = ended["summary"]["learner_mock_attempt"]
+        self.assertTrue(attempt["valid"], attempt)
+        self.assertEqual(2, len(attempt["assessment_ids"]))
+        self.assertEqual(2, len(set(attempt["assessment_hashes"])))
+        status = self.cli("status")
+        self.assertEqual("unknown", status["learner_exam_readiness"]["status"])
+
+    def test_fully_answered_mock_stopped_by_learner_is_not_valid(self):
+        self.ready_with_ticket_pool(pool_size=3)
+        self.set_exam_blueprint(question_count=2, time_limit_minutes=30)
+        result = self.cli("exam")
+        for index, ticket in enumerate(result["tickets"]):
+            self.cli(
+                "record-observation",
+                str(self.write(f"stopped-{index}.json", observation(
+                    f"stopped-attempt-{index}", ticket["assessment_id"],
+                    assessment_result={"score": 1, "max_score": 1},
+                ))),
+            )
+        ended = self.cli("end-session", "--stopped")
+        attempt = ended["summary"]["learner_mock_attempt"]
+        self.assertEqual("stopped", attempt["disposition"])
+        self.assertFalse(attempt["valid"])
+        status = self.cli("status")
+        self.assertEqual("unknown", status["learner_exam_readiness"]["status"])
 
     def test_study_session_end_has_no_post_mortem(self):
         syllabus_path = self.write("syllabus.json", SYLLABUS)

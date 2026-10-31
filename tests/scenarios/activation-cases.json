@@ -17,6 +17,16 @@
       "should_activate": true
     },
     {
+      "id": "explicit_topic_study_for_exam",
+      "prompt": "Готовлюсь к экзамену по физике. Изучи со мной закон Ома: объясни тему простыми словами и проверь, понял ли я.",
+      "should_activate": true
+    },
+    {
+      "id": "generic_explanation_while_exam_prep_context_exists",
+      "prompt": "Я готовлюсь к экзамену по физике, но сейчас просто из любопытства объясни простыми словами, почему небо голубое.",
+      "should_activate": false
+    },
+    {
       "id": "limited_time_weak_prerequisites",
       "prompt": "До экзамена пять дней, база слабая, а сегодня есть только 20 минут. Что учить первым?",
       "should_activate": true

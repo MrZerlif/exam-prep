@@ -49,18 +49,18 @@ def _event_facets(
         return set()
     explicit = event.get("evidence_facets")
     if isinstance(explicit, list):
-        return {str(facet) for facet in explicit if str(facet) in FACETS}
+        # Retention is computed from a spaced, independent event series in
+        # reducer; a proposal cannot claim it directly.
+        return {str(facet) for facet in explicit if str(facet) in FACETS and str(facet) != "retained"}
 
     facets = {"demonstrated"}
     if capability is None:
         task_type = event.get("task_type")
         transfer_evidence = task_type in {"transfer", "exam_problem"}
-        retention_evidence = task_type == "delayed_recall"
     else:
         transfer_evidence = capability.demonstrates_transfer()
-        retention_evidence = capability.demonstrates_retention()
-    if retention_evidence:
-        facets.add("retained")
+    # A capability label (including delayed_recall) is not proof of elapsed
+    # time. reducer fills the retained facet only after validating chronology.
     if transfer_evidence:
         facets.add("transferred")
     return facets

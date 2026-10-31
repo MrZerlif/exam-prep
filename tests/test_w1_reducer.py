@@ -95,7 +95,7 @@ class ReadinessMaturityGateTests(unittest.TestCase):
 
     def test_retention_or_transfer_evidence_allows_exam_ready(self):
         events = [event(f"correct-{index}") for index in range(4)]
-        events.append(event("retained", task_type="delayed_recall"))
+        events.append(event("retained", task_type="delayed_recall", recorded_at="2026-10-25T18:00:00+00:00"))
         state = reduce_learning_state({}, self._mature_syllabus(), events, {})["targets"]["limits"]
 
         self.assertEqual("exam_ready", state["mastery_status"])

@@ -121,13 +121,36 @@ class SchedulerTests(unittest.TestCase):
         )
 
     def test_independent_delayed_recall_gets_longer_interval(self):
+        preparation = event("correct", session_id="prep", task_type="independent_problem")
+        preparation["recorded_at"] = (NOW - timedelta(hours=9)).isoformat()
+        preparation["task_id"] = "prep-task"
+        delayed = event("correct", session_id="later", task_type="delayed_recall")
+        delayed["task_id"] = "delayed-task"
         queue = build_review_queue(
-            [event("correct", task_type="delayed_recall")], {}, COURSE, NOW
+            [preparation, delayed], {}, COURSE, NOW
         )
-        self.assertGreaterEqual(queue["items"]["chain_rule"]["interval_hours"], 24)
+        self.assertIn("base 48h", queue["items"]["chain_rule"]["reason"])
         self.assertEqual(
             "delayed_recall", queue["items"]["chain_rule"]["review_kind"]
         )
+
+    def test_delayed_recall_label_too_soon_does_not_get_long_interval(self):
+        preparation = event("correct", session_id="prep", task_type="independent_problem")
+        preparation["recorded_at"] = (NOW - timedelta(hours=1)).isoformat()
+        preparation["task_id"] = "prep-task"
+        delayed = event("correct", session_id="later", task_type="delayed_recall")
+        delayed["task_id"] = "delayed-task"
+        queue = build_review_queue([preparation, delayed], {}, COURSE, NOW)
+        self.assertIn("base 24h", queue["items"]["chain_rule"]["reason"])
+
+    def test_guided_delayed_recall_label_does_not_get_long_interval(self):
+        preparation = event("correct", session_id="prep", task_type="independent_problem")
+        preparation["recorded_at"] = (NOW - timedelta(hours=9)).isoformat()
+        preparation["task_id"] = "prep-task"
+        guided = event("correct", session_id="later", task_type="delayed_recall", independent=False)
+        guided["task_id"] = "guided-task"
+        queue = build_review_queue([preparation, guided], {}, COURSE, NOW)
+        self.assertIn("base 12h", queue["items"]["chain_rule"]["reason"])
 
     def test_v2_capability_review_kind_overrides_generic_task_type(self):
         syllabus = {

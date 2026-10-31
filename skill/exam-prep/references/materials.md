@@ -28,6 +28,30 @@ After a break, choose a ready question from this bank and ask for reproduction
 without looking. Reading or reading aloud is exposure, not evidence of
 retention; record a later independent reproduction separately.
 
+For explicit topic study, offer course material when requested or useful, and
+choose for the learner's level, language, time, and access. Give verified
+language, level, duration, section/page, reason for fit, and access limits;
+mark unknowns honestly. Do not force an inaccessible or paid video or claim to
+have viewed it. If course materials are insufficient, offer a clearly labeled
+supplement. Never invent metadata. Preserve source precedence in
+`references/source-of-truth.md`.
+
+## Topic continuation note
+
+When a learner wants to continue an explanation later, keep a compact
+`study-progress.md` in their working folder with:
+
+~~~text
+target/topic → part explained → unresolved gap → next chosen step → evidence status
+~~~
+
+Use “not attempted” when no check occurred; otherwise note the actual check
+result and assistance given. Read this note alongside `status --compact` on
+return. It is tutor-managed continuity context, not learning evidence or CLI
+state: `status` does not read it. Do not hand-edit session/derived state, create
+a synthetic attempt, or claim a CLI resume point from this note. Record actual
+exposure or learner checks only through the existing observation workflow.
+
 Authority and provenance are independent. File names do not establish
 `official_exam_list` or `teacher_material`; use an explicit override or trusted
 manifest. Content labels are `[SOURCE]`, `[SUPPLEMENT]`, and `[GENERATED]`.

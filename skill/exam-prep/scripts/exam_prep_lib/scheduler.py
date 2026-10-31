@@ -8,8 +8,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from typing import Any, Iterable
 
 from .capabilities import AssessmentCapability, CapabilityRegistry
-from .evidence_maturity import FACETS
-from .reducer import DIMENSIONS, average_known_mastery, event_assistance_band
+from .evidence_maturity import FACETS, non_superseded_events
+from .reducer import (
+    DIMENSIONS, _derive_delayed_confirmations, average_known_mastery,
+    effective_learning_events, event_assistance_band, is_independent_success,
+)
 from .target_normalization import normalize_event, normalize_syllabus
 
 # Minimum interval floor so a review is never scheduled instantly/negatively
@@ -140,6 +143,20 @@ def _review_status(due_at: datetime, now: datetime, interval_hours: float) -> st
     return "overdue" if overdue_hours > grace else "due"
 
 
+def _recoverable_error_load(events: Iterable[dict[str, Any]], registry: CapabilityRegistry) -> float:
+    """Current error pressure, reduced by later independent clean work."""
+    load = 0.0
+    for event in non_superseded_events(events):
+        outcome = event.get("outcome")
+        if outcome == "incorrect":
+            load += 1.0
+        elif outcome == "partial":
+            load += 0.5
+        elif is_independent_success(event, registry):
+            load = max(0.0, load - 1.0)
+    return round(load, 4)
+
+
 def build_review_queue(
     events: list[dict[str, Any]],
     concepts: dict[str, Any],
@@ -150,8 +167,15 @@ def build_review_queue(
     normalized_syllabus = normalize_syllabus(syllabus or {})
     capability_registry = CapabilityRegistry.from_syllabus(syllabus or {})
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for raw_event in events:
+    unknown_targets: set[str] = set()
+    for raw_event in effective_learning_events(events, course, syllabus or {}):
         event = normalize_event(raw_event, normalized_syllabus)
+        if event.get("outcome") not in {"correct", "partial", "incorrect", "solution_seen"}:
+            continue
+        capability = capability_registry.resolve(event.get("capability_id") or event.get("task_type")).capability
+        if event.get("outcome") == "correct" and not capability.is_registered and _event_band(event) != "solution_seen":
+            unknown_targets.add(event.get("target_id", ""))
+            continue
         grouped.setdefault(event.get("target_id", event.get("concept_id", "")), []).append(event)
     cap = int(course.get("scheduler", {}).get("max_review_interval_hours", 72))
     parsed_exam_time = exam_time(course, now)
@@ -165,23 +189,34 @@ def build_review_queue(
         outcome = last.get("outcome")
         band = _event_band(last)
         review_kind = _event_review_kind(last, capability_registry)
+        confirmations = _derive_delayed_confirmations(
+            concept_events,
+            concept_id,
+            syllabus or {},
+            course,
+        )
+        is_confirmed_delayed_check = (
+            confirmations.get("valid_checks", 0) > 0
+            and confirmations.get("last_confirmed_at") == last.get("recorded_at")
+        )
         if outcome == "solution_seen" or band == "solution_seen":
             base_interval = 2
         elif outcome == "incorrect":
             base_interval = 4
         elif outcome == "partial":
             base_interval = 8
-        elif outcome == "correct" and review_kind == "delayed_recall":
+        elif outcome == "correct" and review_kind == "delayed_recall" and is_confirmed_delayed_check:
             base_interval = 48
-        elif outcome == "correct" and band == "independent":
+        elif is_independent_success(last, capability_registry):
             base_interval = 24
         else:
             base_interval = 12
 
         lapses = sum(item.get("outcome") in {"incorrect", "partial"} for item in concept_events)
+        error_load = _recoverable_error_load(concept_events, capability_registry)
         average_mastery = _average_mastery(concepts.get(concept_id, {}))
         mastery_factor = 0.5 + 0.5 * average_mastery
-        lapses_factor = max(0.4, 1.0 - 0.1 * lapses)
+        lapses_factor = max(0.4, 1.0 - 0.1 * error_load)
         importance = float(concept_metadata.get(concept_id, {}).get("importance", 0.5))
         importance_factor = min(1.15, max(0.85, 1.15 - 0.3 * importance))
         interval = base_interval * mastery_factor * lapses_factor * importance_factor
@@ -190,7 +225,7 @@ def build_review_queue(
         reason_parts = [
             f"base {base_interval}h for last outcome '{outcome}'",
             f"mastery {average_mastery:.2f}",
-            f"{lapses} lapse(s)",
+            f"recoverable error load {error_load:.1f}",
             f"importance {importance:.2f}",
         ]
 
@@ -210,12 +245,13 @@ def build_review_queue(
             "last_review_at": last_time.isoformat(),
             "interval_hours": round(interval, 4),
             "lapses": lapses,
+            "error_load": error_load,
             "last_outcome": outcome,
             "review_kind": review_kind,
             "review_status": _review_status(due_at, now, interval),
             "reason": ", ".join(reason_parts),
         }
-    for concept_id in concepts:
+    for concept_id in set(concepts) | (unknown_targets - {""}):
         items.setdefault(
             concept_id,
             {
@@ -223,8 +259,9 @@ def build_review_queue(
                 "last_review_at": None,
                 "interval_hours": 0,
                 "lapses": 0,
+                "error_load": 0,
                 "last_outcome": None,
-                "review_kind": "diagnostic",
+                "review_kind": "unmapped_assessment" if concept_id in unknown_targets else "diagnostic",
                 "review_status": "due",
                 "reason": "no prior evidence for this concept",
             },

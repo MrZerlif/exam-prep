@@ -67,8 +67,9 @@ class W2PlanningTests(unittest.TestCase):
         self.assertEqual(
             {
                 "total_targets": 2,
-                "targets_touched": 1,
+                "targets_started": 1,
                 "targets_without_evidence": 1,
+                "exam_question_count": None,
                 "available_minutes": 30,
                 "budget_dates": ["2026-10-26"],
                 "minutes_per_target": 15,

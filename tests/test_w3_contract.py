@@ -38,16 +38,29 @@ class W3ContractTests(unittest.TestCase):
         self.assertIn("one observation per block or target", pedagogy)
         self.assertIn("not per arithmetic step", pedagogy)
 
-    def test_diagnostic_exit_exposure_and_exam_gates_do_not_conflict(self):
+    def test_forgotten_steps_unfamiliar_topics_and_solution_requests_have_distinct_paths(self):
         pedagogy = _read("references/pedagogy.md")
-        self.assertIn("i do not remember", pedagogy)
-        self.assertIn("one failed start", pedagogy)
-        self.assertIn("immediately show the model answer in full", pedagogy)
+        self.assertIn("forgotten familiar step", pedagogy)
+        self.assertIn("smallest targeted hint", pedagogy)
+        self.assertIn("unfamiliar topic", pedagogy)
+        self.assertIn("separate worked example", pedagogy)
+        self.assertIn("offer a check or practice afterward", pedagogy)
+        self.assertIn("learner may skip it or stop", pedagogy)
+        self.assertIn('record that target exposure with `record-observation`', pedagogy)
+        self.assertIn('outcome: "solution_seen"', pedagogy)
+        self.assertIn("without inventing a response", pedagogy)
         self.assertIn("solution_seen", pedagogy)
-        self.assertIn("structurally different", pedagogy)
-        self.assertIn("after several minutes", pedagogy)
         self.assertIn("just show", pedagogy)
-        self.assertIn("diagnostic mode", pedagogy)
+        self.assertIn("does not require a diagnostic start", pedagogy)
+        self.assertIn("end-session --stopped", pedagogy)
+        for obsolete in (
+            "immediately show the model answer in full",
+            "only pre-attempt route to the solution",
+            "ask for a start or brief answer structure first",
+            "one failed start",
+            "preserve attempt-first outside the diagnostic exit",
+        ):
+            self.assertNotIn(obsolete, pedagogy)
         self.assertIn("exam mode", pedagogy)
         self.assertIn("no unsolicited hints", pedagogy)
         self.assertIn("does not raise mastery", pedagogy)
@@ -66,13 +79,16 @@ class W3ContractTests(unittest.TestCase):
         skill = _read("SKILL.md")
         optimizer = _read("references/exam-optimizer.md")
         self.assertIn("triage", skill)
-        self.assertIn("all targets in one message", optimizer)
+        self.assertIn("triage is optional", optimizer)
+        self.assertIn("accept a partial", optimizer)
+        self.assertIn("skip triage", optimizer)
         self.assertIn("plan", skill)
         self.assertIn("coverage", optimizer)
         self.assertIn("after the first practice block", optimizer)
         self.assertIn("whenever the budget changes", optimizer)
         self.assertIn("total questions", optimizer)
-        self.assertIn("completed", optimizer)
+        self.assertIn("topics started", optimizer)
+        self.assertNotIn("show the learner total questions on the exam, completed", optimizer)
         self.assertIn("required pace", optimizer)
         self.assertIn("ticket_slots", optimizer)
         self.assertIn("theory", optimizer)

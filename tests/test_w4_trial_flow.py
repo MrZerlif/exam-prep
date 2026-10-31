@@ -124,8 +124,9 @@ class TrialFlowTests(unittest.TestCase):
         self.assertEqual(
             {
                 "total_targets": 5,
-                "targets_touched": 0,
+                "targets_started": 0,
                 "targets_without_evidence": 5,
+                "exam_question_count": None,
                 "available_minutes": 40,
                 "budget_dates": [datetime.now(timezone.utc).date().isoformat()],
                 "minutes_per_target": 8,

@@ -156,7 +156,7 @@ class ProvenanceAndMaturityTests(unittest.TestCase):
             {},
         )
         maturity = result["targets"]["history:dates"]["evidence_maturity"]
-        self.assertEqual(1, maturity["retained"]["count"])
+        self.assertEqual(0, maturity["retained"]["count"])
         self.assertEqual(0, maturity["transferred"]["count"])
 
 

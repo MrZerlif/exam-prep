@@ -6,6 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Iterable, Mapping
 
 from .provenance import provenance_label
+from .reducer import event_assistance_band
 from .scheduler import _configured_timezone, compute_priority, select_next_activity
 from .target_normalization import normalize_syllabus
 
@@ -134,8 +135,13 @@ def forecast_plan(
     )
     coverage = {
         "total_targets": total_targets,
-        "targets_touched": touched,
+        "targets_started": touched,
         "targets_without_evidence": total_targets - touched,
+        "exam_question_count": (
+            (course.get("exam") or {}).get("question_count")
+            if isinstance(course.get("exam"), Mapping)
+            else None
+        ),
         "available_minutes": available_minutes,
         "budget_dates": budget_dates,
         "minutes_per_target": (
@@ -228,3 +234,51 @@ def _available_minutes(
         len(fallback_dates) * minutes_per_day,
         [day.isoformat() for day in fallback_dates],
     )
+
+
+def build_adaptive_guidance(
+    latest_event: Mapping[str, Any] | None,
+    budget_minutes: int,
+    estimated_target_minutes: float,
+) -> dict[str, Any]:
+    """Translate recent evidence into the next learner-facing transition."""
+    event = latest_event or {}
+    outcome = event.get("outcome")
+    if (
+        outcome == "solution_seen"
+        or event.get("solution_exposed")
+        or event.get("assessment_integrity") == "explicit_exposure"
+        or (event.get("assistance") or {}).get("full_solution_viewed")
+    ):
+        return {
+            "transition": "independent_after_exposure",
+            "next_step": "close the solution and reconstruct it on a separate task",
+            "recommended_block_size": 1,
+        }
+    if outcome in {"incorrect", "partial"}:
+        return {
+            "transition": "repair_first_error",
+            "next_step": "identify the first invalid step, then try one targeted item",
+            "recommended_block_size": 1,
+        }
+    if outcome == "correct" and event_assistance_band(dict(event)) != "independent":
+        return {
+            "transition": "parallel_without_hint",
+            "next_step": "try one structurally similar item without a hint",
+            "recommended_block_size": 1,
+        }
+    if outcome == "correct":
+        return {
+            "transition": "method_or_transfer",
+            "next_step": "choose the method or solve one meaningful variation",
+            "recommended_block_size": 1,
+        }
+    if budget_minutes < 15 or estimated_target_minutes > budget_minutes:
+        size = 1
+    else:
+        size = max(3, min(8, budget_minutes // 5))
+    return {
+        "transition": "brief_explanation_plus_example",
+        "next_step": "explain one idea, show a separate example, then let the learner try",
+        "recommended_block_size": size,
+    }

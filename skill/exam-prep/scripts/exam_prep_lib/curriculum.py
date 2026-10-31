@@ -546,7 +546,7 @@ def apply_curriculum_proposal(
         if not (store.state_path / "course.json").exists():
             store._write_json(store.state_path / "course.json", course)
         revision = store.next_revision()
-        events = store.read_complete_observations()
+        events = store.read_learning_observations()
         derived = reduce_learning_state(
             course, syllabus, events, {"revision": revision}
         )

@@ -27,29 +27,72 @@ step. Use `record-batch <path.jsonl> --compact` when several results are ready;
 use `record-observation <path> --compact` for one result. Start activity timers
 only when elapsed time matters.
 
-## Diagnostic exit and model answers
+## Optional “Изучить тему”
 
-Outside exam mode, make one brief attempt to find the learner's starting point.
-If they say “I do not remember” or make one failed start, stop diagnosis and
-immediately show the model answer in full. Diagnostic mode ends on either
-signal. Give the exact wording from the textbook or authoritative course
-source, its hypotheses and conditions, and a short example when useful. Record the
-exposure as `solution_seen` at H5 without asking the learner to choose a mode.
-After several minutes, give a structurally different task for independent
-recall. The model, reading, and exposure never count as mastery.
+Activate only when the learner explicitly asks to study a topic from their
+exam course. No diagnostic attempt is required first:
 
-This is the only route to a full solution before learner production. A request
-to “just show” does not end diagnosis: ask for a start or the brief answer
-structure first. After an attempt, an explicit request may select teaching exposure
-or cram exposure. Teaching exposure uses one worked example; cram exposure is
-rapid review. State the retrieval trade-off, record each solution as
-`solution_seen`, and offer blind reconstruction if time remains. Neither
-exposure mode overrides exam mode.
+1. Explain one idea accessibly with one simple teaching example before any
+   attempt. Use a separate example by default; this does not reveal the current
+   assessment answer. If that answer is explicitly requested or shown outside
+   a mock, follow existing release/exposure rules.
+2. When requested or useful, offer matching course material first. State
+   verified language, level, duration, section/page, why it fits, and access
+   limits; label unknowns as unknown. Prefer a usable suitable source to paid or
+   inaccessible media. If course material is insufficient, offer a clearly
+   labeled supplement. Preserve source precedence in
+   `references/source-of-truth.md`.
+3. Offer a brief teach-back or application as an optional check. Respect “no
+   check” and stop requests. If substantive teaching ends with no learner
+   attempt, record that target exposure with `record-observation`,
+   `outcome: "solution_seen"`, and the assistance actually given. This records
+   the teaching time without inventing a response; it resets delayed retention
+   and cannot count as independent success. A demonstrated response may support
+   its conceptual dimension with actual assistance recorded; it does not prove
+   retention or full mastery. Claimed understanding alone is not evidence.
+4. Repair only a gap the response demonstrates, by explaining its prerequisite
+   or presenting the idea differently; offer another optional check. Then let
+   the learner choose practice, review, the next part, or stop.
+
+In an active mock exam, do not teach or hint. If the learner explicitly asks
+to stop, run `end-session --stopped`, preserve the post-mortem, and then offer
+topic study; do not imply the ended mock can resume as a clean uninterrupted attempt.
+If they ask only for an explanation, offer to stop or submit first.
+
+For no-attempt continuity, use the compact `study-progress.md` contract in
+`references/materials.md`; it is a note, not CLI state or evidence.
+
+Example: “The derivative is the instantaneous rate of change; for position,
+its value gives velocity at that instant. Want to explain that in your own
+words, try one short application, review this part, continue to the next part,
+or stop here?”
+
+## Match help to the learner's request
+
+Outside a mock, distinguish a forgotten familiar step from an unfamiliar
+topic. For a forgotten step, give the smallest targeted hint and ask for that
+step. For an unfamiliar topic, explain one idea and show a separate worked
+example. Offer a check or practice afterward; the learner may skip it or stop.
+
+An explicit full-solution request before an attempt is allowed outside a mock;
+“just show” is an explicit request and does not require a diagnostic start.
+Record what was actually shown as `solution_seen` at H5. The solution and its
+exposure do not count as independent evidence or mastery. Offer a later
+independent task, including a structurally different task for transfer, but do
+not require one now or backdate it. Respect requests to stop or study without a
+check. For a topic-study request, follow the optional recipe above.
+
+After an attempt, an explicit request may select teaching exposure (one worked
+example) or cram exposure (rapid review). State the retrieval trade-off, record
+each solution as `solution_seen`, and offer blind reconstruction if time
+remains. Neither mode overrides exam mode.
 
 ## Pressure safeguards
 
-Frustration, claimed understanding, and time pressure do not permit a premature answer by themselves. The Python engine cannot prevent conversational leakage;
-follow this tutor policy and preserve attempt-first outside the diagnostic exit.
+Frustration, claimed understanding, or time pressure alone do not request an
+answer. Outside a mock, honor the learner's explicit request for a full solution
+and record the exposure. The Python engine cannot prevent conversational
+leakage; keep the exam attempt-first through submission or an explicit stop.
 
 ## Tracks by question model
 
@@ -63,13 +106,13 @@ ticket → brief answer structure → model answer or comparison
        → declared follow-up questions → delayed recall
 ~~~
 
-Ask for the theorem or definition, its hypotheses and conclusion, and the
-shape of the argument in one or two sentences. If the learner says they do not
-remember or cannot begin once, use the diagnostic exit above and continue with
-the model answer. Keep the later reproduction as a separate closed-book task.
-The exam itself is unprompted reproduction; do not force a practice-problem
-stage onto a theory-only ticket. Apply ticket settings from
-`course.exam.ticket_slots` when the exam also includes problems.
+Invite a closed-book start on the theorem or definition, its hypotheses and
+conclusion, and the shape of the argument. For a forgotten step, give a small
+targeted hint. For an unfamiliar idea, explain and show an example. Honor an
+explicit full-solution request outside a mock and record it as exposure. A
+teach-back or later reproduction is optional; the exam itself is unprompted
+reproduction, so do not force a practice-problem stage onto a theory-only
+ticket. Apply `course.exam.ticket_slots` when the exam also includes problems.
 
 ### `problem_set`, `mixed`, `open`, or unset
 
@@ -77,11 +120,11 @@ stage onto a theory-only ticket. Apply ticket settings from
 intuition → worked → faded → guided → independent → transfer → exam → delayed recall
 ~~~
 
-Use only the smallest useful diagnostic start, then move into the model-answer
-rule above when the learner cannot begin. A fast correct independent answer
-can skip stages. A solved example always leads to learner production. For a
-ticket with theory and problem slots, use `ticket_list` for theory and this
-problem ladder for the task.
+Adapt the block to the learner's response: repair an error, give a minimal hint
+for a forgotten step, or explain an unfamiliar topic with a worked example. A
+fast correct independent answer can skip stages. Offer learner practice after
+an example, but respect a skip or stop. For a ticket with theory and problem
+slots, use `ticket_list` for theory and this problem ladder for the task.
 
 ## Voice, photos, and diagnosis
 

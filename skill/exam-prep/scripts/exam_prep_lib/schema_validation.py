@@ -112,6 +112,10 @@ def validate_document(
             raise SchemaError(path, f"value is below minimum {schema['minimum']}")
         if "maximum" in schema and document > schema["maximum"]:
             raise SchemaError(path, f"value is above maximum {schema['maximum']}")
+        if "exclusiveMinimum" in schema and document <= schema["exclusiveMinimum"]:
+            raise SchemaError(path, f"value must be above {schema['exclusiveMinimum']}")
+        if "exclusiveMaximum" in schema and document >= schema["exclusiveMaximum"]:
+            raise SchemaError(path, f"value must be below {schema['exclusiveMaximum']}")
 
     if isinstance(document, dict):
         required = schema.get("required", [])

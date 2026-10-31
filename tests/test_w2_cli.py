@@ -339,8 +339,9 @@ class W2CliTests(unittest.TestCase):
         self.assertEqual(
             {
                 "total_targets": 3,
-                "targets_touched": 1,
+                "targets_started": 1,
                 "targets_without_evidence": 2,
+                "exam_question_count": None,
                 "available_minutes": 120,
                 "budget_dates": [today.isoformat(), (today + timedelta(days=1)).isoformat()],
                 "minutes_per_target": 40,

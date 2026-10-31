@@ -70,6 +70,7 @@ def assess_attempt_evidence(
     *,
     prior_events: Iterable[dict[str, Any]],
     session_phase: str = "study",
+    allow_content_recall: bool = False,
 ) -> AttemptEvidenceDecision:
     if event.get("assessment_id") != assessment.assessment_id:
         raise AssessmentIntegrityError("event assessment_id does not match frozen assessment")
@@ -116,6 +117,12 @@ def assess_attempt_evidence(
         if prior.get("assessment_id") == assessment.assessment_id
         and prior.get("observation_id") not in superseded_ids
     ]
+    content_exposures = [
+        prior for prior in prior_records
+        if prior.get("observation_id") not in superseded_ids
+        and prior.get("assessment_question_hash") == assessment.question_hash
+        and exposes_solution(prior)
+    ]
     attempted_before = any(is_attempt(prior) for prior in previous)
     exposes = exposes_solution(event)
     explicit_reason = event.get("explicit_exposure_reason")
@@ -138,7 +145,10 @@ def assess_attempt_evidence(
             diagnostic="unclear_outcome_not_scored",
             integrity="frozen_attempt",
         )
-    if is_attempt(event) and any(exposes_solution(prior) for prior in previous):
+    if is_attempt(event) and (
+        any(exposes_solution(prior) for prior in previous)
+        or (content_exposures and not allow_content_recall)
+    ):
         # Re-answering a question whose solution was already shown is
         # reproduction, not independent retrieval; the independent follow-up
         # has to be a structurally different assessment.

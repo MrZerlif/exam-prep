@@ -68,11 +68,15 @@ The standalone tools `migrate`, `draft-assessments`, and
 - `start` - open the active session, or resume the one already open.
 - `status` - snapshot: course, session, targets, review queue, recurring
   mistakes, pending action, capability/blueprint diagnostics, and resume point.
+  It reports topics started, independent correct work, current delayed
+  confirmation, and exam-ready topics separately from `exam_question_count`.
+  `learner_exam_readiness` is independent of workspace/material readiness.
   Configured `course.exam.ticket_slots` are included in the course details.
   It does not return the syllabus document or full target titles; use `roadmap`
   when full target metadata is needed.
-  `--compact` trims each target to availability/mastery_status/
-  recurring_mistakes, review_queue to due items only, and drops empty
+  `--compact` keeps availability, mastery status, current progress predicates,
+  delayed-confirmation details, and recurring mistakes; it trims review_queue
+  to due items only and drops empty
   diagnostics - use it once you already know what you're looking for and
   just need the next-action inputs, not a full diagnostic dump (default
   output is unchanged).
@@ -115,8 +119,9 @@ The standalone tools `migrate`, `draft-assessments`, and
   assessment is a `post_exposure_attempt`.
 - `cheatsheet`, `last-minute-review`, and `plan` - deterministic derived
   review artifacts; `plan --days N --minutes-per-day M` is a forecast and
-  never changes the exam date. Its `coverage` block reports total targets,
-  targets with/without evidence, available minutes, minutes per target,
+  never changes the exam date. Its `coverage` block reports total topics,
+  topics started/without evidence, exam question count separately, available
+  minutes, minutes per target,
   required targets per hour, and whether the current pace is at risk. The
   risk flag compares the sum of target learning-time estimates with the
   available budget. When
@@ -131,7 +136,9 @@ The standalone tools `migrate`, `draft-assessments`, and
 - State-changing and overview commands accept opt-in `--include-next-hint`;
   no hint is emitted without the flag.
 - `next --minutes N` - pick one budget-fitting activity; `N` must be a
-  positive integer.
+  positive integer. The result includes an adaptive transition and block size
+  (repair one item after a failure, a no-hint parallel after a hinted success,
+  and a method or transfer task after an independent success).
 - `roadmap` - full target list with mastery, review, and availability.
 - `review-due` - concepts with a due or overdue review.
 - `mistakes` - recurring, unresolved error patterns.
@@ -153,12 +160,26 @@ The standalone tools `migrate`, `draft-assessments`, and
   by an earlier successful line in this batch); the old event remains in the
   log but is ignored when deriving learning and evaluation state. Unknown IDs
   are rejected for that line.
-- `triage <path.json>` - store learner self-ratings from
-  `{"ratings":{"<target_id>":0|1|2}}` in `learner.self_rating`. Ratings are
+- `triage <path.json>` - optionally store partial learner self-ratings from
+  `{"ratings":{"<target_id>":0|1|2}}` in `learner.self_rating`. An empty ratings
+  object explicitly skips triage; omitted targets remain unknown. Ratings are
   not evidence and do not change mastery. The scheduler uses them to order
   ties between targets that have no evidence, with `0` ahead of `2`.
-- `end-session` - close the session; produces a summary, and a
+- Course policy: `course.retention_policy` is versioned and defaults to an
+  independent check at least 8 hours after prior substantive work, then a
+  second check at least 24 hours after the preceding substantive work.
+  `course.readiness_policy.target_score_fraction` is unset by default; learner
+  exam readiness stays unknown until a score target and exam time limit are
+  configured. Each mock question must have a numeric `assessment_result.score`
+  and `max_score`; the attempt score is the weighted sum of points over maximum
+  points. Missing scores do not confirm readiness.
+- `end-session` - close after mock submission; produces a summary and a
   per-question post-mortem when the session was an `exam`.
+- `end-session --stopped` - record that the learner stopped a mock before
+  submission; preserve its post-mortem, but mark it ineligible as a full mock.
+- Mock results include `blueprint_coverage`: required/delivered question counts
+  and theory/problem slots. A short bank can provide practice, but answering
+  all delivered items does not make an incomplete exam a full mock.
 - `rebuild` - recompute derived state from the canonical observation log.
 - `verify <path>` - derivative/antiderivative answer check
   (`references/verification.md`); unsupported kinds return `unavailable`.
@@ -258,6 +279,7 @@ is rejected with `engine-owned field is not accepted from LLM`: `recorded_at`,
 `session_id`, `timestamp`, `expected_seconds`, `elapsed_seconds`,
 `elapsed_includes_recording_delay`,
 `assessment_integrity`, `assessment_spec_hash`,
+`assessment_question_hash`,
 `canonical_assessment_hash`, `derived_evidence_maturity`, `independence`,
 `exposure_classification`, `verifier_result`. The engine owns the clock,
 session binding, timing, and independence/exposure classification; it derives

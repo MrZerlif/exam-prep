@@ -62,6 +62,12 @@ class MigrationTests(unittest.TestCase):
             result = migrate_legacy_workspace(root)
             self.assertTrue(result.migrated)
             self.assertEqual("legacy:math-study:limits", result.id_map["limits"])
+            migrated_course = json.loads(
+                (root / ".exam-prep" / "course.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(8, migrated_course["retention_policy"]["first_check_after_hours"])
+            self.assertEqual(24, migrated_course["retention_policy"]["subsequent_check_after_hours"])
+            self.assertIsNone(migrated_course["readiness_policy"]["target_score_fraction"])
             migrated_syllabus = json.loads(
                 (root / ".exam-prep" / "syllabus.json").read_text(encoding="utf-8")
             )

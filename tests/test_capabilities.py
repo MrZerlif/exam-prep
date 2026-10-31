@@ -182,7 +182,10 @@ class CapabilityRegistryTests(unittest.TestCase):
         self.assertEqual(12, state["evidence"]["transfer_successes"])
         self.assertEqual(12, state["evidence_maturity"]["transferred"]["count"])
         self.assertGreater(state["mastery"]["transfer"], 0.85)
-        self.assertEqual("mastered", state["mastery_status"])
+        # Strong transfer evidence is insufficient for mastery without two
+        # independently timed delayed checks.
+        self.assertEqual("exam_ready", state["mastery_status"])
+        self.assertEqual(0, state["evidence_maturity"]["retained"]["count"])
 
     def test_exposed_custom_transfer_cannot_count_as_transfer_success(self):
         syllabus = {
@@ -359,11 +362,11 @@ class CapabilityRegistryTests(unittest.TestCase):
         state = result["targets"]["ticket-3"]
         self.assertEqual(0, state["evidence"]["transfer_successes"])
         self.assertEqual(0.0, state["mastery"]["transfer"])
-        # Recall credit and retention signalling must survive the fix -
-        # only the transfer over-credit is being removed.
+        # Recall credit survives; missing timestamps cannot fabricate
+        # retained evidence.
         self.assertEqual(20, state["evidence"]["delayed_recall_successes"])
         self.assertGreater(state["mastery"]["recall"], 0.8)
-        self.assertEqual(20, state["evidence_maturity"]["retained"]["count"])
+        self.assertEqual(0, state["evidence_maturity"]["retained"]["count"])
         # Task 3 verification finding: the assertions above check
         # evidence.transfer_successes and mastery.transfer, but
         # evidence_maturity.transferred is a third, independent pathway
@@ -400,7 +403,7 @@ class CapabilityRegistryTests(unittest.TestCase):
         state = result["targets"]["ticket-4"]
         self.assertEqual(12, state["evidence"]["transfer_successes"])
         self.assertGreater(state["mastery"]["transfer"], 0.5)
-        self.assertEqual(12, state["evidence_maturity"]["retained"]["count"])
+        self.assertEqual(0, state["evidence_maturity"]["retained"]["count"])
         self.assertEqual(12, state["evidence_maturity"]["transferred"]["count"])
 
     def test_task_dimensions_and_default_capability_registry_agree(self):

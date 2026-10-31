@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from datetime import datetime, timezone
 from typing import Any
 
 from .capabilities import CapabilityRegistry, MASTERY_DIMENSIONS
@@ -15,6 +16,8 @@ from .evidence_maturity import (
 from .target_normalization import normalize_event, normalize_syllabus
 
 DIMENSIONS = MASTERY_DIMENSIONS
+# Derived snapshots must be rebuilt when admissibility rules change.
+EVIDENCE_POLICY_REVISION = 2
 # Every dimension except speed always starts at a known 0.0 (every scored task
 # updates at least one of conceptual/procedural/recall/transfer). speed is the
 # odd one out: only a minority of task types touch it, and only when the CLI
@@ -125,6 +128,30 @@ def event_assistance_band(event: dict[str, Any]) -> str:
     return band
 
 
+def is_independent_success(event: dict[str, Any], registry: CapabilityRegistry) -> bool:
+    """The same admissible success predicate for mastery and review recovery."""
+    capability = registry.resolve(event.get("capability_id") or event.get("task_type")).capability
+    integrity = event.get("assessment_integrity")
+    return bool(
+        event.get("outcome") == "correct"
+        and capability.is_registered
+        and event_assistance_band(event) == "independent"
+        and integrity in {None, "not_assessment", "frozen_attempt"}
+        and (event.get("assessment_id") is None or integrity == "frozen_attempt")
+    )
+
+
+def is_theory_recall(event: dict[str, Any], registry: CapabilityRegistry) -> bool:
+    """Recall may repeat its content even when the course exam contains problems."""
+    capability = registry.resolve(event.get("capability_id") or event.get("task_type")).capability
+    return bool(
+        capability.is_registered
+        and capability.review_kind in {"definition_recall", "delayed_recall"}
+        and not capability.supports_dimension("procedural")
+        and not capability.demonstrates_transfer()
+    )
+
+
 def average_known_mastery(mastery: dict[str, Any]) -> float:
     """Average mastery over dimensions with actual evidence, excluding any
     dimension (currently only speed) that is still None/unknown."""
@@ -152,6 +179,12 @@ def _empty_concept() -> dict[str, Any]:
         },
         "evidence_maturity": empty_evidence_maturity(),
         "mastery_status": "unseen",
+        "delayed_confirmations": {
+            "valid_checks": 0,
+            "first_confirmed_at": None,
+            "latest_substantive_at": None,
+            "status": "not_confirmed",
+        },
         "availability": "available",
         "last_tested": None,
         "recurring_mistakes": [],
@@ -170,6 +203,7 @@ def _mastery_status(
     state: dict[str, Any],
     required_dimensions: tuple[str, ...] | None = None,
     requires_transfer: bool = True,
+    valid_delayed_checks: int = 0,
 ) -> tuple[str, list[str]]:
     evidence = state["evidence"]
     if not any(evidence.values()):
@@ -187,6 +221,7 @@ def _mastery_status(
     if (
         average >= 0.85
         and evidence["independent_successes"] >= 3
+        and valid_delayed_checks >= 2
         and (not requires_transfer or evidence["transfer_successes"] >= 2)
     ):
         candidate = "mastered"
@@ -205,11 +240,249 @@ def _mastery_status(
 
     maturity = state["evidence_maturity"]
     has_retention_or_transfer = (
-        maturity["retained"]["count"] > 0 or maturity["transferred"]["count"] > 0
+        valid_delayed_checks > 0 or maturity["transferred"]["count"] > 0
     )
     if candidate in {"practicing", "exam_ready", "mastered"} and not has_retention_or_transfer:
         return "learning", ["retained_or_transferred"]
     return candidate, []
+
+
+def _aware_timestamp(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        return None
+    return parsed.astimezone(timezone.utc)
+
+
+def _retention_policy(course: dict[str, Any]) -> tuple[float, float]:
+    raw = course.get("retention_policy")
+    if raw is None:
+        return 8.0, 24.0
+    if not isinstance(raw, dict) or raw.get("version") != 1:
+        raise ValueError("retention_policy must use supported version 1")
+    first = raw.get("first_check_after_hours")
+    next_check = raw.get("subsequent_check_after_hours")
+    if any(isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0 for value in (first, next_check)):
+        raise ValueError("retention_policy delays must be positive numbers")
+    return float(first), float(next_check)
+
+
+def _is_exposure(event: dict[str, Any]) -> bool:
+    assistance = event.get("assistance") or {}
+    return bool(
+        event.get("outcome") == "solution_seen"
+        or event.get("solution_exposed")
+        or event.get("assessment_integrity") in {"explicit_exposure", "post_exposure_attempt"}
+        or assistance.get("full_solution_viewed")
+    )
+
+
+def effective_learning_events(
+    events: list[dict[str, Any]], course: dict[str, Any], syllabus: dict[str, Any],
+) -> list[dict[str, Any]]:
+    """Reapply content exposure to active history without rewriting the journal."""
+    registry = CapabilityRegistry.from_syllabus(syllabus)
+    exposed_ids: set[str] = set()
+    exposed_hashes: set[str] = set()
+    effective = []
+    for raw in non_superseded_events(events):
+        event = dict(raw)
+        assessment_id = event.get("assessment_id")
+        question_hash = event.get("assessment_question_hash")
+        repeats_id = assessment_id is not None and assessment_id in exposed_ids
+        repeats_content = question_hash is not None and question_hash in exposed_hashes
+        if (
+            event.get("outcome") in {"correct", "partial", "incorrect"}
+            and (
+                repeats_id
+                or (repeats_content and (
+                    not is_theory_recall(event, registry)
+                    or event.get("assessment_purpose") in {"mock", "held_out"}
+                ))
+            )
+            and event_assistance_band(event) != "solution_seen"
+        ):
+            event["assessment_integrity"] = "post_exposure_attempt"
+        if _is_exposure(event) or event_assistance_band(event) == "solution_seen":
+            if assessment_id is not None:
+                exposed_ids.add(assessment_id)
+            if question_hash is not None:
+                exposed_hashes.add(question_hash)
+        effective.append(event)
+    return effective
+
+
+def _derive_delayed_confirmations(
+    events: list[dict[str, Any]],
+    target_id: str,
+    syllabus: dict[str, Any],
+    course: dict[str, Any],
+) -> dict[str, Any]:
+    """Count only independent retention checks separated from real prior work."""
+    normalized_syllabus = normalize_syllabus(syllabus)
+    registry = CapabilityRegistry.from_syllabus(syllabus)
+    first_hours, next_hours = _retention_policy(course)
+    checks = 0
+    first_at: str | None = None
+    last_confirmed_at: str | None = None
+    first_delay_hours: float | None = None
+    last_delay_hours: float | None = None
+    previous_time: datetime | None = None
+    high_water_time: datetime | None = None
+    previous_check_task: str | None = None
+    previous_check_assessment: str | None = None
+    previous_check_hash: str | None = None
+    seen_problem_hashes: set[str] = set()
+    seen_problem_tasks: set[str] = set()
+    last_substantive_at: str | None = None
+    status = "not_confirmed"
+
+    for raw_event in effective_learning_events(events, course, syllabus):
+        event = normalize_event(raw_event, normalized_syllabus)
+        if event.get("target_id") != target_id:
+            continue
+        outcome = event.get("outcome")
+        if outcome not in {"correct", "partial", "incorrect", "solution_seen"}:
+            continue
+
+        assessment_hash = event.get("assessment_question_hash") or (event.get("assessment") or {}).get("question_hash")
+        task_id = event.get("task_id")
+        theory_ticket = is_theory_recall(event, registry)
+        previously_seen_problem = not theory_ticket and (
+            (assessment_hash is not None and assessment_hash in seen_problem_hashes)
+            or (task_id is not None and task_id in seen_problem_tasks)
+        )
+        if not theory_ticket:
+            if assessment_hash is not None:
+                seen_problem_hashes.add(assessment_hash)
+            if task_id is not None:
+                seen_problem_tasks.add(task_id)
+
+        current_time = _aware_timestamp(event.get("recorded_at"))
+        last_substantive_at = event.get("recorded_at") if current_time else None
+        # Unknown or backward time cannot establish spacing. Reset any active
+        # series because an unorderable substantive event may have intervened.
+        if current_time is None or (high_water_time is not None and current_time < high_water_time):
+            checks, first_at, last_confirmed_at = 0, None, None
+            first_delay_hours = last_delay_hours = None
+            previous_check_task = previous_check_assessment = previous_check_hash = None
+            status = "insufficient_time_data"
+            previous_time = None
+            continue
+        same_timestamp_block = high_water_time is not None and current_time == high_water_time
+        if high_water_time is None or current_time > high_water_time:
+            high_water_time = current_time
+        if previous_time is None:
+            # After missing or out-of-order time, the first later event is a
+            # fresh clock origin, never a delayed check itself.
+            previous_time = current_time
+            status = "waiting_for_first_interval" if checks == 0 else "waiting_for_next_interval"
+            continue
+
+        band = event_assistance_band(event)
+        if outcome in {"partial", "incorrect", "solution_seen"} or band != "independent" or _is_exposure(event):
+            checks, first_at, last_confirmed_at = 0, None, None
+            first_delay_hours = last_delay_hours = None
+            previous_check_task = previous_check_assessment = previous_check_hash = None
+            status = "reset_after_substantive_work"
+            previous_time = current_time
+            continue
+        if same_timestamp_block:
+            # Multiple outcomes recorded in one batch/session timestamp are
+            # substantive, but their order does not create elapsed time.
+            previous_time = current_time
+            continue
+
+        capability_id = event.get("capability_id") or event.get("task_type")
+        capability = registry.resolve(capability_id).capability
+        integrity = event.get("assessment_integrity")
+        integrity_valid = integrity in {None, "not_assessment", "frozen_attempt"}
+        if event.get("assessment_id") is not None and integrity != "frozen_attempt":
+            integrity_valid = False
+        eligible = (
+            capability.is_registered
+            and capability.demonstrates_retention()
+            and integrity_valid
+        )
+        task_id = event.get("task_id")
+        assessment_id = event.get("assessment_id")
+        assessment = event.get("assessment") if isinstance(event.get("assessment"), dict) else {}
+        # Frozen spec_hash includes assessment_id by design. Retention novelty
+        # must compare the learner-visible content fingerprint instead.
+        assessment_hash = (
+            event.get("assessment_question_hash")
+            or assessment.get("question_hash")
+        )
+        hash_distinct = not (
+            not theory_ticket
+            and assessment_hash is not None
+            and previous_check_hash is not None
+            and assessment_hash == previous_check_hash
+        )
+        if (assessment_id is not None or assessment_hash is not None) and not theory_ticket:
+            hash_distinct = hash_distinct and assessment_hash is not None
+        identity_distinct = (
+            isinstance(task_id, str)
+            and task_id != previous_check_task
+            and (assessment_id is None or assessment_id != previous_check_assessment)
+            and (hash_distinct or theory_ticket)
+            and not previously_seen_problem
+        )
+        if eligible and identity_distinct and previous_time is not None:
+            elapsed_hours = (current_time - previous_time).total_seconds() / 3600
+            required = next_hours if checks >= 1 else first_hours
+            if elapsed_hours >= required:
+                if checks == 0:
+                    checks = 1
+                    first_at = event.get("recorded_at")
+                    last_confirmed_at = first_at
+                    first_delay_hours = round(elapsed_hours, 4)
+                    status = "confirmed_after_break"
+                else:
+                    checks = 2
+                    last_confirmed_at = event.get("recorded_at")
+                    last_delay_hours = round(elapsed_hours, 4)
+                    status = "two_delayed_checks"
+                previous_check_task = task_id
+                previous_check_assessment = assessment_id
+                previous_check_hash = assessment_hash
+            elif checks == 0:
+                status = "waiting_for_first_interval"
+            else:
+                status = "waiting_for_next_interval"
+        elif checks == 0:
+            status = "not_independently_confirmed"
+
+        # Every substantive event is the clock origin for the next check,
+        # including an intervening independent success of another capability.
+        previous_time = current_time
+
+    return {
+        "valid_checks": checks,
+        "first_confirmed_at": first_at,
+        "last_confirmed_at": last_confirmed_at,
+        "first_check_delay_hours": first_delay_hours,
+        "second_check_delay_hours": last_delay_hours,
+        "last_interval_hours": (
+            round((_aware_timestamp(last_confirmed_at) - _aware_timestamp(first_at)).total_seconds() / 3600, 4)
+            if first_at and last_confirmed_at and _aware_timestamp(last_confirmed_at) and _aware_timestamp(first_at)
+            else None
+        ),
+        "latest_substantive_at": last_substantive_at,
+        "missing_conditions": (
+            [f"first_independent_check_after_{first_hours:g}h"] if checks == 0 else
+            [f"second_independent_check_after_{next_hours:g}h"] if checks == 1 else []
+        ),
+        "status": status,
+        "first_check_after_hours": first_hours,
+        "subsequent_check_after_hours": next_hours,
+        "policy_version": ((course.get("retention_policy") or {}).get("version", 1) if isinstance(course.get("retention_policy") or {}, dict) else 1),
+    }
 
 
 def _target_capability_semantics(
@@ -245,6 +518,7 @@ def reduce_learning_state(
     events: list[dict[str, Any]],
     policy: dict[str, Any],
 ) -> dict[str, Any]:
+    events = effective_learning_events(events, course, syllabus)
     question_model = (course.get("exam") or {}).get("question_model")
     mistake_policy = {**DEFAULT_RECURRING_MISTAKE_POLICY, **(policy.get("recurring_mistake") or {})}
     normalized_syllabus = normalize_syllabus(syllabus)
@@ -287,7 +561,7 @@ def reduce_learning_state(
         if outcome in {"incorrect", "partial"}:
             state["evidence"]["failures"] += 1
         if outcome == "correct":
-            if capability.is_registered and assistance_band == "independent":
+            if is_independent_success(event, capability_registry):
                 state["evidence"]["independent_successes"] += 1
             elif capability.is_registered and assistance_band != "solution_seen":
                 state["evidence"]["hinted_successes"] += 1
@@ -395,11 +669,32 @@ def reduce_learning_state(
         required_dimensions, requires_transfer = _target_capability_semantics(
             target, capability_registry
         )
+        confirmations = _derive_delayed_confirmations(events, concept_id, syllabus, course)
+        state["delayed_confirmations"] = confirmations
+        substantive = [
+            normalize_event(event, normalized_syllabus)
+            for event in non_superseded_events(events)
+            if normalize_event(event, normalized_syllabus).get("target_id") == concept_id
+            and normalize_event(event, normalized_syllabus).get("outcome") in {"correct", "partial", "incorrect", "solution_seen"}
+        ]
+        state["progress"] = {
+            "started": bool(substantive),
+            "independent_correct": state["evidence"]["independent_successes"] > 0,
+            "confirmed_after_break": confirmations["valid_checks"] > 0,
+            "exam_ready": False,
+        }
+        maturity = state["evidence_maturity"]["retained"]
+        maturity["count"] = confirmations["valid_checks"]
+        maturity["first_at"] = confirmations["first_confirmed_at"]
+        maturity["last_at"] = confirmations["last_confirmed_at"]
         status, missing = _mastery_status(
-            state, required_dimensions, requires_transfer
+            state, required_dimensions, requires_transfer, confirmations["valid_checks"]
         )
+        if confirmations["valid_checks"] < 2 and status == "mastered":
+            status = "exam_ready"
         state["mastery_status"] = status
         state["mastery_status_details"] = {"missing": missing}
+        state["progress"]["exam_ready"] = status in {"exam_ready", "mastered"}
         state["recurring_mistakes"].sort(key=lambda item: (-item["count"], item["tag"]))
 
     for concept_id, state in concepts.items():
@@ -424,6 +719,7 @@ def reduce_learning_state(
             "derived_from_revision": int(policy.get("revision", 0)),
             "concepts": concepts,
         }
+    result["evidence_policy_revision"] = EVIDENCE_POLICY_REVISION
     if unmapped_capability_events:
         result["unmapped_capability_events"] = unmapped_capability_events
     return result

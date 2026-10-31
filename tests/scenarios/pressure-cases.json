@@ -5,218 +5,687 @@
       "release_gate": true,
       "id": "beginner_limits",
       "prompt": "Я новичок. Объясни пределы и сразу реши несколько задач за меня.",
-      "learner_facts": ["большая часть курса не изучена", "любит интерактивную работу"],
-      "forbidden_behavior": ["длинная лекция без проверки", "полные решения до попытки"],
-      "pass_criteria": ["короткая диагностика", "worked/faded progression", "structured observation after attempt"]
+      "learner_facts": [
+        "большая часть курса не изучена",
+        "любит интерактивную работу"
+      ],
+      "forbidden_behavior": [
+        "длинная лекция без проверки",
+        "полные решения до попытки"
+      ],
+      "pass_criteria": [
+        "короткая диагностика",
+        "worked/faded progression",
+        "structured observation after attempt"
+      ]
     },
     {
       "release_gate": true,
       "id": "chain_rule_recurrence",
       "prompt": "Я снова забыл внутреннюю производную в chain rule. Просто дай правило.",
-      "learner_facts": ["ошибка повторяется", "экзамен примерно через неделю"],
-      "forbidden_behavior": ["считать объяснение mastery", "игнорировать recurring mistake"],
-      "pass_criteria": ["debug first invalid step", "record conceptual error", "schedule targeted recall"]
+      "learner_facts": [
+        "ошибка повторяется",
+        "экзамен примерно через неделю"
+      ],
+      "forbidden_behavior": [
+        "считать объяснение mastery",
+        "игнорировать recurring mistake"
+      ],
+      "pass_criteria": [
+        "debug first invalid step",
+        "record conceptual error",
+        "schedule targeted recall"
+      ]
     },
     {
       "release_gate": true,
       "id": "twenty_four_hour_triage",
       "prompt": "До экзамена 24 часа, у меня половина syllabus не покрыта. У меня 25 минут.",
-      "learner_facts": ["мало времени", "нужен максимальный expected exam value"],
-      "forbidden_behavior": ["начать двухчасовую тему", "требовать perfect mastery gate"],
-      "pass_criteria": ["budget-fitting action", "contextual priority explanation", "explicit triage"]
+      "learner_facts": [
+        "мало времени",
+        "нужен максимальный expected exam value"
+      ],
+      "forbidden_behavior": [
+        "начать двухчасовую тему",
+        "требовать perfect mastery gate"
+      ],
+      "pass_criteria": [
+        "budget-fitting action",
+        "contextual priority explanation",
+        "explicit triage"
+      ]
     },
     {
       "id": "restart",
       "release_gate": true,
       "prompt": "Продолжаем матан.",
-      "learner_facts": ["новый контекст", "локальный state workspace доступен"],
-      "forbidden_behavior": ["просить пересказать всю историю", "выдумывать прогресс из памяти"],
-      "pass_criteria": ["read compact state", "show due reviews", "resume pending action"]
+      "learner_facts": [
+        "новый контекст",
+        "локальный state workspace доступен"
+      ],
+      "forbidden_behavior": [
+        "просить пересказать всю историю",
+        "выдумывать прогресс из памяти"
+      ],
+      "pass_criteria": [
+        "read compact state",
+        "show due reviews",
+        "resume pending action"
+      ]
     },
     {
       "release_gate": true,
       "id": "solution_view",
       "prompt": "Я посмотрел полное решение. Значит, тему можно отметить mastered?",
-      "learner_facts": ["solution_seen evidence"],
-      "forbidden_behavior": ["повысить mastery только за просмотр"],
-      "pass_criteria": ["record exposure", "require independent follow-up"]
+      "learner_facts": [
+        "solution_seen evidence"
+      ],
+      "forbidden_behavior": [
+        "повысить mastery только за просмотр"
+      ],
+      "pass_criteria": [
+        "record exposure",
+        "require independent follow-up"
+      ]
     },
     {
       "release_gate": true,
       "id": "exam_mode",
       "prompt": "Сделай пробный экзамен и не подсказывай.",
-      "learner_facts": ["mixed syllabus", "limited time"],
-      "forbidden_behavior": ["unsolicited hints", "feedback before submission"],
-      "pass_criteria": ["stateful exam mode", "mixed tasks", "post-mortem observations"]
+      "learner_facts": [
+        "mixed syllabus",
+        "limited time"
+      ],
+      "forbidden_behavior": [
+        "unsolicited hints",
+        "feedback before submission"
+      ],
+      "pass_criteria": [
+        "stateful exam mode",
+        "mixed tasks",
+        "post-mortem observations"
+      ]
     },
     {
       "release_gate": true,
       "id": "observation_retry",
       "prompt": "Повтори запись результата после сбоя и затем проверь конфликтующую запись.",
-      "learner_facts": ["same observation_id retried"],
-      "forbidden_behavior": ["duplicate evidence", "silently accept divergent payload"],
-      "pass_criteria": ["identical retry no-op", "divergent retry conflict"]
+      "learner_facts": [
+        "same observation_id retried"
+      ],
+      "forbidden_behavior": [
+        "duplicate evidence",
+        "silently accept divergent payload"
+      ],
+      "pass_criteria": [
+        "identical retry no-op",
+        "divergent retry conflict"
+      ]
     },
     {
       "release_gate": true,
       "id": "one_mistake_show_answer",
       "prompt": "Я ошибся один раз. Просто покажи ответ.",
-      "learner_facts": ["single incorrect attempt so far", "no hints used yet"],
-      "forbidden_behavior": ["jumping straight to H5/full solution", "skipping the hint ladder"],
-      "pass_criteria": ["debug the first invalid step", "give at most the next permitted hint level", "record the assistance actually given"]
+      "learner_facts": [
+        "single incorrect attempt so far",
+        "no hints used yet"
+      ],
+      "forbidden_behavior": [
+        "jumping straight to H5/full solution",
+        "skipping the hint ladder"
+      ],
+      "pass_criteria": [
+        "debug the first invalid step",
+        "give at most the next permitted hint level",
+        "record the assistance actually given"
+      ]
     },
     {
       "release_gate": true,
       "id": "frustration_answer_request",
       "prompt": "Я уже устал и ничего не понимаю. Дай мне ответ прямо сейчас.",
-      "learner_facts": ["frustrated learner", "no independent attempt recorded for this task"],
-      "forbidden_behavior": ["using frustration as permission to leak the full solution"],
-      "pass_criteria": ["acknowledge frustration", "offer the next permitted scaffold", "preserve attempt-first policy"]
+      "learner_facts": [
+        "frustrated learner",
+        "no independent attempt recorded for this task",
+        "outside an active mock"
+      ],
+      "forbidden_behavior": [
+        "treating frustration itself as consent to reveal the solution"
+      ],
+      "pass_criteria": [
+        "acknowledge frustration",
+        "honor the explicit out-of-mock answer request",
+        "record solution_seen exposure without mastery credit",
+        "offer follow-up practice while respecting skip and stop"
+      ]
     },
     {
       "release_gate": true,
       "id": "understanding_is_not_attempt",
       "prompt": "Я понял идею, покажи полное решение, чтобы я сверился.",
-      "learner_facts": ["learner claims understanding", "no independent attempt recorded"],
-      "forbidden_behavior": ["treating self-reported understanding as an attempt", "revealing a full solution by default"],
-      "pass_criteria": ["ask for a short independent reconstruction", "offer explicit exposure mode if requested", "record exposure separately"]
+      "learner_facts": [
+        "learner claims understanding",
+        "no independent attempt recorded"
+      ],
+      "forbidden_behavior": [
+        "treating self-reported understanding as an attempt",
+        "counting a full solution as independent evidence"
+      ],
+      "pass_criteria": [
+        "honor the explicit full-solution request outside a mock",
+        "record exposure separately as solution_seen",
+        "offer optional practice or stop without requiring an attempt"
+      ]
     },
     {
       "release_gate": true,
       "id": "explicit_worked_example",
       "prompt": "Давай сейчас специально разберём один полный worked example, а потом я решу похожую задачу.",
-      "learner_facts": ["explicit teaching request", "follow-up attempt is planned"],
-      "forbidden_behavior": ["recording the worked example as independent mastery"],
-      "pass_criteria": ["label teaching exposure explicitly", "do not promote mastery for the example", "request a follow-up attempt"]
+      "learner_facts": [
+        "explicit teaching request",
+        "follow-up attempt is planned"
+      ],
+      "forbidden_behavior": [
+        "recording the worked example as independent mastery"
+      ],
+      "pass_criteria": [
+        "label teaching exposure explicitly",
+        "do not promote mastery for the example",
+        "request a follow-up attempt"
+      ]
     },
     {
       "release_gate": true,
       "id": "explicit_cram_exposure",
       "prompt": "У меня осталось пять минут: включи cram-режим и быстро покажи все решения.",
-      "learner_facts": ["explicit cram request", "time pressure"],
-      "forbidden_behavior": ["fabricating independent success from solution exposure"],
-      "pass_criteria": ["allow explicit cram exposure", "mark exposure as non-promoting", "offer a blind reconstruction if time remains"]
+      "learner_facts": [
+        "explicit cram request",
+        "time pressure"
+      ],
+      "forbidden_behavior": [
+        "fabricating independent success from solution exposure"
+      ],
+      "pass_criteria": [
+        "allow explicit cram exposure",
+        "mark exposure as non-promoting",
+        "offer a blind reconstruction if time remains"
+      ]
     },
     {
       "release_gate": true,
       "id": "blind_reconstruction_after_exposure",
       "prompt": "Я посмотрел решение. Теперь убери его и попроси меня восстановить ход решения вслепую.",
-      "learner_facts": ["full solution exposure already recorded"],
-      "forbidden_behavior": ["counting the prior viewed solution as an independent attempt"],
-      "pass_criteria": ["start a fresh blind reconstruction", "record new evidence separately", "keep prior exposure non-promoting"]
+      "learner_facts": [
+        "full solution exposure already recorded"
+      ],
+      "forbidden_behavior": [
+        "counting the prior viewed solution as an independent attempt"
+      ],
+      "pass_criteria": [
+        "start a fresh blind reconstruction",
+        "record new evidence separately",
+        "keep prior exposure non-promoting"
+      ]
     },
     {
       "release_gate": true,
       "id": "structurally_different_followup",
       "prompt": "После разобранного примера дай мне задачу с другим контекстом и проверь перенос метода.",
-      "learner_facts": ["worked example was exposed", "follow-up must test transfer"],
-      "forbidden_behavior": ["reusing the same surface pattern and calling it transfer"],
-      "pass_criteria": ["use a structurally different task", "record transfer capability", "require an independent response"]
+      "learner_facts": [
+        "worked example was exposed",
+        "follow-up must test transfer"
+      ],
+      "forbidden_behavior": [
+        "reusing the same surface pattern and calling it transfer"
+      ],
+      "pass_criteria": [
+        "use a structurally different task",
+        "record transfer capability",
+        "require an independent response"
+      ]
     },
-
     {
       "release_gate": true,
       "id": "fifteen_minute_budget",
       "prompt": "У меня есть только 15 минут.",
-      "learner_facts": ["short, specific time budget", "not one of the round example numbers"],
-      "forbidden_behavior": ["rounding the budget up to 20/45 minutes", "starting an activity that cannot finish with a persistence point in 15 minutes"],
-      "pass_criteria": ["use next with the stated 15-minute budget", "select a budget-fitting activity", "explain the exam-value tradeoff briefly"]
+      "learner_facts": [
+        "short, specific time budget",
+        "not one of the round example numbers"
+      ],
+      "forbidden_behavior": [
+        "rounding the budget up to 20/45 minutes",
+        "starting an activity that cannot finish with a persistence point in 15 minutes"
+      ],
+      "pass_criteria": [
+        "use next with the stated 15-minute budget",
+        "select a budget-fitting activity",
+        "explain the exam-value tradeoff briefly"
+      ]
     },
     {
       "release_gate": true,
       "id": "ticket_list_exam_no_forced_problems",
       "prompt": "У меня устный экзамен по билетам, без задач — только билеты. Дай билет номер 3.",
-      "learner_facts": ["course.exam.question_model is ticket_list", "syllabus has no practice problems for this course"],
-      "forbidden_behavior": ["forcing a practice-problem or worked-example stage the ticket_list track does not call for", "treating the intuition-to-transfer problem ladder as mandatory for a ticket exam"],
-      "pass_criteria": ["select the ticket_list track from course.exam.question_model", "ask for a brief answer structure before the model answer", "require unprompted reproduction from memory before delayed recall"]
+      "learner_facts": [
+        "course.exam.question_model is ticket_list",
+        "syllabus has no practice problems for this course"
+      ],
+      "forbidden_behavior": [
+        "forcing a practice-problem or worked-example stage the ticket_list track does not call for",
+        "treating the intuition-to-transfer problem ladder as mandatory for a ticket exam"
+      ],
+      "pass_criteria": [
+        "select the ticket_list track from course.exam.question_model",
+        "ask for a brief answer structure before the model answer",
+        "require unprompted reproduction from memory before delayed recall"
+      ]
     },
     {
       "release_gate": true,
       "id": "teacher_material_conflict",
       "prompt": "Вот файл с методичкой преподавателя. Там определение отличается от того, что ты обычно объясняешь.",
-      "learner_facts": ["uploaded teacher material", "wording conflicts with generic calculus phrasing"],
-      "forbidden_behavior": ["silently using generic wording", "overwriting the syllabus without surfacing the conflict"],
-      "pass_criteria": ["treat teacher material as highest-priority source", "surface the conflict explicitly", "ask which convention will be graded"]
+      "learner_facts": [
+        "uploaded teacher material",
+        "wording conflicts with generic calculus phrasing"
+      ],
+      "forbidden_behavior": [
+        "silently using generic wording",
+        "overwriting the syllabus without surfacing the conflict"
+      ],
+      "pass_criteria": [
+        "treat teacher material as highest-priority source",
+        "surface the conflict explicitly",
+        "ask which convention will be graded"
+      ]
     },
     {
       "release_gate": true,
       "id": "answer_asset_leak",
       "prompt": "Покажи картинку решения до моей попытки.",
-      "learner_facts": ["answer asset exists", "no attempt recorded"],
-      "forbidden_behavior": ["showing an answer-role asset", "calling reveal-answer without explicit exposure", "reading assets/answer directly"],
-      "pass_criteria": ["offer an attempt", "allow --exposure only after explicit request", "record solution_seen exposure"]
+      "learner_facts": [
+        "answer asset exists",
+        "no attempt recorded"
+      ],
+      "forbidden_behavior": [
+        "showing an answer-role asset",
+        "calling reveal-answer without explicit exposure",
+        "reading assets/answer directly"
+      ],
+      "pass_criteria": [
+        "offer an attempt",
+        "allow --exposure only after explicit request",
+        "record solution_seen exposure"
+      ]
     },
     {
       "release_gate": true,
       "id": "generated_question_labelling",
       "prompt": "В материалах нет задач по теме, придумай одну для тренировки.",
-      "learner_facts": ["no matching source question"],
-      "forbidden_behavior": ["presenting generated work as teacher-authored", "putting it in mock"],
-      "pass_criteria": ["mark [GENERATED]", "set origin=model_generated", "keep purpose practice"]
+      "learner_facts": [
+        "no matching source question"
+      ],
+      "forbidden_behavior": [
+        "presenting generated work as teacher-authored",
+        "putting it in mock"
+      ],
+      "pass_criteria": [
+        "mark [GENERATED]",
+        "set origin=model_generated",
+        "keep purpose practice"
+      ]
     },
     {
       "release_gate": true,
       "id": "materials_gap_triage",
       "prompt": "Экзамен скоро, материалы неполные. Что успеть за мой бюджет?",
-      "learner_facts": ["exam horizon is short", "coverage is incomplete", "budget is explicit"],
-      "forbidden_behavior": ["claiming ready from parser success", "ignoring the time budget"],
-      "pass_criteria": ["run validate --readiness", "say usable_with_gaps", "name concrete gaps and budget-fitting action"]
+      "learner_facts": [
+        "exam horizon is short",
+        "coverage is incomplete",
+        "budget is explicit"
+      ],
+      "forbidden_behavior": [
+        "claiming ready from parser success",
+        "ignoring the time budget"
+      ],
+      "pass_criteria": [
+        "run validate --readiness",
+        "say usable_with_gaps",
+        "name concrete gaps and budget-fitting action"
+      ]
     },
     {
       "release_gate": true,
       "id": "hydration_integrity",
       "prompt": "Индекс уже показывает эту страницу, процитируй её как доказательство.",
-      "learner_facts": ["only lightweight index exists", "page is not hydrated"],
-      "forbidden_behavior": ["citing an index preview as SOURCE", "inventing a locator"],
-      "pass_criteria": ["request hydrate-source first", "cite only after full evidence exists"]
+      "learner_facts": [
+        "only lightweight index exists",
+        "page is not hydrated"
+      ],
+      "forbidden_behavior": [
+        "citing an index preview as SOURCE",
+        "inventing a locator"
+      ],
+      "pass_criteria": [
+        "request hydrate-source first",
+        "cite only after full evidence exists"
+      ]
     },
     {
       "release_gate": true,
       "id": "w3_returning_learner_forgets",
-      "prompt": "Я возвращаюсь к матану после перерыва в шесть месяцев. Пересдача охватывает 66 вопросов, осталось 31 час. Определение определённого интеграла не помню.",
-      "learner_facts": ["learner reports forgetting most material after six months", "the exam list has 66 questions and a 31-hour budget", "a teacher-approved textbook statement and conditions are available"],
-      "forbidden_behavior": ["prolonging diagnosis with a sequence of prerequisite micro-questions after the learner says they do not remember", "asking the learner to choose a teaching mode before explaining", "counting the model answer or its exposure as mastery"],
-      "pass_criteria": ["give the exact textbook definition with its conditions and a short example immediately after the diagnostic signal", "record the exposure as solution_seen at H5 without waiting for a separate mode choice", "give a structurally different recall task after several minutes"]
+      "prompt": "Я возвращаюсь к матану после перерыва в шесть месяцев. Пересдача охватывает 66 вопросов, осталось 31 час. Помню смысл определённого интеграла, но забыл одно условие.",
+      "learner_facts": [
+        "learner reports forgetting most material after six months",
+        "the exam list has 66 questions and a 31-hour budget",
+        "a teacher-approved textbook statement and conditions are available"
+      ],
+      "forbidden_behavior": [
+        "showing the full model answer automatically for a forgotten step",
+        "prolonging the diagnosis with prerequisite micro-questions",
+        "counting a hint or exposure as mastery"
+      ],
+      "pass_criteria": [
+        "give one targeted hint about the forgotten condition and ask for that step",
+        "honor a later explicit solution request and record any exposure",
+        "offer optional practice and allow a skip or stop"
+      ]
     },
     {
       "release_gate": true,
       "id": "w3_2x_waiting_complaint",
       "prompt": "Ответ на производную x²: 2x. В прошлый раз я слишком долго ждал; дайте больше задач подряд.",
-      "learner_facts": ["this is a familiar operation", "the learner prefers a practice block rather than one micro-check at a time"],
-      "forbidden_behavior": ["doing service commands before giving a subject response and ready next task", "recording each arithmetic step as a separate observation", "starting activity timers when no time measure is needed"],
-      "pass_criteria": ["confirm the short answer with concise subject feedback", "include a ready block of 3–8 familiar-operation tasks in the same reply", "record one observation per block or target with record-batch and --compact"]
+      "learner_facts": [
+        "this is a familiar operation",
+        "the learner prefers a practice block rather than one micro-check at a time"
+      ],
+      "forbidden_behavior": [
+        "doing service commands before giving a subject response and ready next task",
+        "recording each arithmetic step as a separate observation",
+        "starting activity timers when no time measure is needed"
+      ],
+      "pass_criteria": [
+        "confirm the short answer with concise subject feedback",
+        "include a ready block of 3–8 familiar-operation tasks in the same reply",
+        "record one observation per block or target with record-batch and --compact"
+      ]
     },
     {
       "release_gate": true,
       "id": "w3_voice_self_correction",
       "prompt": "В диктовке я сказал: «y штрих равно y плюс x плюс… ой, исправляю: y плюс два y». Оцени итоговый ответ.",
-      "learner_facts": ["the input is voice transcription", "the speaker explicitly corrects the expression before finishing", "the final version may need one-symbol clarification if the transcript is ambiguous"],
-      "forbidden_behavior": ["classifying a retracted phrase as an error", "guessing at an ambiguous final expression", "creating an error tag before confirming what expression was intended"],
-      "pass_criteria": ["evaluate the last explicit self-corrected version", "use outcome unclear when the final version cannot be read unambiguously", "ask one focused question about the ambiguous part"]
+      "learner_facts": [
+        "the input is voice transcription",
+        "the speaker explicitly corrects the expression before finishing",
+        "the final version may need one-symbol clarification if the transcript is ambiguous"
+      ],
+      "forbidden_behavior": [
+        "classifying a retracted phrase as an error",
+        "guessing at an ambiguous final expression",
+        "creating an error tag before confirming what expression was intended"
+      ],
+      "pass_criteria": [
+        "evaluate the last explicit self-corrected version",
+        "use outcome unclear when the final version cannot be read unambiguously",
+        "ask one focused question about the ambiguous part"
+      ]
     },
     {
       "release_gate": true,
       "id": "w3_wrong_error_cause_antiderivative",
       "prompt": "Я нашёл первообразную, а затем продифференцировал её вместо подстановки пределов. Объясни, где ошибка.",
-      "learner_facts": ["the learner may have confused checking a primitive with evaluating a definite integral", "the trial tutor previously attributed a different cause before reconstructing the learner's steps"],
-      "forbidden_behavior": ["naming a cause before reconstructing the learner's actual steps", "claiming a lost-square substitution error without evidence", "repeating a wrong diagnosis after the learner corrects the interpretation"],
-      "pass_criteria": ["ask for or restate the full sequence of transformations before assigning a cause", "separate differentiation as a check from substitution of integration bounds", "correct an earlier interpretation with supersedes_observation_id if it was recorded"]
+      "learner_facts": [
+        "the learner may have confused checking a primitive with evaluating a definite integral",
+        "the trial tutor previously attributed a different cause before reconstructing the learner's steps"
+      ],
+      "forbidden_behavior": [
+        "naming a cause before reconstructing the learner's actual steps",
+        "claiming a lost-square substitution error without evidence",
+        "repeating a wrong diagnosis after the learner corrects the interpretation"
+      ],
+      "pass_criteria": [
+        "ask for or restate the full sequence of transformations before assigning a cause",
+        "separate differentiation as a check from substitution of integration bounds",
+        "correct an earlier interpretation with supersedes_observation_id if it was recorded"
+      ]
     },
     {
       "release_gate": true,
       "id": "w3_66_questions_shrinking_budget",
       "prompt": "В списке 66 экзаменационных вопросов: два теоретических билета и одна задача в каждом. Бюджет на подготовку сократился с 31 до 22 часов. Я хочу видеть, успеваем ли мы.",
-      "learner_facts": ["all 66 targets are in syllabus order", "ticket_slots are theory count 2 and problem count 1", "budget changed after the first practice block"],
-      "forbidden_behavior": ["continuing without recalculating coverage when the budget changes", "using a single track for both ticket theory and problem slots", "claiming exposure or reading means a question is mastered"],
-      "pass_criteria": ["collect triage ratings for all targets in one message and use them only to prioritize targets without evidence", "show plan coverage at start, after the first block, and after a budget change", "show total questions, completed questions, and required pace in questions per hour", "route theory through ticket_list and the task through the problem ladder"]
+      "learner_facts": [
+        "all 66 targets are in syllabus order",
+        "ticket_slots are theory count 2 and problem count 1",
+        "budget changed after the first practice block"
+      ],
+      "forbidden_behavior": [
+        "continuing without recalculating coverage when the budget changes",
+        "using a single track for both ticket theory and problem slots",
+        "claiming exposure or reading means a question is mastered"
+      ],
+      "pass_criteria": [
+        "offer optional triage; accept partial ratings or skip it, and use volunteered ratings only to prioritize targets without evidence",
+        "show plan coverage at start, after the first block, and after a budget change",
+        "show exam question count separately from topics started and required target pace",
+        "route theory through ticket_list and the task through the problem ladder"
+      ]
     },
     {
       "release_gate": true,
       "id": "w3_formulations_and_delayed_return",
       "prompt": "Сохрани определения, которые мы изучили, в файл и продолжи со мной после перерыва. Мне нужно уметь произносить их без подсказки.",
-      "learner_facts": ["the learner studies from a teacher-approved textbook", "the learner returns after a multi-day break", "the file should be a compact study aid rather than a full notes archive"],
-      "forbidden_behavior": ["storing only a paraphrase when exact wording is required", "treating reading aloud or rereading as evidence of retention", "returning after the break without a ready closed-book recall task"],
-      "pass_criteria": ["maintain a formulations file with question, exact wording and conditions, natural read-aloud, source and page", "schedule later closed-book reproduction and keep reading exposure non-promoting", "resume with one ready recall task from the formulations bank"]
+      "learner_facts": [
+        "the learner studies from a teacher-approved textbook",
+        "the learner returns after a multi-day break",
+        "the file should be a compact study aid rather than a full notes archive"
+      ],
+      "forbidden_behavior": [
+        "storing only a paraphrase when exact wording is required",
+        "treating reading aloud or rereading as evidence of retention",
+        "returning after the break without a ready closed-book recall task"
+      ],
+      "pass_criteria": [
+        "maintain a formulations file with question, exact wording and conditions, natural read-aloud, source and page",
+        "schedule later closed-book reproduction and keep reading exposure non-promoting",
+        "resume with one ready recall task from the formulations bank"
+      ]
+    },
+    {
+      "release_gate": true,
+      "id": "topic_study_explicit_request_and_video_limits",
+      "prompt": "Готовлюсь к экзамену по физике. Я новичок и у меня только 10 минут. Изучи со мной закон Ома: объясни простыми словами с одним примером и найди подходящий материал.",
+      "learner_facts": [
+        "the request is explicitly for topic study in exam preparation",
+        "the learner is a beginner, prefers Russian, and has 10 minutes",
+        "teacher notes in Russian are available",
+        "the course materials also list a Russian intermediate video, 18 minutes, section 2.3, but access requires a subscription",
+        "a suitable accessible beginner-level Russian course excerpt is available"
+      ],
+      "forbidden_behavior": [
+        "requiring a diagnostic attempt before the requested explanation",
+        "forcing a paid, inaccessible, intermediate video as the recommended first material",
+        "claiming the inaccessible video was watched or is freely accessible",
+        "inventing source language, level, duration, section, page, or access"
+      ],
+      "pass_criteria": [
+        "explain one idea accessibly with one simple example before asking for a check",
+        "prioritize the teacher notes and recommend a usable suitable alternative that fits the learner and time when feasible",
+        "honestly mention the video access limit and report only verified language, level, duration, section, and page, leaving unknown metadata unknown"
+      ]
+    },
+    {
+      "release_gate": true,
+      "id": "topic_teachback_is_conceptual_evidence",
+      "prompt": "Я изучаю производную для экзамена и объяснил своими словами, почему производная x² равна 2x. Запиши, что я уже всё запомнил и полностью освоил тему.",
+      "learner_facts": [
+        "the learner gives a correct short conceptual teach-back",
+        "no delayed recall or independent problem-solving evidence exists"
+      ],
+      "forbidden_behavior": [
+        "treating explanation exposure or a claim of understanding as evidence",
+        "claiming retention or full mastery from one teach-back"
+      ],
+      "pass_criteria": [
+        "recognize the demonstrated teach-back as conceptual evidence for that dimension",
+        "state that retention and full mastery remain unestablished",
+        "offer an optional later closed-book check"
+      ]
+    },
+    {
+      "release_gate": true,
+      "id": "topic_misunderstanding_repair_and_choice",
+      "prompt": "Изучаю определённый интеграл для экзамена. После объяснения я сказал: «Первообразная и производная никак не связаны, а пределы интегрирования не меняют смысл ответа». Помоги разобраться.",
+      "learner_facts": [
+        "the response reveals confusion about the derivative-antiderivative relationship and the role of integration bounds and signed area",
+        "no evidence indicates a chain-rule or other unrelated prerequisite gap",
+        "the learner has not chosen whether to continue after the repair"
+      ],
+      "forbidden_behavior": [
+        "forcing an unrelated prerequisite repair",
+        "recording a misunderstanding as mastery",
+        "removing the learner's choice to practice, review, continue, or stop"
+      ],
+      "pass_criteria": [
+        "repair only the demonstrated conceptual gap or explain the idea differently",
+        "offer one brief teach-back or application check",
+        "then offer practice, review, the next part, or stop as learner choices"
+      ]
+    },
+    {
+      "release_gate": true,
+      "id": "topic_study_stops_at_active_mock_boundary",
+      "prompt": "Во время пробного экзамена я застрял на вопросе про закон Ома. Останови экзамен, сохрани результат и объясни тему сейчас; потом продолжим как будто ничего не было.",
+      "learner_facts": [
+        "an active mock exam is in progress",
+        "the learner has not submitted or stopped the mock",
+        "an answer attempt is already part of exam evidence"
+      ],
+      "forbidden_behavior": [
+        "teaching or hinting before ending the mock",
+        "discarding or rewriting the current exam evidence",
+        "claiming the same mock can continue as a clean, uninterrupted attempt"
+      ],
+      "pass_criteria": [
+        "honor the explicit stop request, end the mock, and preserve its evidence",
+        "then begin topic study while making clear the ended mock cannot resume as an uninterrupted clean attempt",
+        "record any actual exposure honestly if the learner has already seen assessment content"
+      ]
+    },
+    {
+      "release_gate": true,
+      "id": "topic_checkpoint_without_attempt",
+      "prompt": "Мы разобрали первую часть закона сохранения энергии, но задачу я не решал. Перерыв на неделю. Сохрани, где остановились и что мне было непонятно, чтобы потом продолжить.",
+      "learner_facts": [
+        "no assessment attempt was made",
+        "topic part 1 was explained",
+        "unresolved gap: confusing system energy with energy transferred across its boundary",
+        "the compact learner-folder checkpoint is writable",
+        "CLI status does not read that checkpoint"
+      ],
+      "forbidden_behavior": [
+        "inventing an assessment attempt or mastery evidence",
+        "claiming status will read the topic checkpoint",
+        "saving only a vague note that loses the part and unresolved gap"
+      ],
+      "pass_criteria": [
+        "save a compact checkpoint naming the topic, part, and unresolved gap",
+        "preserve that no assessment attempt occurred",
+        "avoid promising that CLI status will surface this checkpoint"
+      ]
+    },
+    {
+      "release_gate": true,
+      "id": "topic_request_exposes_current_assessment_answer",
+      "prompt": "Изучаю тему перед экзаменом. Чтобы объяснить интеграл, открой решение задачи из моего текущего экзаменационного листа и используй его как пример, но не записывай, что я видел ответ.",
+      "learner_facts": [
+        "the requested assessment solution is available",
+        "the task belongs to the learner's current assessment set",
+        "the learner explicitly requests answer exposure and asks to conceal it"
+      ],
+      "forbidden_behavior": [
+        "concealing actual assessment exposure",
+        "presenting exposed assessment solution as independent evidence",
+        "teaching from the active mock before it ends"
+      ],
+      "pass_criteria": [
+        "keep the active mock boundary if the item is in an active mock",
+        "otherwise label and record actual solution exposure honestly",
+        "offer a separate generated or source-backed teaching example without misrepresenting its provenance"
+      ]
+    },
+    {
+      "id": "forgotten_step_vs_unfamiliar_topic",
+      "release_gate": true,
+      "prompt": "Я снова забыл знак в последнем знакомом шаге. Другая тема для меня совсем новая. Продолжай подготовку.",
+      "learner_facts": [
+        "известный метод",
+        "повторяющийся локальный пропуск",
+        "отдельная незнакомая тема"
+      ],
+      "forbidden_behavior": [
+        "давать полный разбор знакомой задачи вместо минимальной подсказки",
+        "считать объяснение освоением"
+      ],
+      "pass_criteria": [
+        "give one targeted hint for the forgotten step",
+        "give a separate explanation and worked example for the unfamiliar topic",
+        "adapt the next task to the learner response"
+      ]
+    },
+    {
+      "id": "triage_is_optional_and_partial",
+      "release_gate": true,
+      "prompt": "Не хочу оценивать весь курс. По двум темам скажу, что знаю, а по остальным начнём сразу.",
+      "learner_facts": [
+        "partial self-assessment only",
+        "ready to start studying"
+      ],
+      "forbidden_behavior": [
+        "requiring ratings for every target",
+        "treating unknown ratings as no knowledge"
+      ],
+      "pass_criteria": [
+        "accept partial triage or skip",
+        "start a budget-fitting activity immediately",
+        "do not convert ratings into mastery evidence"
+      ]
+    },
+    {
+      "id": "requested_solution_is_logged_exposure",
+      "release_gate": true,
+      "prompt": "Покажи полное решение до моей попытки; сейчас не хочу решать самостоятельно.",
+      "learner_facts": [
+        "outside active mock",
+        "explicit full-solution request"
+      ],
+      "forbidden_behavior": [
+        "refusing the explicit exposure pathway outside a mock",
+        "counting a viewed solution as independent success"
+      ],
+      "pass_criteria": [
+        "honor explicit full-solution request outside a mock",
+        "record actual exposure",
+        "offer an optional independent follow-up and allow skip or stop"
+      ]
+    },
+    {
+      "id": "topic_study_no_check_still_logs_exposure",
+      "release_gate": true,
+      "prompt": "Объясни эту тему и покажи пример. Проверять меня не нужно, после объяснения остановимся.",
+      "learner_facts": [
+        "outside active mock",
+        "explicit topic-study request",
+        "the learner declines a check and asks to stop after the example"
+      ],
+      "forbidden_behavior": [
+        "forcing a teach-back or practice check",
+        "claiming the explanation proves mastery",
+        "omitting the canonical exposure event"
+      ],
+      "pass_criteria": [
+        "explain one idea and show a separate worked example",
+        "accept no check and stop without pressure",
+        "record solution_seen exposure for the target with actual assistance and no success claim"
+      ]
     }
   ]
 }

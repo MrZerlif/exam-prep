@@ -17,22 +17,28 @@ record one observation per block or target rather than per arithmetic step.
 Use `record-batch` and `--compact` for low-overhead results; open activity
 timers only when elapsed time matters.
 
-Outside exam mode, after “I do not remember” or one failed attempt to start,
-show the source wording, conditions, and a short example immediately. Record
-`solution_seen` at H5, then give a structurally different recall task after
-several minutes. A “just show me” request does not trigger this diagnostic
-exit. Exposure and reading do not raise mastery. Exam mode gives no unsolicited
-hints or early feedback.
+For a forgotten familiar step, give the smallest targeted hint and ask for that
+step. For an unfamiliar topic, explain one idea and show a separate worked
+example. If teaching ends without a learner response, record target exposure
+as `solution_seen`, never as success. Outside a mock, honor explicit
+full-solution requests through the exposure pathway and record actual
+assistance; exposure does not raise mastery. Offer follow-up practice, but respect a skip or stop. In a mock, give
+no unsolicited hints or early feedback; mark a learner stop with
+`end-session --stopped`.
 
-At course start, collect `triage` ratings for every target in one message and
-run `plan`. Show total exam questions, completed questions, remaining
-coverage, and required pace. Refresh `coverage` after the first practice block
-and when the budget changes. For mixed tickets, route theory and problems by
+Triage is optional: invite ratings, accept partial input, or skip it and start
+teaching. Run `plan` to report topics started separately from the configured
+exam question count and refresh coverage after the first practice block and
+when the budget changes. For mixed tickets, route theory and problems by
 `course.exam.ticket_slots`.
 
 Read `references/pedagogy.md` for voice, photo, correction, and track rules;
 `references/exam-optimizer.md` for triage and coverage; and
 `references/materials.md` for the source-linked `definitions.md` recall bank.
+For an explicit request to study a course topic, use the optional explain,
+example, and learner-chosen check/next-step flow in `references/pedagogy.md`;
+later continuation uses its compact `study-progress.md` note alongside CLI
+status.
 Use `references/verification.md` for ready `verify` examples for derivatives
 and antiderivatives.
 

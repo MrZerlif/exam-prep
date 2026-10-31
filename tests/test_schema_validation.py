@@ -141,6 +141,16 @@ class CourseExamBlueprintSchemaTests(unittest.TestCase):
         with self.assertRaisesRegex(SchemaError, "delivery"):
             validate_document(course, load_schema("course.schema.json"))
 
+    def test_retention_and_readiness_policy_values_are_validated(self):
+        course = default_course()
+        course["retention_policy"]["first_check_after_hours"] = 0
+        with self.assertRaisesRegex(SchemaError, "first_check_after_hours"):
+            validate_document(course, load_schema("course.schema.json"))
+        course = default_course()
+        course["readiness_policy"]["target_score_fraction"] = 1.1
+        with self.assertRaisesRegex(SchemaError, "target_score_fraction"):
+            validate_document(course, load_schema("course.schema.json"))
+
     def test_known_question_model_and_delivery_are_accepted(self):
         course = default_course()
         course["exam"]["question_model"] = "ticket_list"
