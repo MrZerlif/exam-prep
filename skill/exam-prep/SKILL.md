@@ -3,7 +3,7 @@ name: exam-prep
 description: Use when a learner is preparing for an exam by a fixed date, needs a plan from their own materials, has limited time or weak prerequisites, repeats mistakes, asks to study an exam-course topic, or asks to resume persistent local progress.
 license: MIT
 metadata:
-  version: "1.1.0"
+  version: "1.2.0"
 ---
 
 # Exam Prep
